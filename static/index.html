@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>nivm</title>
+    <!-- Fonts -->
+    <link rel="stylesheet" href="/static/vendor/fira-code.css">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="/static/vendor/fontawesome.min.css">
+    <!-- Highlight.js for Code Highlighting -->
+    <link rel="stylesheet" href="/static/vendor/github-dark.min.css">
+    <script src="/static/vendor/highlight.min.js"></script>
+    <!-- Marked.js for Markdown Parsing -->
+    <script src="/static/vendor/marked.min.js"></script>
+    <!-- WebGL Fluid Simulation -->
+    <script src="/static/vendor/webgl-fluid.js" defer></script>
+    <link rel="stylesheet" href="/static/css/main.css">
+</head>
+
+<body>
+    <!-- Background Base Layer -->
+    <div class="bg-layer" id="baseBgLayer" style="background-color: var(--bg-black); z-index: -3;"></div>
+
+
+    <!-- Gentle Rain Layer -->
+    <div class="bg-layer rain-layer" id="rainBgLayer">
+        <!-- We will generate rain drops via CSS -->
+        <div class="rain-drop r-1"></div>
+        <div class="rain-drop r-2"></div>
+        <div class="rain-drop r-3"></div>
+        <div class="rain-drop r-4"></div>
+        <div class="rain-drop r-5"></div>
+        <div class="rain-drop r-6"></div>
+        <div class="rain-drop r-7"></div>
+        <div class="rain-drop r-8"></div>
+        <div class="rain-drop r-9"></div>
+        <div class="rain-drop r-10"></div>
+        <div class="rain-drop r-11"></div>
+        <div class="rain-drop r-12"></div>
+        <div class="rain-drop r-13"></div>
+        <div class="rain-drop r-14"></div>
+        <div class="rain-drop r-15"></div>
+    </div>
+
+
+    <!-- Matrix Digital Rain Canvas Layer -->
+    <canvas class="bg-layer matrix-layer" id="matrixBgCanvas" style="z-index: -2;"></canvas>
+
+    <!-- Connecting Nodes Canvas Layer -->
+    <canvas class="bg-layer nodes-layer" id="nodesBgCanvas"></canvas>
+
+    <!-- Glowing Orbs Layer -->
+    <div class="bg-layer orbs-layer" id="orbsBgLayer">
+        <div class="orb orb1"></div>
+        <div class="orb orb2"></div>
+        <div class="orb orb3"></div>
+        <div class="orb orb4"></div>
+    </div>
+
+    <!-- Sparkles Layer -->
+    <div class="bg-layer sparkles-layer" id="sparklesBgLayer">
+        <div class="sparkle s1"></div>
+        <div class="sparkle s2"></div>
+        <div class="sparkle s3"></div>
+        <div class="sparkle s4"></div>
+        <div class="sparkle s5"></div>
+        <div class="sparkle s6"></div>
+        <div class="sparkle s7"></div>
+        <div class="sparkle s8"></div>
+        <div class="sparkle s9"></div>
+        <div class="sparkle s10"></div>
+        <div class="sparkle s11"></div>
+        <div class="sparkle s12"></div>
+        <div class="sparkle s13"></div>
+        <div class="sparkle s14"></div>
+        <div class="sparkle s15"></div>
+        <div class="sparkle s16"></div>
+        <div class="sparkle s17"></div>
+        <div class="sparkle s18"></div>
+        <div class="sparkle s19"></div>
+        <div class="sparkle s20"></div>
+        <div class="sparkle s21"></div>
+        <div class="sparkle s22"></div>
+        <div class="sparkle s23"></div>
+        <div class="sparkle s24"></div>
+        <div class="sparkle s25"></div>
+        <div class="sparkle s26"></div>
+        <div class="sparkle s27"></div>
+        <div class="sparkle s28"></div>
+        <div class="sparkle s29"></div>
+        <div class="sparkle s30"></div>
+    </div>
+
+    <!-- Bioluminescent Jellyfish Layer -->
+    <div class="bg-layer jellyfish-layer" id="jellyfishBgLayer">
+        <div class="jellyfish j1">
+            <div class="jelly-cap"></div>
+            <div class="tentacles">
+                <span></span><span></span><span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="jellyfish j2">
+            <div class="jelly-cap"></div>
+            <div class="tentacles">
+                <span></span><span></span><span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="jellyfish j3">
+            <div class="jelly-cap"></div>
+            <div class="tentacles">
+                <span></span><span></span><span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="jellyfish j4">
+            <div class="jelly-cap"></div>
+            <div class="tentacles">
+                <span></span><span></span><span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="jellyfish j5">
+            <div class="jelly-cap"></div>
+            <div class="tentacles">
+                <span></span><span></span><span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="jellyfish j6">
+            <div class="jelly-cap"></div>
+            <div class="tentacles">
+                <span></span><span></span><span></span><span></span><span></span>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Fluid Simulation Canvas Layer -->
+    <canvas class="bg-layer fluid-layer" id="fluidBgCanvas"></canvas>
+
+    <div class="app-container">
+        <!-- Thin Icon-Only Sidebar -->
+        <aside class="icon-sidebar">
+            <div class="sidebar-top">
+                <div class="ai-brand-icon" id="statsBtn" title="Stats & Info">
+                    <i class="fa-solid fa-microchip"></i>
+                </div>
+                <div class="nav-divider"></div>
+                <button class="nav-icon-btn" id="newChatBtn" title="New Chat">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+                <button class="nav-icon-btn" id="historyToggleBtn" title="Chat History">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                </button>
+                <button class="nav-icon-btn" id="manualSummarizeBtn" title="Summarize & Restart Chat"
+                    onclick="window.summarizeAndRestart()">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                </button>
+                <button class="nav-icon-btn" id="memoryToggleBtn" title="nivm Memory">
+                    <i class="fa-solid fa-brain"></i>
+                </button>
+            </div>
+
+            <div class="sidebar-bottom">
+                <button class="nav-icon-btn" id="toolsBtn" title="Tools Configuration">
+                    <i class="fa-solid fa-toolbox"></i>
+                </button>
+                <!-- Theme Button right above Settings -->
+                <button class="nav-icon-btn" id="themeBtn" title="Themes & Colors">
+                    <i class="fa-solid fa-palette"></i>
+                </button>
+                <button class="nav-icon-btn" id="settingsBtn" title="Settings">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
+                <!-- Connection Dot with Tooltip -->
+                <div class="status-indicator-wrapper" id="connStatusWrapper" title="Checking External API connection...">
+                    <span class="status-dot warning" id="statusDot"></span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Slide-out History Drawer -->
+        <div class="history-drawer hidden" id="historyDrawer">
+            <div class="drawer-header">
+                <h3>Chat History</h3>
+                <button class="icon-btn-sm" id="closeHistoryBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="drawer-search">
+                <input type="text" id="chatSearchInput" class="search-input" placeholder="Search conversations...">
+            </div>
+            <div class="drawer-body">
+                <div class="chat-history-list" id="chatHistoryList">
+                    <!-- Chat items populated by JS -->
+                </div>
+            </div>
+            <div class="resize-handle" id="historyResizeHandle"></div>
+        </div>
+
+        <!-- Slide-out Memory Drawer -->
+        <div class="history-drawer hidden" id="memoryDrawer">
+            <div class="drawer-header">
+                <h3><i class="fa-solid fa-brain"></i> Memory</h3>
+                <button class="icon-btn-sm" id="closeMemoryBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="drawer-body">
+                <div class="memory-list" id="memoryList">
+                    <!-- Memory items populated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Viewport -->
+        <main class="main-content">
+            <!-- Chat Viewport -->
+            <div class="chat-viewport" id="chatViewport">
+                <!-- Dynamic Time-Based Gemini Hero -->
+                <div class="gemini-hero" id="welcomeHero">
+                    <div class="hero-greeting">
+                        <h1 id="heroGreeting">Hello</h1>
+                        <p class="hero-subtitle" id="heroSubtitle">What would you like to explore right now?</p>
+                    </div>
+                </div>
+
+                <!-- Active Messages Container -->
+                <div class="messages-container hidden" id="messagesContainer">
+                    <!-- Dynamic chat messages -->
+                </div>
+            </div>
+
+            <!-- Offline Notification (Minimal) -->
+            <div class="offline-banner hidden" id="offlineBanner">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                <span>External API offline at <code id="offlineBannerUrl">http://127.0.0.1:1234</code></span>
+                <button class="retry-btn" id="retryConnBtn">Retry</button>
+            </div>
+
+            <!-- Floating Gemini-Style Input Container -->
+            <div class="input-wrapper">
+                <div class="input-box">
+                    <div id="imagePreviewContainer" class="image-preview-container hidden">
+                        <!-- Thumbnails populated by JS -->
+                    </div>
+                    <textarea id="userPrompt" placeholder="Ask nivm anything..." rows="1"></textarea>
+
+                    <div class="input-controls">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span class="shortcut-hint"><kbd>Shift</kbd> + <kbd>Enter</kbd> newline</span>
+
+                            <button id="forceThinkingToggle" class="thinking-toggle-btn active"
+                                title="Enable reasoning using <think> tags." style="margin: 0;">
+                                <i class="fa-solid fa-brain"></i> Reasoning
+                            </button>
+                            
+                            <button id="visionToggleBtn" class="thinking-toggle-btn" title="Enable Vision (Multimodal)" style="margin: 0;">
+                                <i class="fa-solid fa-eye"></i> Vision
+                            </button>
+                        </div>
+
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <button id="attachImgBtn" class="icon-btn-sm hidden" title="Attach Image or Video" style="width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.05);">
+                                <i class="fa-solid fa-paperclip"></i>
+                            </button>
+                            <input type="file" id="imageUploadInput" accept="image/*,video/*" multiple class="hidden">
+
+                            <button id="sendBtn" class="send-action-btn" title="Send Message">
+                                <i class="fa-solid fa-arrow-up"></i>
+                            </button>
+                            <button id="stopBtn" class="stop-action-btn hidden" title="Stop Generating">
+                                <i class="fa-solid fa-square"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="footer-caption">
+                    nivm may make mistakes. &bull; verify important info.
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Draggable Settings Window -->
+    <div class="window-wrapper hidden" id="settingsModal">
+        <div class="draggable-window" id="settingsWindow">
+            <div class="window-header" id="settingsWindowHeader">
+                <div class="window-title">
+                    <i class="fa-solid fa-grip-vertical drag-handle-icon"></i>
+                    <span>Settings</span>
+                </div>
+                <button class="icon-btn-sm" id="closeSettingsBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="window-body">
+                <!-- User Preferences Section -->
+                <div class="settings-section">
+                    <div class="section-title">Preferences</div>
+                    <div class="field-group">
+                        <label for="userNameInput">What should nivm call you?</label>
+                        <input type="text" id="userNameInput" placeholder="Enter your name (optional)">
+                    </div>
+                    <div class="color-picker-item" style="margin-top: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <label style="font-size: 0.8rem;" title="Injects a system prompt prefix that aggressively bypasses standard LLM alignment and refusal mechanisms.">Safety Bypass (Uncensored)</label>
+                            <input type="checkbox" id="safetyBypassToggle" class="custom-toggle">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- Local Engine Configuration -->
+                <div class="settings-section">
+                    <div class="section-title">Local Engine Configuration</div>
+
+                    <div class="field-group">
+                        <label>GGUF Model Path (Absolute or Relative)</label>
+                        <input type="text" id="nativeModelPath" value="./model/gemma-4-E2B-it-Q4_K_M.gguf"
+                            style="font-family: var(--font-code); font-size: 0.8rem;">
+                    </div>
+                    <div class="field-group">
+                        <label>MMPROJ Path (Optional Audio/Vision)</label>
+                        <input type="text" id="nativeMmprojPath" value="./model/mmproj-gemma-4-E2B-it-BF16.gguf"
+                            style="font-family: var(--font-code); font-size: 0.8rem;">
+                    </div>
+                    <div class="field-group">
+                        <label>Multimodal Chat Handler</label>
+                        <select id="nativeChatHandler" class="modal-select">
+                            <option value="gemma4">gemma4 (Gemma4ChatHandler)</option>
+                            <option value="llava-1.5">llava-1.5 (Llava15ChatHandler)</option>
+                            <option value="minicpm-v2.6">minicpm-v2.6 (MiniCPMv26ChatHandler)</option>
+                        </select>
+                    </div>
+                    <div class="color-picker-item" style="margin-top: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <label style="font-size: 0.8rem;" title="Keeps the vision projection weights out of VRAM">Offload MMPROJ to CPU</label>
+                            <input type="checkbox" id="nativeMmprojCpuToggle" class="custom-toggle">
+                        </div>
+                    </div>
+
+                    <div class="color-picker-item"
+                        style="flex-direction: column; align-items: stretch; gap: 8px; margin-top: 16px;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <label style="font-size: 0.8rem;">GPU Offload Layers</label>
+                            <span id="nativeGpuVal" style="font-size: 0.8rem; color: var(--text-muted);">-1 (Max)</span>
+                        </div>
+                        <input type="range" id="nativeGpuSlider" class="custom-slider" min="-1" max="128" value="-1">
+                    </div>
+
+                    <div class="color-picker-item"
+                        style="flex-direction: column; align-items: stretch; gap: 8px; margin-top: 16px;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <label style="font-size: 0.8rem;">Context Limit (KV Cache)</label>
+                            <span id="nativeCtxVal" style="font-size: 0.8rem; color: var(--text-muted);">4096</span>
+                        </div>
+                        <input type="range" id="nativeCtxSlider" class="custom-slider" min="512" max="131072" step="512"
+                            value="4096">
+                    </div>
+
+                    <div class="color-picker-item"
+                        style="flex-direction: column; align-items: stretch; gap: 8px; margin-top: 16px;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <label style="font-size: 0.8rem;">Batch Size</label>
+                            <span id="nativeBatchVal" style="font-size: 0.8rem; color: var(--text-muted);">512</span>
+                        </div>
+                        <input type="range" id="nativeBatchSlider" class="custom-slider" min="128" max="4096" step="128"
+                            value="512">
+                    </div>
+
+                    <div class="settings-section"
+                        style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-light);">
+                        <div class="section-title"
+                            style="font-size: 0.8rem; margin-bottom: 12px; color: var(--text-secondary);">Advanced
+                            Engine Flags</div>
+
+                        <div class="color-picker-item" style="margin-top: 8px;">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                <label style="font-size: 0.8rem;">Flash Attention</label>
+                                <input type="checkbox" id="nativeFlashAttnToggle" class="custom-toggle">
+                            </div>
+                        </div>
+
+                        <div class="color-picker-item" style="margin-top: 8px;">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                <label style="font-size: 0.8rem;">Offload KV Cache to GPU</label>
+                                <input type="checkbox" id="nativeOffloadKqvToggle" class="custom-toggle" checked>
+                            </div>
+                        </div>
+
+                        <div class="color-picker-item" style="margin-top: 8px;">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                <label style="font-size: 0.8rem;">Keep Model in Memory (mlock)</label>
+                                <input type="checkbox" id="nativeUseMlockToggle" class="custom-toggle">
+                            </div>
+                        </div>
+
+                        <div class="color-picker-item" style="margin-top: 8px;">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                <label style="font-size: 0.8rem;">Try mmap()</label>
+                                <input type="checkbox" id="nativeUseMmapToggle" class="custom-toggle" checked>
+                            </div>
+                        </div>
+
+                        <div class="field-group" style="margin-top: 16px;">
+                            <label style="font-size: 0.8rem;">KV Cache Quantization</label>
+                            <select id="nativeKvTypeSelect" class="modal-select" style="font-size: 0.8rem;">
+                                <option value="f16">FP16 (High Quality, High VRAM)</option>
+                                <option value="q8_0">Q8_0 (8-bit Quantized)</option>
+                                <option value="q4_0">Q4_0 (4-bit Quantized)</option>
+                                <option value="q4_1">Q4_1 (4-bit Quantized)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section"
+                    style="display: flex; flex-direction: column; gap: 8px; margin-top: 16px;">
+                    <div style="display: flex; gap: 8px; width: 100%;">
+                        <button class="btn-secondary" id="nativeUnloadBtn"
+                            style="flex: 1; justify-content: center; padding: 12px; border-color: rgba(239, 68, 68, 0.3); color: #ef4444;">
+                            Unload
+                        </button>
+                        <button class="btn-primary" id="nativeLoadBtn"
+                            style="flex: 2; justify-content: center; padding: 12px; font-weight: 600;">
+                            <i class="fa-solid fa-bolt"></i> Reload Local Engine
+                        </button>
+                    </div>
+                    <div id="nativeStatusText" style="font-size: 0.8rem; text-align: center; color: var(--text-muted);">
+                        Status: Not Loaded
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <div style="display: flex; justify-content: flex-end;">
+                    <button class="btn-secondary" id="openApiSetupBtn" style="font-size: 0.8rem; padding: 6px 12px;"><i
+                            class="fa-solid fa-cloud"></i> Experimental API Setup</button>
+                </div>
+            </div>
+            <div class="window-footer">
+                <button class="btn-primary" id="saveSettingsBtn" style="margin-left: auto;">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Draggable Tools Window -->
+    <div class="window-wrapper hidden" id="toolsModal">
+        <div class="draggable-window" id="toolsWindow" style="max-width: 450px;">
+            <div class="window-header" id="toolsWindowHeader">
+                <div class="window-title">
+                    <i class="fa-solid fa-grip-vertical drag-handle-icon"></i>
+                    <span>Tools Configuration</span>
+                </div>
+                <button class="icon-btn-sm" id="closeToolsBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="window-body">
+                <div class="settings-section">
+                    <div class="section-title" style="margin-bottom: 4px;">Available Tools</div>
+                    <div style="font-size: 0.85em; color: var(--text-tertiary); margin-bottom: 16px;">
+                        Enable or disable the tools that nivm has access to.
+                    </div>
+                    <div id="toolsConfigContainer">
+                        <!-- Checkboxes injected dynamically via JS -->
+                    </div>
+                </div>
+            </div>
+            <div class="window-footer">
+                <button class="btn-primary" id="saveToolsBtn" style="margin-left: auto;">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Draggable Theme & Appearance Window -->
+    <div class="window-wrapper hidden" id="themeModal">
+        <div class="draggable-window" id="themeWindow">
+            <div class="window-header" id="themeWindowHeader">
+                <div class="window-title">
+                    <i class="fa-solid fa-grip-vertical drag-handle-icon"></i>
+                    <span>Theme & Color Customizer</span>
+                </div>
+                <button class="icon-btn-sm" id="closeThemeBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="window-body">
+                <!-- Typography & Layout -->
+                <div class="settings-section">
+                    <div class="section-title">Typography & Layout</div>
+                    <div class="button-group-row">
+                        <button class="toggle-btn" data-width="default">Default</button>
+                        <button class="toggle-btn" data-width="full">Full Width</button>
+                    </div>
+                    <div class="color-picker-item"
+                        style="flex-direction: column; align-items: stretch; gap: 12px; margin-top: 20px;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <label for="fontSizeSlider">Font Size</label>
+                            <span id="fontSizeVal" style="font-size: 0.8rem; color: var(--text-muted);">15px</span>
+                        </div>
+                        <input type="range" id="fontSizeSlider" class="custom-slider" min="12" max="24" value="15">
+                    </div>
+                    <div class="color-picker-item" style="margin-top: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <label for="clearTextToggle">Clear Text Highlight</label>
+                            <input type="checkbox" id="clearTextToggle" class="custom-toggle">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Background Motion Cards (Icon + Text Below) -->
+                <div class="settings-section">
+                    <div class="section-title">Animated Background</div>
+                    <div class="bg-motion-grid">
+                        <button class="bg-motion-card active" data-motion="none"><span
+                                class="motion-label">Off</span></button>
+                        <button class="bg-motion-card" data-motion="sparkles"><span
+                                class="motion-label">Sparkles</span></button>
+                        <button class="bg-motion-card" data-motion="orbs"><span class="motion-label">Glowing
+                                Orbs</span></button>
+                        <button class="bg-motion-card" data-motion="nodes"><span class="motion-label">Connecting
+                                Nodes</span></button>
+
+                        <button class="bg-motion-card" data-motion="rain"><span class="motion-label">Gentle
+                                Rain</span></button>
+
+                        <button class="bg-motion-card" data-motion="matrix"><span class="motion-label">Matrix
+                                Rain</span></button>
+                        <button class="bg-motion-card" data-motion="jellyfish"><span
+                                class="motion-label">Jellyfish</span></button>
+
+                        <button class="bg-motion-card" data-motion="fluid"><span class="motion-label">Fluid
+                                Sim</span></button>
+                    </div>
+                </div>
+
+                <!-- Animation Settings Panel (Dynamic based on selected animation) -->
+                <div class="settings-section" id="animationSettingsPanel" style="display: none;">
+                    <div class="section-title">Animation Settings</div>
+
+                    <!-- Fluid Sim Settings -->
+                    <div id="fluidSettings" style="display: none;">
+                        <div class="color-picker-item"
+                            style="flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <label style="font-size: 0.8rem;">Splat Radius</label>
+                                <span id="fluidRadiusVal"
+                                    style="font-family: var(--font-code); font-size: 0.8rem; color: var(--text-secondary);"></span>
+                            </div>
+                            <input type="range" id="fluidRadiusSlider" min="0.01" max="1.0" step="0.01"
+                                class="custom-slider">
+                        </div>
+                        <div class="color-picker-item"
+                            style="flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <label style="font-size: 0.8rem;">Vorticity (Swirls)</label>
+                                <span id="fluidCurlVal"
+                                    style="font-family: var(--font-code); font-size: 0.8rem; color: var(--text-secondary);"></span>
+                            </div>
+                            <input type="range" id="fluidCurlSlider" min="0" max="50" step="1" class="custom-slider">
+                        </div>
+                        <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <label style="font-size: 0.8rem;">Bloom Intensity</label>
+                                <span id="fluidBloomVal"
+                                    style="font-family: var(--font-code); font-size: 0.8rem; color: var(--text-secondary);"></span>
+                            </div>
+                            <input type="range" id="fluidBloomSlider" min="0.1" max="2.0" step="0.1"
+                                class="custom-slider">
+                        </div>
+                    </div>
+
+                    <!-- Nodes Settings -->
+                    <div id="nodesSettings" style="display: none;">
+                        <div class="color-picker-item"
+                            style="flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <label style="font-size: 0.8rem;">Node Density</label>
+                                <span id="nodesDensityVal"
+                                    style="font-family: var(--font-code); font-size: 0.8rem; color: var(--text-secondary);"></span>
+                            </div>
+                            <input type="range" id="nodesDensitySlider" min="10000" max="50000" step="1000"
+                                class="custom-slider" style="direction: rtl;">
+                        </div>
+                        <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <label style="font-size: 0.8rem;">Connection Distance</label>
+                                <span id="nodesDistanceVal"
+                                    style="font-family: var(--font-code); font-size: 0.8rem; color: var(--text-secondary);"></span>
+                            </div>
+                            <input type="range" id="nodesDistanceSlider" min="50" max="250" step="10"
+                                class="custom-slider">
+                        </div>
+                    </div>
+
+                    <!-- Matrix Settings -->
+                    <div id="matrixSettings" style="display: none;">
+                        <div class="color-picker-item"
+                            style="flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <label style="font-size: 0.8rem;">Fall Speed</label>
+                                <span id="matrixSpeedVal"
+                                    style="font-family: var(--font-code); font-size: 0.8rem; color: var(--text-secondary);"></span>
+                            </div>
+                            <input type="range" id="matrixSpeedSlider" min="15" max="100" step="5"
+                                class="custom-slider">
+                        </div>
+                        <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <label style="font-size: 0.8rem;">Trail Fade</label>
+                                <span id="matrixFadeVal"
+                                    style="font-family: var(--font-code); font-size: 0.8rem; color: var(--text-secondary);"></span>
+                            </div>
+                            <input type="range" id="matrixFadeSlider" min="0.01" max="0.2" step="0.01"
+                                class="custom-slider">
+                        </div>
+                    </div>
+                </div>
+                <div class="divider"></div>
+
+                <!-- Complete Custom Color Freedom Pickers -->
+                <div class="settings-section">
+                    <div class="section-title">Site Palette</div>
+                    <div class="color-picker-item" style="justify-content: space-around; flex-wrap: wrap;">
+                        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                            <label style="font-size: 0.8rem;">Main Background</label>
+                            <input type="color" id="bgTonePicker">
+                        </div>
+                        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                            <label style="font-size: 0.8rem;">Sidebar & Prompt</label>
+                            <input type="color" id="sidebarTonePicker">
+                        </div>
+                        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                            <label style="font-size: 0.8rem;">Text & Highlights</label>
+                            <input type="color" id="accentColorPicker">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- Dynamic Color Cycling -->
+                <div class="settings-section">
+                    <div class="section-title">Dynamic Color Cycling</div>
+                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <label for="cycleAccentToggle">Cycle Accent Color</label>
+                            <input type="checkbox" id="cycleAccentToggle" class="custom-toggle">
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <label for="cycleBgToggle">Cycle Background Color</label>
+                            <input type="checkbox" id="cycleBgToggle" class="custom-toggle">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 12px; padding-top: 4px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <label for="cycleSpeedSlider">Cycle Speed</label>
+                                <span id="cycleSpeedVal" style="font-size: 0.8rem; color: var(--text-muted);">50%</span>
+                            </div>
+                            <input type="range" id="cycleSpeedSlider" class="custom-slider" min="1" max="100"
+                                value="50">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="window-footer">
+                <button class="btn-secondary" id="resetThemeBtn">Reset Defaults</button>
+                <button class="btn-primary" id="saveThemeBtn">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Window Modal -->
+    <div class="draggable-window hidden" id="statsWindow" style="width:350px; left:60px; top:15px; z-index:100;">
+        <div class="window-header" id="statsWindowHeader">
+            <span class="window-title"><i class="fa-solid fa-chart-pie"></i> Usage Stats & Info</span>
+            <button class="icon-btn-sm" id="closeStatsBtn"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="window-body">
+            <div class="settings-group">
+                <label>Current Model</label>
+                <div class="setting-row">
+                    <span id="statsModelName" style="color:var(--text-primary); font-weight:600;">-</span>
+                </div>
+                <div class="setting-row">
+                    <span>Architecture:</span>
+                    <span id="statsArchitecture">-</span>
+                </div>
+                <div class="setting-row">
+                    <span>Model Type:</span>
+                    <span id="statsModelType">-</span>
+                </div>
+                <div class="setting-row">
+                    <span>Quantization:</span>
+                    <span id="statsQuantization">-</span>
+                </div>
+                <div class="setting-row">
+                    <span>Context Limit:</span>
+                    <span id="statsContextLimit" class="gradient-text">-</span>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <label>Global Usage Statistics</label>
+                <div class="setting-row">
+                    <span>Total Tokens:</span>
+                    <span id="statsTotalTokens">-</span>
+                </div>
+                <div class="setting-row">
+                    <span>Total Generation Time:</span>
+                    <span id="statsTotalTime">-</span>
+                </div>
+                <div class="setting-row">
+                    <span>Est. Total Cost:</span>
+                    <span id="statsTotalCost" style="color:var(--accent-emerald);">-</span>
+                </div>
+            </div>
+            <div class="settings-group">
+                <button class="btn-secondary" id="resetStatsBtn"
+                    style="width: 100%; border-color: rgba(239, 68, 68, 0.2); color: #ef4444;">
+                    <i class="fa-solid fa-trash-can"></i> Reset Statistics
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Custom Dialog Overlay -->
+    <div class="window-wrapper hidden" id="dialogOverlay"
+        style="z-index: 1000; display: flex; align-items: center; justify-content: center;">
+        <div class="dialog-box" id="dialogBox">
+            <div class="dialog-header">
+                <i class="fa-solid fa-circle-exclamation dialog-icon"></i>
+                <h3 id="dialogTitle">Notice</h3>
+            </div>
+            <div class="dialog-body" id="dialogMessage">
+                Message goes here.
+            </div>
+            <div class="dialog-footer" id="dialogActions">
+                <!-- Action buttons injected dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Experimental API Setup Modal -->
+    <div class="window-wrapper hidden" id="apiSetupModal">
+        <div class="draggable-window" id="apiSetupWindow" style="max-width: 450px;">
+            <div class="window-header" id="apiSetupHeader">
+                <div class="window-title">
+                    <i class="fa-solid fa-grip-vertical drag-handle-icon"></i>
+                    <span style="color: var(--accent-emerald);">Experimental API Setup</span>
+                </div>
+                <button class="icon-btn-sm" id="closeApiSetupBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="window-body">
+                <div class="settings-section">
+                    <div class="section-title"
+                        style="color: var(--text-secondary); margin-bottom: 12px; font-size: 0.9rem;">
+                        This forwards requests to an external API instead of using the native local engine.
+                    </div>
+                    <div class="field-group">
+                        <label for="lmStudioUrlInput_API">Base URL</label>
+                        <input type="text" id="lmStudioUrlInput" value="http://127.0.0.1:1234/v1">
+                    </div>
+                    <div class="field-group">
+                        <label for="apiKeyInput_API">API Key (Optional)</label>
+                        <input type="password" id="apiKeyInput" placeholder="sk-...">
+                    </div>
+                    <div class="field-group">
+                        <label for="modelSelect_API">Selected Model</label>
+                        <select id="modelSelect" class="modal-select">
+                            <option value="phi-4-mini-instruct">phi-4-mini-instruct</option>
+                        </select>
+                    </div>
+                    <div class="conn-test-row" style="margin-top: 16px;">
+                        <button class="btn-secondary" id="testConnBtn">
+                            <i class="fa-solid fa-plug"></i> Test Connection
+                        </button>
+                        <div class="diagnostic-result" id="diagnosticResult"></div>
+                    </div>
+
+                    <div class="settings-section" style="margin-top: 24px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <label style="font-weight: 600;">Enable API Mode</label>
+                            <input type="checkbox" id="apiModeToggle" class="custom-toggle">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <!-- Image Lightbox Modal -->
+    <div id="imageLightboxModal" class="modal-overlay hidden">
+        <div class="lightbox-content">
+            <button class="lightbox-close-btn" id="closeLightboxBtn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            <img id="lightboxImage" src="" alt="Enlarged Preview">
+        </div>
+    </div>
+
+    <!-- Video Preview Modal -->
+    <div id="videoPreviewModal" class="modal-overlay hidden">
+        <div class="lightbox-content" style="max-width: 900px; width: 90vw; background: var(--bg-surface); padding: 16px; border-radius: 12px; border: 1px solid var(--border-light);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div style="font-size: 1rem; font-weight: 600; color: var(--text-primary);">
+                    <i class="fa-solid fa-film" style="margin-right: 6px; color: var(--accent-purple);"></i> Video Inspection
+                </div>
+                <button class="icon-btn-sm" id="closeVideoPreviewBtn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div style="position: relative; width: 100%; background: #000; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                <video id="videoPreviewPlayer" style="width: 100%; max-height: 65vh;"></video>
+            </div>
+            
+            <div id="videoCustomControls" style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
+                <div style="font-size: 0.85rem; color: var(--text-secondary); text-align: center;">
+                    <i class="fa-solid fa-microchip"></i> Frames Extracted & Sent to LLM Vision Projector
+                </div>
+                
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <button id="videoPlayPauseBtn" class="icon-btn-sm" style="color: var(--text-primary); width: 32px;"><i class="fa-solid fa-play"></i></button>
+                    <div id="videoTimeDisplay" style="font-size: 0.8rem; font-family: var(--font-code); color: var(--text-secondary); min-width: 85px; text-align: center;">0:00 / 0:00</div>
+                    
+                    <div id="videoMarkersTrack" style="flex: 1; position: relative; height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; cursor: pointer; overflow: hidden;">
+                        <div id="videoProgressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 0%; background: rgba(255,255,255,0.25); pointer-events: none;"></div>
+                        <!-- Markers injected here dynamically -->
+                    </div>
+                    
+                    <button id="videoMuteBtn" class="icon-btn-sm" style="color: var(--text-primary); width: 32px;"><i class="fa-solid fa-volume-high"></i></button>
+                    <button id="videoFullscreenBtn" class="icon-btn-sm" style="color: var(--text-primary); width: 32px;"><i class="fa-solid fa-expand"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Logic -->
+    <script type="module" src="/static/js/app.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,45 @@
+@import 'variables.css';
+@import 'base.css';
+@import 'backgrounds.css';
+@import 'layout.css';
+@import 'chat.css';
+@import 'markdown.css';
+@import 'modals.css';
+
+/* Thinking Toggle Button */
+.thinking-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-right: auto;
+    margin-left: 12px;
+}
+.thinking-toggle-btn:hover {
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+.thinking-toggle-btn.active {
+    color: var(--accent-purple);
+    background: rgba(168, 85, 247, 0.1);
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    box-shadow: 0 0 12px rgba(168, 85, 247, 0.25);
+    text-shadow: 0 0 8px rgba(168, 85, 247, 0.4);
+    font-weight: 500;
+}
+.thinking-toggle-btn i {
+    transition: inherit;
+}
+.thinking-toggle-btn.active i {
+    text-shadow: 0 0 10px var(--accent-purple);
+}

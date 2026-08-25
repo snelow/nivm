@@ -1,0 +1,250 @@
+/* -----------------------------------------
+   Thinking Block (Collapsible)
+----------------------------------------- */
+.thinking-block {
+    margin: 16px 0;
+    display: inline-block;
+    max-width: 90%;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl) var(--radius-xl) var(--radius-xl) 4px;
+    background-color: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: var(--shadow-subtle);
+    overflow: hidden;
+    transition: all var(--transition-fast);
+}
+
+.thinking-block[open] {
+    border-color: var(--border-focus);
+    background-color: rgba(255, 255, 255, 0.15);
+    display: block;
+    max-width: 100%;
+}
+
+.thinking-block summary {
+    padding: 10px 24px 10px 16px; /* Increased right padding to prevent WebKit flex cutoff */
+    cursor: pointer;
+    font-size: 0.85em;
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+    transition: color var(--transition-fast);
+    white-space: nowrap;
+    width: max-content;
+}
+
+.thinking-block summary .think-status {
+    opacity: 0.7;
+    font-style: italic;
+}
+
+.thinking-block summary:hover {
+    color: var(--text-primary);
+}
+
+.thinking-block summary::-webkit-details-marker {
+    display: none;
+}
+
+.thinking-content {
+    padding: 0 16px 16px 16px;
+    font-size: 0.9em;
+    color: var(--text-muted);
+    line-height: 1.5;
+    border-top: 1px solid var(--border-subtle);
+    margin-top: 8px;
+    padding-top: 12px;
+    animation: thinkReveal 0.3s ease;
+}
+
+@keyframes thinkReveal {
+    from {
+        opacity: 0;
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
+    to {
+        opacity: 1;
+        max-height: 2000px;
+        padding-top: 12px;
+        padding-bottom: 16px;
+    }
+}
+
+.thinking-block.is-streaming .thinking-content {
+    animation: none !important;
+    opacity: 1;
+    max-height: none;
+}
+
+/* -----------------------------------------
+   Clear Text Highlight Mode
+----------------------------------------- */
+body.clear-text-active .assistant-row .message-bubble .text-hl {
+    background-color: rgba(0, 0, 0, 0.45);
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    padding: 3px 0;
+    box-shadow: 6px 0 0 rgba(0, 0, 0, 0.45), -6px 0 0 rgba(0, 0, 0, 0.45);
+    border-radius: 3px;
+    line-height: 2;
+}
+
+.color-picker-item input[type="color"] {
+    width: 40px;
+    height: 32px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.color-picker-item input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.color-picker-item input[type="color"]::-webkit-color-swatch {
+    border: none;
+    border-radius: 4px;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+}
+
+/* Toggle Buttons */
+.button-group-row {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+}
+
+.toggle-btn {
+    flex: 1;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.toggle-btn.active {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+    border-color: var(--text-primary);
+}
+
+/* Utility */
+.hidden {
+    display: none !important;
+}
+
+/* Custom Toggle Checkbox */
+.custom-toggle {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 44px;
+    height: 24px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    position: relative;
+    cursor: pointer;
+    outline: none;
+    transition: all var(--transition-fast);
+}
+
+.custom-toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    background-color: var(--text-secondary);
+    border-radius: 50%;
+    transition: all var(--transition-fast);
+}
+
+.custom-toggle:checked {
+    background-color: var(--text-primary);
+}
+
+.custom-toggle:checked::after {
+    left: 22px;
+    background-color: var(--bg-black);
+}
+
+/* Custom Slider */
+.custom-slider {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 3px;
+    outline: none;
+    border: 1px solid var(--glass-border);
+}
+
+.custom-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text-primary);
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+/* -----------------------------------------
+   Tool Trace Block (Collapsible)
+----------------------------------------- */
+.tool-trace-block {
+    margin: 8px 0;
+}
+
+.tool-trace-block summary {
+    cursor: pointer;
+    font-size: 0.85em;
+    color: var(--text-tertiary);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+    transition: color var(--transition-fast);
+}
+
+.tool-trace-block summary:hover {
+    color: var(--text-secondary);
+}
+
+.tool-trace-block summary::-webkit-details-marker {
+    display: none;
+}
+
+.tool-trace-content {
+    font-family: var(--font-mono);
+    font-size: 0.8em;
+    color: var(--text-muted);
+    background: rgba(0,0,0,0.2);
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    margin-top: 4px;
+    display: inline-block;
+    word-break: break-all;
+}

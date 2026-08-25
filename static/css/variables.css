@@ -1,0 +1,54 @@
+/* Premium Ultra-Clean Glassmorphic Theme for nivm */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@font-face {
+    font-family: 'Monocraft';
+    src: url('https://cdn.jsdelivr.net/gh/IdreesInc/Monocraft@main/dist/Monocraft-ttf/Monocraft.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+:root {
+    /* Base Colors - HSL/RGB for opacity support */
+    --bg-black: #09090b;
+    --bg-surface: #121215;
+
+    /* We need RGB values for glassmorphism */
+    --bg-surface-rgb: 18, 18, 21;
+    --bg-elevated-rgb: 24, 24, 27;
+
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-focus: rgba(255, 255, 255, 0.2);
+
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+
+    --accent-emerald: #10b981;
+    --accent-rose: #f43f5e;
+    --accent-amber: #f59e0b;
+
+    --font-main: 'Monocraft', monospace;
+    --font-chat: 'Monocraft', monospace;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    --font-size-base: 15px;
+    --chat-max-width: 800px;
+
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+    --radius-full: 9999px;
+
+    --transition-fast: 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+    --transition-normal: 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    --transition-slow: 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+
+    --shadow-subtle: 0 4px 20px rgba(0, 0, 0, 0.2);
+    --shadow-float: 0 10px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+    --shadow-glow: 0 0 20px rgba(255, 255, 255, 0.05);
+
+    --glass-bg: rgba(var(--bg-surface-rgb), 0.65);
+    --glass-border: rgba(255, 255, 255, 0.06);
+}

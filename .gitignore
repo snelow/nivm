@@ -1,11 +1,18 @@
 # Project specific
 User files/
 benchmark.py
+user_settings.json
+chats.json
+memory.json
+.download_status.json
 
 # Models
-gemma-4-E2B-it-Q4_K_M.gguf
-*mmproj*.gguf
-model/*.gguf
+*.gguf
+*.aria2
+models/*
+!models/.gitkeep
+model/*
+
 
 # Python
 __pycache__/

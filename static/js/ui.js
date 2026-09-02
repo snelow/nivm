@@ -154,7 +154,7 @@ export function renderChatHistory() {
     if (query) {
         filteredChats = state.conversations.filter(chat => {
             if (chat.title && chat.title.toLowerCase().includes(query)) return true;
-            return chat.messages.some(m => m.content && m.content.toLowerCase().includes(query));
+            return chat.messages.some(m => getMessageText(m.content).toLowerCase().includes(query));
         });
     }
 
@@ -188,6 +188,17 @@ export function renderChatHistory() {
         item.appendChild(actions);
         dom.chatHistoryList.appendChild(item);
     });
+}
+
+function getMessageText(content) {
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+        return content
+            .filter(item => item && item.type === 'text' && typeof item.text === 'string')
+            .map(item => item.text)
+            .join(' ');
+    }
+    return '';
 }
 
 export function renderActiveChat() {
@@ -243,7 +254,7 @@ export function appendMessageToDOM(msg, isStreaming = false) {
             bubble.innerHTML = '';
             // Extract text and media
             const texts = content.filter(item => item.type === 'text');
-            const images = content.filter(item => item.type === 'image_url' || item.type === 'video_url' || item.type === 'audio_url');
+            const images = content.filter(item => item.type === 'image_url' || item.type === 'video_url' || item.type === 'audio_url' || item.type === 'document_url');
             
             if (images.length > 0) {
                 const gallery = document.createElement('div');
@@ -257,7 +268,8 @@ export function appendMessageToDOM(msg, isStreaming = false) {
                 images.forEach(item => {
                     const isVideo = item.type === 'video_url';
                     const isAudio = item.type === 'audio_url';
-                    const url = isVideo ? item.video_url.url : (isAudio ? item.audio_url.url : item.image_url.url);
+                    const isDocument = item.type === 'document_url';
+                    const url = isVideo ? item.video_url.url : (isAudio ? item.audio_url.url : (isDocument ? item.document_url.url : item.image_url.url));
                     
                     let media;
                     if (isAudio) {
@@ -268,6 +280,21 @@ export function appendMessageToDOM(msg, isStreaming = false) {
                         media.style.height = '40px';
                         media.style.flexShrink = '0';
                         media.style.outline = 'none';
+                    } else if (isDocument) {
+                        media = document.createElement('div');
+                        media.textContent = 'PDF document';
+                        media.style.padding = '42px 16px';
+                        media.style.width = '120px';
+                        media.style.height = '120px';
+                        media.style.boxSizing = 'border-box';
+                        media.style.display = 'flex';
+                        media.style.alignItems = 'center';
+                        media.style.justifyContent = 'center';
+                        media.style.textAlign = 'center';
+                        media.style.borderRadius = '8px';
+                        media.style.background = 'var(--bg-surface)';
+                        media.style.color = 'var(--text-primary)';
+                        media.style.flexShrink = '0';
                     } else {
                         media = document.createElement(isVideo ? 'video' : 'img');
                         media.src = url;
@@ -373,13 +400,14 @@ export function appendMessageToDOM(msg, isStreaming = false) {
 export function updateMessageActionIcons(actionsContainer, msg, row) {
     actionsContainer.innerHTML = '';
     const { role, content, meta } = msg;
+    const copyText = getMessageText(content);
 
     const copyBtn = document.createElement('button');
     copyBtn.className = 'action-icon-btn';
     copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i>';
     copyBtn.setAttribute('title', 'Copy response');
     copyBtn.onclick = () => {
-        navigator.clipboard.writeText(content);
+        navigator.clipboard.writeText(copyText);
         copyBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
         copyBtn.setAttribute('title', 'Copied!');
         setTimeout(() => {
@@ -397,7 +425,9 @@ export function updateMessageActionIcons(actionsContainer, msg, row) {
 
         const popover = document.createElement('div');
         popover.className = 'floating-stats-popover hidden';
-        popover.innerHTML = `<i class="fa-solid fa-microchip" style="color:var(--accent-purple);"></i> ${state.selectedModel} &bull; <i class="fa-solid fa-bolt" style="color:var(--accent-emerald);"></i> ${meta.durationSec}s &bull; ${meta.tkPerSec} tk/s &bull; ~${meta.estTokens} tokens &bull; Est. $${meta.estCost}`;
+        const modelName = meta.modelInfo?.name || state.selectedModel || 'nivm';
+        const roleIcon = meta.modelInfo?.role === 'vision' ? 'fa-eye' : 'fa-code';
+        popover.innerHTML = `<i class="fa-solid ${roleIcon}" style="color:var(--accent-purple);"></i> ${modelName} &bull; <i class="fa-solid fa-bolt" style="color:var(--accent-emerald);"></i> ${meta.durationSec}s &bull; ${meta.tkPerSec} tk/s &bull; ~${meta.estTokens} tokens`;
 
         infoBtn.onmouseenter = () => popover.classList.remove('hidden');
         infoBtn.onmouseleave = () => popover.classList.add('hidden');
@@ -489,39 +519,34 @@ export function updateAssistantBubble(bubbleElement, rawText, isGenerating = fal
     processedText = processedText.replace(/^nivm\n/i, '');
     processedText = processedText.replace(/(<\/think>\s*)nivm:\s*/i, '$1');
     processedText = processedText.replace(/(<\/think>\s*)nivm\n/i, '$1');
-
-    const isThinkingModel = state.selectedModel.toLowerCase().includes('think') || state.selectedModel.toLowerCase().includes('r1');
     
-    let hasThinkStart = processedText.includes('<think>');
-    let hasThinkEnd = processedText.includes('</think>');
-
-    if (!hasThinkStart) {
-        if (hasThinkEnd) {
-            processedText = '<think>\n' + processedText;
-            hasThinkStart = true;
-        } else if (isThinkingModel && isGenerating) {
-            processedText = '<think>\n' + processedText;
-            hasThinkStart = true;
+    if (processedText.trim() === '') {
+        if (isGenerating) {
+            processedText = '<div style="opacity: 0.6; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-circle-notch fa-spin"></i> <span>Processing...</span></div>';
+        } else {
+            processedText = '*(Empty response)*';
         }
     }
 
-    if (hasThinkStart) {
-        if (hasThinkEnd) {
-            stopThinkingPhraseRotation();
-            const thinkDuration = thinkStartTime ? (performance.now() - thinkStartTime) / 1000 : 0;
-            const durationLabel = getCreativeDuration(thinkDuration);
-            processedText = processedText.replace(/<think>/g, '<details class="thinking-block"><summary><i class="fa-solid fa-brain"></i> <span class="think-status">' + durationLabel + '</span></summary><div class="thinking-content">\n\n');
-            processedText = processedText.replace(/<\/think>/g, '\n\n</div></details>\n\n');
+    const hasThinkTag = processedText.includes('<think>') || processedText.includes('</think>');
+    if (hasThinkTag) {
+        stopThinkingPhraseRotation();
+        processedText = processedText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+        processedText = processedText.replace(/<think>[\s\S]*$/g, '').trim();
+    } else if (isGenerating && processedText.trim() === '') {
+        startThinkingPhraseRotation();
+        const currentPhrase = thinkingPhrases[thinkPhraseIndex];
+        processedText = `<div class="thinking-block is-streaming" open><div class="thinking-content" style="opacity:0.75;"><i class="fa-solid fa-brain"></i> <span class="think-status">${currentPhrase}</span> <i class="fa-solid fa-spinner fa-spin" style="font-size:0.8em; opacity:0.6;"></i></div></div>`;
+    } else {
+        stopThinkingPhraseRotation();
+    }
+
+    if (!processedText.trim() && !isGenerating) {
+        if (thinkStartTime) {
+            const thinkDuration = (performance.now() - thinkStartTime) / 1000;
+            processedText = `*Reasoned internally for ${getCreativeDuration(thinkDuration).toLowerCase()}*`;
         } else {
-            if (isGenerating) {
-                startThinkingPhraseRotation();
-                const currentPhrase = thinkingPhrases[thinkPhraseIndex];
-                processedText = processedText.replace(/<think>/g, '<details class="thinking-block is-streaming" open><summary><i class="fa-solid fa-brain"></i> <span class="think-status">' + currentPhrase + '</span> <i class="fa-solid fa-spinner fa-spin" style="font-size:0.8em; opacity:0.6;"></i></summary><div class="thinking-content">\n\n');
-            } else {
-                stopThinkingPhraseRotation();
-                processedText = processedText.replace(/<think>/g, '<details class="thinking-block" open><summary><i class="fa-solid fa-brain"></i> <span class="think-status">Thought interrupted</span></summary><div class="thinking-content">\n\n');
-            }
-            processedText += '\n\n</div></details>';
+            processedText = '*(Empty response)*';
         }
     }
 
@@ -569,12 +594,14 @@ export function attachCodeCopyButtons(container) {
 
 export async function populateStatsModal() {
     if (state.engineMode === 'native') {
-        const path = dom.nativeModelPath ? dom.nativeModelPath.value.split('/').pop() : 'Native Local Engine';
-        dom.statsModelName.textContent = path;
-        dom.statsArchitecture.textContent = dom.nativeFlashAttnToggle?.checked ? 'GGUF (Flash Attn)' : 'GGUF';
+        const activeRole = state.inferenceMode === 'single'
+            ? (dom.singleModelRoleSelect?.value || 'coder')
+            : 'coder';
+        dom.statsModelName.textContent = `Local Engine (${activeRole})`;
+        dom.statsArchitecture.textContent = dom[activeRole + 'FlashAttn']?.checked ? 'GGUF (Flash Attn)' : 'GGUF';
         dom.statsModelType.textContent = 'LOCAL_NATIVE';
-        dom.statsQuantization.textContent = dom.nativeKvTypeSelect ? dom.nativeKvTypeSelect.value.toUpperCase() + ' (KV Cache)' : '-';
-        dom.statsContextLimit.textContent = dom.nativeCtxSlider ? dom.nativeCtxSlider.value : '4096';
+        dom.statsQuantization.textContent = dom[activeRole + 'KvSelect'] ? dom[activeRole + 'KvSelect'].value.toUpperCase() + ' (KV Cache)' : '-';
+        dom.statsContextLimit.textContent = dom[activeRole + 'CtxSlider'] ? dom[activeRole + 'CtxSlider'].value : '8192';
         
         dom.statsTotalTokens.textContent = state.usageStats.totalTokens.toLocaleString();
         dom.statsTotalTime.textContent = state.usageStats.totalDurationSec.toFixed(1) + 's';
@@ -790,7 +817,7 @@ export function renderToolsSettings() {
     }
     
     tools.forEach(tool => {
-        const isEnabled = state.enabledTools[tool.name] !== false; // Default true if not explicitly disabled
+        const isEnabled = state.enabledTools[tool.name] === true;
         
         const wrap = document.createElement('div');
         wrap.className = 'tool-setting-row';
@@ -825,7 +852,7 @@ export function renderToolsSettings() {
         toggleBtn.textContent = isEnabled ? 'Enabled' : 'Disabled';
         
         toggleBtn.onclick = () => {
-            const newState = !state.enabledTools[tool.name];
+            const newState = !(state.enabledTools[tool.name] === true);
             state.enabledTools[tool.name] = newState;
             saveEnabledTools();
             
@@ -982,7 +1009,7 @@ export function setupVisionUI() {
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
             const files = [];
             for (let item of items) {
-                if (item.type.indexOf('image') === 0 || item.type.indexOf('video') === 0 || item.type.indexOf('audio') === 0) {
+                if (item.type.indexOf('image') === 0 || item.type === 'application/pdf' || item.type.indexOf('video') === 0 || item.type.indexOf('audio') === 0) {
                     const file = item.getAsFile();
                     if (file) files.push(file);
                 }
@@ -1011,7 +1038,7 @@ export function setupVisionUI() {
         if (dt.files && dt.files.length > 0) {
             for (let i = 0; i < dt.files.length; i++) {
                 const file = dt.files[i];
-                if (file.type.indexOf('image') === 0 || file.type.indexOf('video') === 0 || file.type.indexOf('audio') === 0) {
+                if (file.type.indexOf('image') === 0 || file.type === 'application/pdf' || file.type.indexOf('video') === 0 || file.type.indexOf('audio') === 0) {
                     files.push(file);
                 }
             }
@@ -1054,6 +1081,7 @@ function renderImagePreviews() {
             
             const isVideo = imgObj.type && imgObj.type.startsWith('video/');
             const isAudio = imgObj.type && imgObj.type.startsWith('audio/');
+            const isPdf = imgObj.type === 'application/pdf' || imgObj.file.name.toLowerCase().endsWith('.pdf');
             
             let media;
             if (isAudio) {
@@ -1063,6 +1091,12 @@ function renderImagePreviews() {
                 media.style.height = '40px';
                 media.style.borderRadius = '8px';
                 media.style.outline = 'none';
+            } else if (isPdf) {
+                media = document.createElement('div');
+                media.textContent = `PDF: ${imgObj.file.name}`;
+                media.style.padding = '18px 12px';
+                media.style.maxWidth = '220px';
+                media.style.color = 'var(--text-primary)';
             } else {
                 media = document.createElement(isVideo ? 'video' : 'img');
                 if (isVideo) {

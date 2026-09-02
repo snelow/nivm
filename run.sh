@@ -6,7 +6,6 @@ set -e
 # Default parameters
 HOST="127.0.0.1"
 PORT="8000"
-LM_STUDIO_URL="http://127.0.0.1:1234/v1"
 RELOAD="true"
 FORCE_SETUP="false"
 
@@ -19,13 +18,12 @@ NC='\033[0m' # No Color
 
 # Function to show usage help
 show_help() {
-    echo -e "${CYAN}LM Studio Web Frontend & Python Backend Launcher${NC}"
+    echo -e "${CYAN}Sovereign AI Workbench — Local Multi-Model Assistant${NC}"
     echo "Usage: ./run.sh [OPTIONS]"
     echo ""
     echo "Options:"
     echo "  -h, --host HOST         Set server bind address (default: 127.0.0.1)"
     echo "  -p, --port PORT         Set server port (default: 8000)"
-    echo "  -u, --url URL           Set LM Studio API base URL (default: http://127.0.0.1:1234/v1)"
     echo "  --no-reload             Disable Uvicorn auto-reload"
     echo "  -s, --setup             Force re-installation of dependencies in virtual environment"
     echo "  --help                  Show this help message and exit"
@@ -41,10 +39,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         -p|--port)
             PORT="$2"
-            shift 2
-            ;;
-        -u|--url)
-            LM_STUDIO_URL="$2"
             shift 2
             ;;
         --no-reload)
@@ -68,8 +62,31 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo -e "${CYAN}====================================================${NC}"
-echo -e "${CYAN}                        nivm                        ${NC}"
+echo -e "${CYAN}        Sovereign AI Workbench — nivm v2.0          ${NC}"
 echo -e "${CYAN}====================================================${NC}"
+
+# Check models directory
+MODELS_DIR="models"
+echo -e "${YELLOW}[+] Checking models...${NC}"
+if [ -f "$MODELS_DIR/Qwen3-1.7B-Q8_0.gguf" ]; then
+    echo -e "  ${GREEN}✓${NC} Router:  Qwen3-1.7B ($(du -h $MODELS_DIR/Qwen3-1.7B-Q8_0.gguf | cut -f1))"
+elif [ -f "$MODELS_DIR/qwen2.5-1.5b-instruct-q4_k_m.gguf" ]; then
+    echo -e "  ${GREEN}✓${NC} Router:  Qwen2.5-1.5B ($(du -h $MODELS_DIR/qwen2.5-1.5b-instruct-q4_k_m.gguf | cut -f1))"
+else
+    echo -e "  ${RED}✗${NC} Router:  missing router model"
+fi
+if [ -f "$MODELS_DIR/qwen2.5-coder-3b-instruct-q4_k_m.gguf" ]; then
+    echo -e "  ${GREEN}✓${NC} Worker:  Qwen2.5-Coder-3B ($(du -h $MODELS_DIR/qwen2.5-coder-3b-instruct-q4_k_m.gguf | cut -f1))"
+elif [ -f "$MODELS_DIR/microsoft_Phi-4-mini-instruct-Q4_K_M.gguf" ]; then
+    echo -e "  ${GREEN}✓${NC} Worker:  Phi-4-mini ($(du -h $MODELS_DIR/microsoft_Phi-4-mini-instruct-Q4_K_M.gguf | cut -f1))"
+else
+    echo -e "  ${RED}✗${NC} Worker:  missing worker model"
+fi
+if [ -f "$MODELS_DIR/gemma-4-E2B-it-Q4_K_M.gguf" ]; then
+    echo -e "  ${GREEN}✓${NC} Vision:  Gemma-4-E2B ($(du -h $MODELS_DIR/gemma-4-E2B-it-Q4_K_M.gguf | cut -f1))"
+else
+    echo -e "  ${YELLOW}-${NC} Vision:  optional, not installed"
+fi
 
 # Virtual Environment Setup
 VENV_DIR="venv"
@@ -97,6 +114,8 @@ if [ "$FORCE_SETUP" = "true" ] || [ ! -d "$VENV_DIR" ]; then
     echo -e "${YELLOW}[+] Installing requirements...${NC}"
     pip install --upgrade pip -q
     pip install -r requirements.txt -q
+    echo -e "${YELLOW}[+] Installing llama-cpp-python...${NC}"
+    pip install llama-cpp-python==0.3.34 -q
     echo -e "${GREEN}[✓] Virtual environment ready.${NC}"
 else
     source "$VENV_DIR/bin/activate"
@@ -150,12 +169,11 @@ fi
 # Export environment variables for config.py
 export SERVER_HOST="$HOST"
 export SERVER_PORT="$PORT"
-export LM_STUDIO_BASE_URL="$LM_STUDIO_URL"
 export RELOAD="$RELOAD"
 
 echo -e "${GREEN}[✓] Configuration loaded:${NC}"
 echo -e "  • Frontend URL:    ${CYAN}http://${HOST}:${PORT}${NC}"
-echo -e "  • LM Studio URL:   ${CYAN}${LM_STUDIO_URL}${NC}"
+echo -e "  • Air-gapped:      ${CYAN}Yes — no external API calls${NC}"
 echo -e "  • Auto Reload:     ${CYAN}${RELOAD}${NC}"
 echo -e "${CYAN}----------------------------------------------------${NC}"
 echo -e "${GREEN}[+] Starting Uvicorn Server... (Press Ctrl+C to stop)${NC}"

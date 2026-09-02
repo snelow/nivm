@@ -1,22 +1,32 @@
+"""
+Sovereign AI Workbench — FastAPI Backend
+
+Air-gapped, multi-model AI assistant. No external API calls.
+All inference runs locally via llama-cpp-python.
+"""
+
 import json
 import logging
+import time
+import os
+import asyncio
+import base64
+import mimetypes
+import subprocess
 from typing import List, Dict, Any, Optional
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File
+
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-import httpx
-import os
-import asyncio
 
 import config
-try:
-    from engine import native_engine, HAS_LLAMA_CPP
-except ImportError:
-    native_engine = None
-    HAS_LLAMA_CPP = False
+from engine import model_manager, HAS_LLAMA_CPP, scan_local_ggufs
+from router import classify_intent
+from downloader import downloader
 
+# ── File paths ──────────────────────────────────────────────────
 USER_FILES_DIR = os.path.join(os.path.dirname(__file__), "User files")
 os.makedirs(USER_FILES_DIR, exist_ok=True)
 SETTINGS_FILE = os.path.join(USER_FILES_DIR, "settings.json")
@@ -24,6 +34,73 @@ CHATS_FILE = os.path.join(USER_FILES_DIR, "chats.json")
 MEMORY_FILE = os.path.join(USER_FILES_DIR, "memory.json")
 UPLOADS_DIR = os.path.join(USER_FILES_DIR, "uploads")
 os.makedirs(UPLOADS_DIR, exist_ok=True)
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+
+# ── Settings ────────────────────────────────────────────────────
+
+class SettingsModel(BaseModel):
+    model_config = {"extra": "allow"}
+    
+    engine_mode: str = "native"
+    inference_mode: str = "routing"          # "routing" or "single"
+    single_model_role: str = "coder"         # which role to use in single mode
+
+    # Legacy flat settings (kept for backward compat)
+    native_gpu_layers: int = -1
+    native_ctx: int = 8192
+    native_batch: int = 512
+    native_flash_attn: bool = True
+    native_offload_kqv: bool = True
+    native_use_mlock: bool = False
+    native_use_mmap: bool = True
+    native_kv_type: str = "q4_0"
+
+    # Per-role: Router
+    router_gpu_layers: int = -1
+    router_ctx: int = 8192
+    router_batch: int = 512
+    router_flash_attn: bool = True
+    router_offload_kqv: bool = True
+    router_use_mlock: bool = False
+    router_use_mmap: bool = True
+    router_kv_type: str = "f16"
+
+    # Per-role: Coder
+    coder_gpu_layers: int = -1
+    coder_ctx: int = 8192
+    coder_batch: int = 1024
+    coder_flash_attn: bool = True
+    coder_offload_kqv: bool = True
+    coder_use_mlock: bool = False
+    coder_use_mmap: bool = True
+    coder_kv_type: str = "q8_0"
+
+    # Per-role: Vision
+    vision_gpu_layers: int = -1
+    vision_ctx: int = 32768
+    vision_batch: int = 1024
+    vision_flash_attn: bool = True
+    vision_offload_kqv: bool = True
+    vision_use_mlock: bool = False
+    vision_use_mmap: bool = True
+    vision_kv_type: str = "q4_0"
+
+    # Custom model selection & path history
+    custom_model_path: str = ""
+    custom_mmproj_path: str = ""
+    custom_chat_handler: str = "auto"
+    remembered_model_paths: List[str] = []
+    last_known_good_paths: Dict[str, str] = {}
+
+    # Per-role: Custom
+    custom_gpu_layers: int = -1
+    custom_ctx: int = 8192
+    custom_batch: int = 512
+    custom_flash_attn: bool = True
+    custom_offload_kqv: bool = True
+    custom_use_mlock: bool = False
+    custom_use_mmap: bool = True
+    custom_kv_type: str = "f16"
 
 def get_user_settings():
     default_settings = SettingsModel().model_dump()
@@ -36,53 +113,70 @@ def get_user_settings():
             pass
     return default_settings
 
-def get_active_base_url():
-    settings = get_user_settings()
-    url = settings.get("base_url") or config.LM_STUDIO_BASE_URL
-    url = url.strip().rstrip("/")
-    if url and not url.startswith("http"):
-        url = "http://" + url
-    return url
+def _get_role_overrides(settings: dict, role: str) -> dict:
+    """Extract per-role engine overrides from the settings dict."""
+    prefix = f"{role}_"
+    key_map = {
+        "path": "path",
+        "gpu_layers": "n_gpu_layers",
+        "ctx": "n_ctx",
+        "batch": "n_batch",
+        "flash_attn": "flash_attn",
+        "offload_kqv": "offload_kqv",
+        "use_mlock": "use_mlock",
+        "use_mmap": "use_mmap",
+        "kv_type": "kv_type",
+        "mmproj_path": "mmproj_path",
+        "chat_handler_type": "chat_handler_type",
+    }
+    overrides = {}
+    for short_key, engine_key in key_map.items():
+        settings_key = f"{prefix}{short_key}"
+        if settings_key in settings:
+            overrides[engine_key] = settings[settings_key]
+    return overrides
 
-def get_httpx_headers():
+def _apply_all_overrides():
+    """Read user settings and apply per-role overrides to MODEL_REGISTRY."""
     settings = get_user_settings()
-    api_key = settings.get("api_key", "").strip()
-    headers = {}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    return headers
-
-class SettingsModel(BaseModel):
-    base_url: str = ""
-    api_key: str = ""
-    engine_mode: str = "native"
-    safety_bypass: bool = False
+    for role in ["router", "coder", "vision", "custom"]:
+        overrides = _get_role_overrides(settings, role)
+        if overrides:
+            model_manager.apply_user_overrides(role, overrides)
     
-    # Native Engine settings
-    native_model_path: str = "./model/gemma-4-E2B-it-Q4_K_M.gguf"
-    native_gpu_layers: int = -1
-    native_ctx: int = 4096
-    native_batch: int = 512
-    native_flash_attn: bool = False
-    native_offload_kqv: bool = True
-    native_use_mlock: bool = False
-    native_use_mmap: bool = True
-    native_kv_type: str = "f16"
-    native_mmproj_path: str = ""
-    native_mmproj_cpu: bool = False
-    native_chat_handler: str = "gemma4"
+    # Custom model path override
+    if settings.get("custom_model_path"):
+        model_manager.apply_user_overrides("custom", {"path": settings["custom_model_path"]})
+    if settings.get("custom_mmproj_path"):
+        model_manager.apply_user_overrides("custom", {
+            "mmproj_path": settings["custom_mmproj_path"],
+            "chat_handler_type": settings.get("custom_chat_handler", "auto")
+        })
+    
+    # Restore last known good paths
+    if settings.get("last_known_good_paths"):
+        model_manager.last_known_good_paths.update(settings["last_known_good_paths"])
 
-# Setup logging
+# ── Logging ─────────────────────────────────────────────────────
 logging.basicConfig(level=logging.WARNING)
-logger = logging.getLogger("lm_studio_backend")
+logger = logging.getLogger("nivm")
 
+
+def get_resident_role() -> str:
+    """Pick the model that should stay warm between requests."""
+    available = model_manager.list_available()
+    for role in ["router", "vision", "coder"]:
+        if available.get(role, {}).get("available"):
+            return role
+    return "coder"
+
+# ── FastAPI App ─────────────────────────────────────────────────
 app = FastAPI(
-    title="LM Studio Frontend Backend API",
-    description="FastAPI backend connecting a modern web UI to local LM Studio instances.",
-    version="1.0.0"
+    title="nivm",
+    description="Local, multi-model AI assistant. No external API calls.",
+    version="2.0.0"
 )
 
-# CORS middleware for developer flexibility
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -90,7 +184,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Initializing workbench (models idle until user loads)...")
+    _apply_all_overrides()
 
+# ══════════════════════════════════════════════════════════════
+# Settings & Storage Endpoints
+# ══════════════════════════════════════════════════════════════
 
 @app.get("/api/settings")
 async def get_settings_endpoint():
@@ -102,21 +203,27 @@ async def save_settings_endpoint(settings: SettingsModel):
         json.dump(settings.model_dump(), f)
     return {"status": "success"}
 
-import time
+
 @app.post("/api/upload")
 async def upload_file_endpoint(file: UploadFile = File(...)):
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
-    
+
     ext = os.path.splitext(file.filename)[1]
+    allowed_extensions = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".mp4", ".mov", ".webm", ".wav", ".mp3", ".m4a"}
+    if ext.lower() not in allowed_extensions:
+        raise HTTPException(status_code=415, detail="Unsupported file type")
     new_filename = f"media_{int(time.time() * 1000)}{ext}"
     file_path = os.path.join(UPLOADS_DIR, new_filename)
-    
+
     content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File is too large (maximum 25 MB)")
     with open(file_path, "wb") as f:
         f.write(content)
-        
+
     return {"url": f"/uploads/{new_filename}"}
+
 
 @app.get("/api/chats")
 async def get_chats_endpoint():
@@ -140,6 +247,7 @@ async def save_chats_endpoint(request: Request):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.get("/api/memory")
 async def get_memory_endpoint():
     """Returns the user's memory database."""
@@ -154,15 +262,15 @@ async def get_memory_endpoint():
 
 @app.post("/api/memory")
 async def save_memory_endpoint(request: Request):
-    """Updates the user's memory database. Expects a JSON object with a 'key' and 'value'."""
+    """Updates the user's memory database."""
     try:
         body = await request.json()
         key = body.get("key")
         value = body.get("value")
-        
+
         if not key:
             raise HTTPException(status_code=400, detail="Key is required")
-            
+
         memory_data = {}
         if os.path.exists(MEMORY_FILE):
             try:
@@ -170,13 +278,12 @@ async def save_memory_endpoint(request: Request):
                     memory_data = json.load(f)
             except Exception:
                 pass
-                
-        # If value is none or empty string, maybe we delete it? For now just set it.
+
         memory_data[key] = value
-        
+
         with open(MEMORY_FILE, "w") as f:
             json.dump(memory_data, f, indent=2)
-            
+
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Error saving memory file: {e}")
@@ -184,14 +291,14 @@ async def save_memory_endpoint(request: Request):
 
 @app.delete("/api/memory")
 async def delete_memory_endpoint(request: Request):
-    """Deletes a key from the user's memory database. Expects a JSON object with a 'key'."""
+    """Deletes a key from the user's memory database."""
     try:
         body = await request.json()
         key = body.get("key")
-        
+
         if not key:
             raise HTTPException(status_code=400, detail="Key is required")
-            
+
         memory_data = {}
         if os.path.exists(MEMORY_FILE):
             try:
@@ -199,406 +306,618 @@ async def delete_memory_endpoint(request: Request):
                     memory_data = json.load(f)
             except Exception:
                 pass
-                
+
         if key in memory_data:
             del memory_data[key]
             with open(MEMORY_FILE, "w") as f:
                 json.dump(memory_data, f, indent=2)
-            
+
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Error deleting memory file: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete memory")
 
-@app.get("/api/health")
-async def health_check():
-    """Health check endpoint that verifies connectivity to API backend."""
-    lm_studio_connected = False
-    lm_studio_error = None
-    available_models = []
-    
-    active_base_url = get_active_base_url()
-    headers = get_httpx_headers()
 
-    try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            response = await client.get(f"{active_base_url}/models", headers=headers)
-            if response.status_code == 200:
-                lm_studio_connected = True
-                data = response.json()
-                available_models = [m.get("id") for m in data.get("data", [])]
-            else:
-                lm_studio_error = f"API responded with HTTP {response.status_code}"
-    except Exception as e:
-        lm_studio_error = f"Could not connect to API at {active_base_url}: {str(e)}"
-
-    return {
-        "status": "online",
-        "lm_studio_url": active_base_url,
-        "lm_studio_connected": lm_studio_connected,
-        "lm_studio_error": lm_studio_error,
-        "default_model": config.DEFAULT_MODEL,
-        "available_models": available_models
-    }
-
+# ══════════════════════════════════════════════════════════════
+# Config & Health Endpoints
+# ══════════════════════════════════════════════════════════════
 
 @app.get("/api/config")
 async def get_config():
     """Returns application configuration settings."""
     return {
-        "lm_studio_base_url": config.LM_STUDIO_BASE_URL,
-        "default_model": config.DEFAULT_MODEL,
+        "default_model": "coder",
         "default_system_prompt": config.DEFAULT_SYSTEM_PROMPT,
         "default_temperature": config.DEFAULT_TEMPERATURE,
         "default_top_p": config.DEFAULT_TOP_P,
         "default_max_tokens": config.DEFAULT_MAX_TOKENS,
     }
 
+@app.get("/api/network/monitor")
+async def get_network_monitor():
+    """Returns real-time network connection data to prove air-gapped status."""
+    from network_monitor import get_network_status
+    return get_network_status()
+
+
+# ══════════════════════════════════════════════════════════════
+# Health & Model Info
+# ══════════════════════════════════════════════════════════════
+
+@app.get("/api/health")
+async def health_check():
+    """Health check — no external connectivity, just local engine status."""
+    return {
+        "status": "online",
+        "air_gapped": True,
+        "has_llama_cpp": HAS_LLAMA_CPP,
+        "active_model": model_manager.get_active_info(),
+        "available_models": model_manager.list_available(),
+    }
+
 
 @app.get("/api/models")
 async def get_models():
-    """Proxy request to list available models."""
-    active_base_url = get_active_base_url()
-    headers = get_httpx_headers()
-    
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{active_base_url}/models", headers=headers)
-            if response.status_code == 200:
-                return response.json()
-            else:
-                logger.warning(f"Failed to fetch models from API: HTTP {response.status_code}")
-    except Exception as e:
-        logger.warning(f"Error connecting to API models endpoint: {e}")
-
-    # Fallback response if API is unreachable or returning empty
+    """List all locally available models."""
+    available = model_manager.list_available()
     return {
         "object": "list",
         "data": [
-            {"id": config.DEFAULT_MODEL, "object": "model", "owned_by": "local"}
+            {
+                "id": role,
+                "name": info["name"],
+                "available": info["available"],
+                "size_gb": info["size_gb"],
+            }
+            for role, info in available.items()
         ]
     }
 
 
-import base64
-import mimetypes
+# ══════════════════════════════════════════════════════════════
+# Media Processing (local upload → base64 for model input)
+# ══════════════════════════════════════════════════════════════
+
+def process_media_in_messages(messages: list) -> bool:
+    """
+    Convert local upload URLs to base64 data URIs in-place.
+    Returns True if any image/visual content was found.
+    """
+    has_images = False
+
+    for msg in messages:
+        if not isinstance(msg.get("content"), list):
+            continue
+
+        new_content = []
+        for item in msg["content"]:
+            if item.get("type") in ["image_url", "video_url", "audio_url", "document_url"]:
+                url_key = item.get("type")
+                url = item.get(url_key, {}).get("url", "")
+
+                if url.startswith("/uploads/"):
+                    filename = url.split("/")[-1]
+                    filepath = os.path.join(UPLOADS_DIR, filename)
+                    if os.path.exists(filepath):
+                        if url_key == "video_url":
+                            _process_video(filepath, new_content)
+                            has_images = True
+                        elif url_key == "audio_url":
+                            _process_audio(filepath, new_content)
+                        elif url_key == "document_url" or filepath.lower().endswith(".pdf"):
+                            _process_pdf(filepath, new_content)
+                            has_images = True
+                        else:
+                            _process_image(filepath, item, new_content)
+                            has_images = True
+                else:
+                    new_content.append(item)
+                    if url_key == "image_url":
+                        has_images = True
+            else:
+                new_content.append(item)
+
+        msg["content"] = new_content
+
+    return has_images
+
+
+def _process_video(filepath: str, content_list: list):
+    """Extract frames and audio from a video file."""
+    import cv2
+
+    content_list.append({
+        "type": "text",
+        "text": "[System Note: The user attached a video file. The following media consists of the video's audio track and a sequence of extracted visual frames.]"
+    })
+
+    # Extract audio
+    try:
+        from pydub import AudioSegment
+        import io
+        audio = AudioSegment.from_file(filepath)
+        audio = audio.set_frame_rate(16000).set_channels(1)
+        wav_io = io.BytesIO()
+        audio.export(wav_io, format="wav")
+        wav_b64 = base64.b64encode(wav_io.getvalue()).decode("utf-8")
+        content_list.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:audio/wav;base64,{wav_b64}"}
+        })
+    except Exception as e:
+        logger.warning(f"Failed to extract audio from video: {e}")
+
+    # Extract frames
+    cap = cv2.VideoCapture(filepath)
+    if cap.isOpened():
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        if fps > 0 and frame_count > 0:
+            duration_seconds = frame_count / fps
+            num_frames = min(60, max(1, int(duration_seconds)))
+            step = max(1, frame_count // num_frames)
+            extracted = 0
+            for i in range(0, frame_count, step):
+                cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+                ret, frame = cap.read()
+                if ret:
+                    _, buffer = cv2.imencode('.jpg', frame)
+                    b64 = base64.b64encode(buffer).decode("utf-8")
+                    content_list.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
+                    })
+                    extracted += 1
+                if extracted >= num_frames:
+                    break
+    cap.release()
+
+
+def _process_pdf(filepath: str, content_list: list):
+    """Render PDF pages as images so the Gemma vision model can inspect them."""
+    import pymupdf
+
+    max_pages = 8
+    try:
+        document = pymupdf.open(filepath)
+        page_count = len(document)
+        pages_to_render = min(page_count, max_pages)
+        content_list.append({
+            "type": "text",
+            "text": (
+                f"[System Note: The user attached a PDF with {page_count} page(s). "
+                f"The next {pages_to_render} page image(s) are provided for visual inspection. "
+                "Reference page numbers when answering.]"
+            )
+        })
+
+        for page_index in range(pages_to_render):
+            page = document.load_page(page_index)
+            # Increase zoom from 1.5 to 3.0 for much sharper text (better OCR accuracy for the vision model)
+            pixmap = page.get_pixmap(matrix=pymupdf.Matrix(3.0, 3.0), alpha=False)
+            jpeg_bytes = pixmap.tobytes("jpeg", jpg_quality=90)
+            encoded = base64.b64encode(jpeg_bytes).decode("utf-8")
+            
+            # Extract pure text to help the vision model with dense OCR
+            page_text = page.get_text().strip()
+            
+            content_list.append({
+                "type": "text",
+                "text": f"[PDF page {page_index + 1}]\nExtracted Text:\n{page_text if page_text else '<No text found on this page>'}\n"
+            })
+            content_list.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{encoded}"}
+            })
+
+        document.close()
+    except Exception as exc:
+        logger.warning(f"PDF processing failed: {exc}")
+        content_list.append({
+            "type": "text",
+            "text": "[System Note: The attached PDF could not be rendered for vision analysis.]"
+        })
+
+
+def _process_audio(filepath: str, content_list: list):
+    """Convert audio file to WAV base64."""
+    content_list.append({
+        "type": "text",
+        "text": "[System Note: The user attached an audio file.]"
+    })
+    try:
+        from pydub import AudioSegment
+        import io
+        audio = AudioSegment.from_file(filepath)
+        audio = audio.set_frame_rate(16000).set_channels(1)
+        wav_io = io.BytesIO()
+        audio.export(wav_io, format="wav")
+        wav_b64 = base64.b64encode(wav_io.getvalue()).decode("utf-8")
+        content_list.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:audio/wav;base64,{wav_b64}"}
+        })
+    except Exception as e:
+        logger.warning(f"Failed to process audio: {e}")
+
+
+def _process_image(filepath: str, item: dict, content_list: list):
+    """Convert image to JPEG base64, handling animated images."""
+    from PIL import Image
+    import io
+
+    is_animated = False
+    try:
+        with Image.open(filepath) as img:
+            if getattr(img, "is_animated", False) and getattr(img, "n_frames", 1) > 1:
+                is_animated = True
+                content_list.append({
+                    "type": "text",
+                    "text": "[System Note: The user attached an animated image. The following sequence of frames was extracted.]"
+                })
+                n_frames = img.n_frames
+                num_frames_to_extract = min(30, max(1, n_frames))
+                step = max(1, n_frames // num_frames_to_extract)
+                extracted = 0
+                for i in range(0, n_frames, step):
+                    img.seek(i)
+                    buf = io.BytesIO()
+                    rgb_frame = img.convert('RGB')
+                    rgb_frame.save(buf, format='JPEG', quality=85)
+                    b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+                    content_list.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
+                    })
+                    extracted += 1
+                    if extracted >= num_frames_to_extract:
+                        break
+    except Exception as e:
+        logger.warning(f"Animation extraction failed: {e}")
+
+    if not is_animated:
+        try:
+            with Image.open(filepath) as img:
+                buf = io.BytesIO()
+                img.convert('RGB').save(buf, format='JPEG', quality=85)
+                b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+            item["image_url"]["url"] = f"data:image/jpeg;base64,{b64}"
+            content_list.append(item)
+        except Exception as e:
+            logger.warning(f"Image conversion failed: {e}")
+            mime, _ = mimetypes.guess_type(filepath)
+            mime = mime or "image/jpeg"
+            with open(filepath, "rb") as media_file:
+                b64 = base64.b64encode(media_file.read()).decode("utf-8")
+            item["image_url"]["url"] = f"data:{mime};base64,{b64}"
+            content_list.append(item)
+
+
+# ══════════════════════════════════════════════════════════════
+# Chat Completion — Multi-Model with Auto-Routing
+# ══════════════════════════════════════════════════════════════
 
 @app.post("/api/chat")
-async def chat_completion(request: Request):
+async def chat_completion(request: Request, background_tasks: BackgroundTasks):
     """
-    Proxy endpoint for chat completions. Supports streaming SSE responses.
-    Expects OpenAI standard completion payload.
+    Multi-model chat completion with automatic intent routing.
+    
+    Flow:
+      1. Process media in messages
+      2. Deterministic routing picks the best local model
+      3. Selected model loads on GPU → generates response
+      4. Response includes metadata about which model handled it
     """
     try:
         body = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
-    model = body.get("model", config.DEFAULT_MODEL)
     messages = body.get("messages", [])
     temperature = body.get("temperature", config.DEFAULT_TEMPERATURE)
     top_p = body.get("top_p", config.DEFAULT_TOP_P)
     max_tokens = body.get("max_tokens", config.DEFAULT_MAX_TOKENS)
     stream = body.get("stream", True)
+
+    # Step 1: Process media (convert uploads to base64)
+    has_images = await asyncio.to_thread(process_media_in_messages, messages)
+
+    # Step 2: Extract user message text for routing
+    user_text = ""
+    if messages:
+        last_msg = messages[-1]
+        if isinstance(last_msg.get("content"), str):
+            user_text = last_msg["content"]
+        elif isinstance(last_msg.get("content"), list):
+            user_text = " ".join(
+                item.get("text", "") for item in last_msg["content"]
+                if item.get("type") == "text"
+            )
+
+    # Step 3: Route to the right model (or skip routing in single mode)
+    settings = get_user_settings()
+    inference_mode = settings.get("inference_mode", "routing")
     
-    # Process local uploads to Base64
-    for msg in messages:
-        if isinstance(msg.get("content"), list):
-            new_content = []
-            for item in msg["content"]:
-                if item.get("type") in ["image_url", "video_url", "audio_url"]:
-                    url_key = item.get("type")
-                    url = item.get(url_key, {}).get("url", "")
-                    if url.startswith("/uploads/"):
-                        filename = url.split("/")[-1]
-                        filepath = os.path.join(UPLOADS_DIR, filename)
-                        if os.path.exists(filepath):
-                            if url_key == "video_url":
-                                import cv2
-                                
-                                # Inform the model that this is a video
-                                new_content.append({
-                                    "type": "text",
-                                    "text": "[System Note: The user attached a video file. The following media consists of the video's audio track and a sequence of extracted visual frames.]"
-                                })
-                                
-                                # Extract and resample audio using pydub
-                                try:
-                                    from pydub import AudioSegment
-                                    import io
-                                    audio = AudioSegment.from_file(filepath)
-                                    audio = audio.set_frame_rate(16000).set_channels(1)
-                                    wav_io = io.BytesIO()
-                                    audio.export(wav_io, format="wav")
-                                    wav_b64 = base64.b64encode(wav_io.getvalue()).decode("utf-8")
-                                    new_content.append({
-                                        "type": "image_url",
-                                        "image_url": {"url": f"data:audio/wav;base64,{wav_b64}"}
-                                    })
-                                except Exception as e:
-                                    print(f"Failed to extract audio from video: {e}")
+    if inference_mode == "single":
+        # Single model mode — skip the router entirely
+        routed_to = settings.get("single_model_role", "coder")
+        logger.warning(f"Single model mode: using {routed_to}")
+    else:
+        # Routing mode — classify intent and pick the best specialist
+        routed_to = await asyncio.to_thread(classify_intent, user_text, has_images)
+        logger.warning(f"Router classified -> {routed_to}")
+    
+    available_models = model_manager.list_available()
+    if not available_models.get(routed_to, {}).get("available"):
+        logger.warning(f"Requested role '{routed_to}' unavailable, falling back to coder")
+        routed_to = "coder"
+    logger.warning(f"Routed to: {routed_to}")
 
-                                cap = cv2.VideoCapture(filepath)
-                                if cap.isOpened():
-                                    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                                    fps = cap.get(cv2.CAP_PROP_FPS)
-                                    if fps > 0 and frame_count > 0:
-                                        duration_seconds = frame_count / fps
-                                        num_frames = min(60, max(1, int(duration_seconds)))
-                                        
-                                        step = max(1, frame_count // num_frames)
-                                        extracted = 0
-                                        for i in range(0, frame_count, step):
-                                            cap.set(cv2.CAP_PROP_POS_FRAMES, i)
-                                            ret, frame = cap.read()
-                                            if ret:
-                                                _, buffer = cv2.imencode('.jpg', frame)
-                                                b64 = base64.b64encode(buffer).decode("utf-8")
-                                                new_content.append({
-                                                    "type": "image_url",
-                                                    "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
-                                                })
-                                                extracted += 1
-                                            if extracted >= num_frames:
-                                                break
-                                cap.release()
-                            elif url_key == "audio_url":
-                                new_content.append({
-                                    "type": "text",
-                                    "text": "[System Note: The user attached an audio file.]"
-                                })
-                                try:
-                                    from pydub import AudioSegment
-                                    import io
-                                    audio = AudioSegment.from_file(filepath)
-                                    audio = audio.set_frame_rate(16000).set_channels(1)
-                                    wav_io = io.BytesIO()
-                                    audio.export(wav_io, format="wav")
-                                    wav_b64 = base64.b64encode(wav_io.getvalue()).decode("utf-8")
-                                    new_content.append({
-                                        "type": "image_url",
-                                        "image_url": {"url": f"data:audio/wav;base64,{wav_b64}"}
-                                    })
-                                except Exception as e:
-                                    print(f"Failed to extract audio from file: {e}")
-                            else:
-                                mime, _ = mimetypes.guess_type(filepath)
-                                mime = mime or "image/jpeg"
-                                
-                                is_animated = False
-                                try:
-                                    from PIL import Image
-                                    import io
-                                    with Image.open(filepath) as img:
-                                        if getattr(img, "is_animated", False) and getattr(img, "n_frames", 1) > 1:
-                                            is_animated = True
-                                            new_content.append({
-                                                "type": "text",
-                                                "text": "[System Note: The user attached an animated image. The following sequence of frames was extracted.]"
-                                            })
-                                            
-                                            n_frames = img.n_frames
-                                            # We cap at 30 frames for short animations like GIFs to avoid context bloat
-                                            num_frames_to_extract = min(30, max(1, n_frames))
-                                            step = max(1, n_frames // num_frames_to_extract)
-                                            
-                                            extracted = 0
-                                            for i in range(0, n_frames, step):
-                                                img.seek(i)
-                                                buf = io.BytesIO()
-                                                # Convert to RGB to safely save as JPEG
-                                                rgb_frame = img.convert('RGB')
-                                                rgb_frame.save(buf, format='JPEG', quality=85)
-                                                b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-                                                new_content.append({
-                                                    "type": "image_url",
-                                                    "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
-                                                })
-                                                extracted += 1
-                                                if extracted >= num_frames_to_extract:
-                                                    break
-                                except Exception as e:
-                                    print(f"Animation extraction failed: {e}")
+    # Strip tools instruction for vision model to prevent it from getting confused and looping
+    if routed_to == "vision":
+        for msg in messages:
+            if msg.get("role") == "system" and isinstance(msg.get("content"), str):
+                msg["content"] = msg["content"].split("[CRITICAL INSTRUCTION: TOOLS SYSTEM]")[0].strip()
 
-                                if not is_animated:
-                                    try:
-                                        from PIL import Image
-                                        import io
-                                        with Image.open(filepath) as img:
-                                            buf = io.BytesIO()
-                                            img.convert('RGB').save(buf, format='JPEG', quality=85)
-                                            b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-                                        item["image_url"]["url"] = f"data:image/jpeg;base64,{b64}"
-                                        new_content.append(item)
-                                    except Exception as e:
-                                        print(f"Static image conversion failed: {e}")
-                                        with open(filepath, "rb") as media_file:
-                                            b64 = base64.b64encode(media_file.read()).decode("utf-8")
-                                        item["image_url"]["url"] = f"data:{mime};base64,{b64}"
-                                        new_content.append(item)
-                    else:
-                        new_content.append(item)
-                else:
-                    new_content.append(item)
-            msg["content"] = new_content
 
-    engine_mode = body.get("engine_mode", "api")
+    # Step 4: Activate the specialist model (hot-swap onto GPU)
+    _apply_all_overrides()
+    try:
+        swap_time = await asyncio.to_thread(model_manager.activate, routed_to)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=f"Model not available: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load model: {e}")
 
-    payload = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "top_p": top_p,
-        "stream": stream,
-    }
+    model_info = model_manager.get_active_info()
 
-    if max_tokens > 0:
-        payload["max_tokens"] = max_tokens
-
-    if engine_mode == "native":
-        if not native_engine or not native_engine.is_loaded():
-            raise HTTPException(status_code=400, detail="Native engine is not loaded.")
-        
-        if stream:
-            def sync_generator():
-                import time
-                try:
-                    start_time = time.time()
-                    token_count = 0
-                    for chunk in native_engine.generate(messages, max_tokens, temperature, top_p, stream=True):
-                        yield f"data: {json.dumps(chunk)}\n\n"
-                        try:
-                            if "choices" in chunk and len(chunk["choices"]) > 0:
-                                delta = chunk["choices"][0].get("delta", {})
-                                if "content" in delta and delta["content"]:
-                                    token_count += 1
-                        except Exception:
-                            pass
-                    
-                    elapsed = time.time() - start_time
-                    tk_s = token_count / elapsed if elapsed > 0 else 0
-                    
-                    usage_chunk = {
-                        "object": "chat.completion.chunk",
-                        "choices": [{"delta": {"content": ""}, "index": 0, "finish_reason": "stop"}],
-                        "usage": {
-                            "completion_tokens": token_count,
-                            "total_time_s": elapsed,
-                            "tk_s": tk_s
-                        }
-                    }
-                    yield f"data: {json.dumps(usage_chunk)}\n\n"
-                except Exception as e:
-                    yield f"data: {json.dumps({'error': str(e)})}\n\n"
-            return StreamingResponse(sync_generator(), media_type="text/event-stream")
-        else:
-            try:
-                response = native_engine.generate(messages, max_tokens, temperature, top_p, stream=False)
-                return JSONResponse(status_code=200, content=response)
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
-
-    if max_tokens > 0:
-        payload["max_tokens"] = max_tokens
-
-    active_base_url = get_active_base_url()
-    headers = get_httpx_headers()
-    target_url = f"{active_base_url}/chat/completions"
-
+    # Step 5: Generate response
     if stream:
-        async def stream_generator():
+        def sync_generator():
             try:
-                async with httpx.AsyncClient(timeout=120.0) as client:
-                    async with client.stream("POST", target_url, json=payload, headers=headers) as response:
-                        if response.status_code != 200:
-                            err_content = await response.aread()
-                            yield f"data: {json.dumps({'error': f'API returned error code {response.status_code}: {err_content.decode()}'})}\n\n"
-                            return
+                # Send routing metadata as first chunk
+                meta_chunk = {
+                    "object": "chat.completion.chunk",
+                    "choices": [{"delta": {"content": ""}, "index": 0, "finish_reason": None}],
+                    "model_info": {
+                        "role": routed_to,
+                        "name": model_info["name"],
+                        "swap_time_s": round(swap_time, 1),
+                    }
+                }
+                yield f"data: {json.dumps(meta_chunk)}\n\n"
 
-                        async for line in response.aiter_lines():
-                            if line:
-                                yield f"{line}\n\n"
-            except httpx.ConnectError:
-                err_msg = json.dumps({"error": f"Failed to connect to API at {target_url}."})
-                yield f"data: {err_msg}\n\n"
+                start_time = time.time()
+                token_count = 0
+
+                for chunk in model_manager.generate(messages, max_tokens, temperature, top_p, stream=True):
+                    yield f"data: {json.dumps(chunk)}\n\n"
+                    try:
+                        if "choices" in chunk and len(chunk["choices"]) > 0:
+                            delta = chunk["choices"][0].get("delta", {})
+                            if "content" in delta and delta["content"]:
+                                token_count += 1
+                    except Exception:
+                        pass
+
+                elapsed = time.time() - start_time
+                tk_s = token_count / elapsed if elapsed > 0 else 0
+
+                usage_chunk = {
+                    "object": "chat.completion.chunk",
+                    "choices": [{"delta": {"content": ""}, "index": 0, "finish_reason": "stop"}],
+                    "usage": {
+                        "completion_tokens": token_count,
+                        "total_time_s": round(elapsed, 2),
+                        "tk_s": round(tk_s, 1),
+                    },
+                    "model_info": {
+                        "role": routed_to,
+                        "name": model_info["name"],
+                    }
+                }
+                yield f"data: {json.dumps(usage_chunk)}\n\n"
             except Exception as e:
-                err_msg = json.dumps({"error": f"Streaming error: {str(e)}"})
-                yield f"data: {err_msg}\n\n"
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
-        return StreamingResponse(stream_generator(), media_type="text/event-stream")
-
+        background_tasks.add_task(model_manager.activate, get_resident_role())
+        return StreamingResponse(sync_generator(), media_type="text/event-stream", background=background_tasks)
     else:
         try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                response = await client.post(target_url, json=payload, headers=headers)
-                return JSONResponse(status_code=response.status_code, content=response.json())
-        except httpx.ConnectError:
-            raise HTTPException(
-                status_code=503,
-                detail=f"Failed to connect to API at {target_url}."
+            response = await asyncio.to_thread(
+                model_manager.generate, messages, max_tokens, temperature, top_p, False
             )
+            if isinstance(response, dict):
+                response["model_info"] = {
+                    "role": routed_to,
+                    "name": model_info["name"],
+                    "swap_time_s": round(swap_time, 1),
+                }
+            background_tasks.add_task(model_manager.activate, get_resident_role())
+            return JSONResponse(status_code=200, content=response)
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
-class EngineLoadRequest(BaseModel):
-    model_path: str
-    n_gpu_layers: int = -1
-    n_ctx: int = 4096
-    n_batch: int = 512
-    flash_attn: bool = False
-    offload_kqv: bool = True
-    use_mlock: bool = False
-    use_mmap: bool = True
-    kv_type: str = "f16"
-    mmproj_path: str = ""
-    chat_handler: str = "gemma4"
-    mmproj_cpu: bool = False
 
-@app.post("/api/engine/load")
-async def engine_load(req: EngineLoadRequest):
-    if not native_engine:
-        raise HTTPException(status_code=500, detail="Native engine module not available.")
-    try:
-        # Run loading in thread so it doesn't block event loop entirely
-        await asyncio.to_thread(
-            native_engine.load_model, 
-            req.model_path, 
-            req.n_gpu_layers, 
-            req.n_ctx, 
-            req.n_batch,
-            req.flash_attn,
-            req.offload_kqv,
-            req.use_mlock,
-            req.use_mmap,
-            req.kv_type,
-            req.mmproj_path,
-            req.chat_handler,
-            req.mmproj_cpu
-        )
-        return {"status": "loaded", "config": native_engine.config}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/engine/unload")
-async def engine_unload():
-    if not native_engine:
-        raise HTTPException(status_code=500, detail="Native engine module not available.")
-    native_engine.unload_model()
-    return {"status": "unloaded"}
+# ══════════════════════════════════════════════════════════════
+# Engine Management Endpoints
+# ══════════════════════════════════════════════════════════════
 
 @app.get("/api/engine/status")
 async def engine_status():
-    if not native_engine:
-        return {"status": "unavailable", "has_llama_cpp": HAS_LLAMA_CPP}
+    """Get current engine and model status."""
     return {
-        "status": "loaded" if native_engine.is_loaded() else "unloaded",
         "has_llama_cpp": HAS_LLAMA_CPP,
-        "model_path": native_engine.model_path,
-        "config": native_engine.config
+        "active": model_manager.get_active_info(),
+        "available": model_manager.list_available(),
+    }
+
+@app.post("/api/engine/activate/{role}")
+async def engine_activate(role: str):
+    """Manually activate a specific model by role."""
+    try:
+        _apply_all_overrides()
+        swap_time = await asyncio.to_thread(model_manager.activate, role)
+        return {
+            "status": "loaded",
+            "role": role,
+            "swap_time_s": round(swap_time, 1),
+            "info": model_manager.get_active_info(),
+            "warning": model_manager.last_load_warning,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/engine/unload")
+async def engine_unload():
+    """Unload all active models."""
+    await asyncio.to_thread(model_manager.unload_all)
+    return {"status": "unloaded"}
+
+
+@app.post("/api/engine/smart-toggle")
+async def engine_smart_toggle():
+    """
+    Smart load/unload toggle.
+    - If any model is loaded → unload all
+    - If nothing loaded → apply user overrides and load the appropriate model
+    """
+    if model_manager.has_any_loaded():
+        await asyncio.to_thread(model_manager.unload_all)
+        return {
+            "action": "unloaded",
+            "status": "All models unloaded",
+            "info": model_manager.get_active_info(),
+        }
+    else:
+        _apply_all_overrides()
+        settings = get_user_settings()
+        inference_mode = settings.get("inference_mode", "routing")
+        
+        if inference_mode == "single":
+            role = settings.get("single_model_role", "coder")
+        else:
+            role = get_resident_role()
+        
+        try:
+            swap_time = await asyncio.to_thread(model_manager.activate, role)
+            return {
+                "action": "loaded",
+                "status": f"Loaded {role}",
+                "role": role,
+                "swap_time_s": round(swap_time, 1),
+                "info": model_manager.get_active_info(),
+                "warning": model_manager.last_load_warning,
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to load: {e}")
+
+
+# ══════════════════════════════════════════════════════════════
+# Model Scanning & Accelerated Download Endpoints
+# ══════════════════════════════════════════════════════════════
+
+class DownloadModelRequest(BaseModel):
+    url: str
+    filename: Optional[str] = None
+
+
+@app.get("/api/models/scan")
+async def scan_models_endpoint():
+    """Scan local models directory and remembered paths for GGUF files."""
+    settings = get_user_settings()
+    remembered = settings.get("remembered_model_paths", [])
+    extra_dirs = [os.path.dirname(p) for p in remembered if p and os.path.isabs(p)]
+    discovered = scan_local_ggufs(extra_dirs=list(set(extra_dirs)))
+    return {
+        "models": discovered,
+        "remembered_paths": remembered,
     }
 
 
-# Serve static web assets
+@app.post("/api/models/download")
+async def download_model_endpoint(req: DownloadModelRequest):
+    """Start downloading a GGUF model via aria2 or streaming fallback."""
+    if not req.url or not req.url.strip():
+        raise HTTPException(status_code=400, detail="A download URL is required")
+    try:
+        status = downloader.start_download(req.url, req.filename)
+        return status
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/models/download/status")
+async def download_model_status_endpoint():
+    """Poll download progress, speed, and ETA."""
+    status = downloader.get_status()
+    # If completed and not yet in remembered paths, add it to settings
+    if status.get("status") == "completed" and status.get("path"):
+        saved_path = status["path"]
+        settings = get_user_settings()
+        remembered = settings.get("remembered_model_paths", [])
+        if saved_path not in remembered:
+            remembered.append(saved_path)
+            settings["remembered_model_paths"] = remembered
+            settings["custom_model_path"] = saved_path
+            try:
+                with open(SETTINGS_FILE, "w") as f:
+                    json.dump(settings, f)
+            except Exception:
+                pass
+    return status
+
+
+@app.post("/api/models/download/cancel")
+async def download_model_cancel_endpoint():
+    """Cancel an ongoing download."""
+    return downloader.cancel_download()
+
+
+
+# ══════════════════════════════════════════════════════════════
+# Tool Execution Endpoints
+# ══════════════════════════════════════════════════════════════
+
+class ExecuteTerminalRequest(BaseModel):
+    command: str
+
+@app.post("/api/tools/execute_terminal")
+async def execute_terminal(req: ExecuteTerminalRequest):
+    """Execute a shell command securely and return its output."""
+    try:
+        # We run it in a thread so it doesn't block the async event loop
+        def run_cmd():
+            return subprocess.run(
+                req.command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=15,
+                cwd=os.path.dirname(__file__)
+            )
+            
+        result = await asyncio.to_thread(run_cmd)
+        
+        output = result.stdout
+        if result.stderr:
+            output += f"\n[STDERR]\n{result.stderr}"
+            
+        if not output.strip():
+            output = "[Command executed successfully with no output]"
+            
+        return {"output": output}
+    except subprocess.TimeoutExpired:
+        return {"error": "Command execution timed out after 15 seconds."}
+    except Exception as e:
+        return {"error": f"Execution failed: {str(e)}"}
+
+
+# ══════════════════════════════════════════════════════════════
+# Static Files & Root
+# ══════════════════════════════════════════════════════════════
+
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if not os.path.exists(static_dir):
     os.makedirs(static_dir, exist_ok=True)

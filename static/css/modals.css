@@ -385,3 +385,803 @@
 .lightbox-close-btn:hover {
     color: var(--accent-rose);
 }
+
+/* -----------------------------------------
+   Inference Mode Selector
+----------------------------------------- */
+.mode-selector {
+    display: flex;
+    gap: 8px;
+}
+
+.mode-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border-light, rgba(255,255,255,0.08));
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    text-align: left;
+}
+
+.mode-btn i {
+    font-size: 1.1rem;
+    opacity: 0.5;
+    transition: opacity 0.25s;
+}
+
+.mode-btn-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.mode-btn-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.mode-btn-desc {
+    font-size: 0.72rem;
+    opacity: 0.6;
+}
+
+.mode-btn:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.mode-btn.active {
+    border-color: var(--accent-purple, #a78bfa);
+    background: rgba(167, 139, 250, 0.08);
+    color: var(--text-primary);
+    box-shadow: 0 0 12px rgba(167, 139, 250, 0.1);
+}
+
+.mode-btn.active i {
+    opacity: 1;
+    color: var(--accent-purple, #a78bfa);
+}
+
+/* -----------------------------------------
+   Role Config Cards (Accordion)
+----------------------------------------- */
+.role-config-card {
+    border: 1px solid var(--border-light, rgba(255,255,255,0.06));
+    border-radius: 10px;
+    margin-bottom: 8px;
+    background: rgba(255, 255, 255, 0.015);
+    overflow: hidden;
+    transition: border-color 0.2s;
+}
+
+.role-config-card:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.role-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s;
+}
+
+.role-card-header:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.role-card-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.role-card-title i {
+    font-size: 0.9rem;
+    opacity: 0.7;
+    color: var(--accent-purple, #a78bfa);
+}
+
+.role-card-badge {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-tertiary);
+    font-weight: 500;
+}
+
+.role-card-badge.available {
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--accent-emerald, #10b981);
+}
+
+.role-card-badge.unavailable {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+}
+
+.role-card-chevron {
+    font-size: 0.7rem;
+    color: var(--text-tertiary);
+    transition: transform 0.3s ease;
+}
+
+.role-card-chevron.rotated {
+    transform: rotate(180deg);
+}
+
+.role-card-body {
+    padding: 0 14px 14px 14px;
+    max-height: 500px;
+    opacity: 1;
+    transition: max-height 0.35s ease, opacity 0.25s ease, padding 0.35s ease;
+    overflow: hidden;
+}
+
+.role-card-body.collapsed {
+    max-height: 0;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+.role-config-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Flag chips row */
+.role-flags-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.flag-chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+}
+
+.flag-chip:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.flag-chip input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--accent-purple, #a78bfa);
+    cursor: pointer;
+}
+
+/* -----------------------------------------
+   Smart Engine Toggle Button
+----------------------------------------- */
+.smart-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.03));
+    color: var(--accent-emerald, #10b981);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.smart-toggle-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.05), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.smart-toggle-btn:hover::before {
+    opacity: 1;
+}
+
+.smart-toggle-btn:hover {
+    border-color: rgba(16, 185, 129, 0.5);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.1);
+}
+
+.smart-toggle-btn:active {
+    transform: scale(0.98);
+}
+
+.smart-toggle-btn:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+/* Loaded state — switches to red/unload styling */
+.smart-toggle-btn.is-loaded {
+    border-color: rgba(239, 68, 68, 0.3);
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.03));
+    color: #ef4444;
+}
+
+.smart-toggle-btn.is-loaded::before {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.05), transparent);
+}
+
+.smart-toggle-btn.is-loaded:hover {
+    border-color: rgba(239, 68, 68, 0.5);
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.1);
+}
+
+.smart-toggle-btn i {
+    font-size: 1rem;
+}
+
+/* -----------------------------------------
+   Custom Model Card & File Status Pills
+----------------------------------------- */
+.custom-model-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-light, rgba(255, 255, 255, 0.08));
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    transition: all 0.25s ease;
+}
+
+.custom-model-card.hidden {
+    display: none !important;
+}
+
+.custom-input-with-btn {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    align-items: center;
+}
+
+.custom-input-with-btn input[type="text"] {
+    flex: 1 1 0;
+    min-width: 0 !important;
+    width: 100%;
+    font-family: var(--font-code);
+    font-size: 0.8rem;
+    box-sizing: border-box;
+    padding: 7px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: var(--text-primary);
+}
+
+.custom-input-with-btn input[type="text"]:focus {
+    border-color: var(--accent-purple, #a78bfa);
+    outline: none;
+}
+
+.custom-input-with-btn button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    box-sizing: border-box;
+    padding: 7px 14px;
+    font-size: 0.8rem;
+}
+
+.file-status-pill {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 500;
+}
+
+.file-status-pill.status-found {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--accent-emerald, #10b981);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.file-status-pill.status-missing {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.file-status-pill.status-unknown {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-tertiary);
+}
+
+.remembered-paths-container {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.remembered-paths-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.path-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    font-family: var(--font-code);
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.path-chip:hover {
+    background: rgba(167, 139, 250, 0.15);
+    border-color: rgba(167, 139, 250, 0.35);
+    color: var(--text-primary);
+}
+
+.path-chip.active {
+    background: rgba(167, 139, 250, 0.25);
+    border-color: var(--accent-purple, #a78bfa);
+    color: var(--text-primary);
+}
+
+/* -----------------------------------------
+   Accelerated Download Card & Badge
+----------------------------------------- */
+.engine-badge-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: rgba(167, 139, 250, 0.15);
+    color: var(--accent-purple, #a78bfa);
+    border: 1px solid rgba(167, 139, 250, 0.3);
+}
+
+.download-progress-card {
+    margin-top: 12px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(167, 139, 250, 0.25);
+    transition: all 0.25s ease;
+}
+
+.download-progress-card.hidden {
+    display: none !important;
+}
+
+.download-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.download-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
+}
+
+.download-card-title {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.download-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.73rem;
+    color: var(--text-muted);
+}
+
+.download-card-meta .meta-sep {
+    opacity: 0.4;
+}
+
+.download-cancel-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    font-size: 0.85rem;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.download-cancel-btn:hover {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.download-progress-track {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    position: relative;
+}
+
+.download-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-purple, #a78bfa), var(--accent-emerald, #10b981));
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+/* -----------------------------------------
+   Air-Gap Telemetry Sentinel Window & Oscilloscope
+----------------------------------------- */
+.sentinel-pulse-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--accent-emerald, #10b981);
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    padding: 3px 8px;
+    border-radius: 12px;
+}
+
+.sentinel-pulse-badge .pulse-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-emerald, #10b981);
+    box-shadow: 0 0 8px var(--accent-emerald, #10b981);
+    animation: sentinelPulse 1.8s infinite ease-in-out;
+}
+
+@keyframes sentinelPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.3; transform: scale(0.7); }
+}
+
+.sentinel-header-strip {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    margin-bottom: 12px;
+}
+
+.sentinel-status-block {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.sentinel-status-icon-ring {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1.5px solid rgba(16, 185, 129, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-emerald, #10b981);
+    font-size: 1rem;
+    box-shadow: 0 0 16px rgba(16, 185, 129, 0.15);
+}
+
+.sentinel-status-label {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.03em;
+}
+
+.sentinel-status-sub {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.sentinel-meta-pills {
+    display: flex;
+    gap: 6px;
+}
+
+.sentinel-meta-pill {
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-family: var(--font-code);
+    font-size: 0.7rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+}
+
+.sentinel-meta-pill strong {
+    color: var(--accent-emerald, #10b981);
+}
+
+/* Oscilloscope Frame */
+.sentinel-oscilloscope-frame {
+    background: radial-gradient(circle at center, rgba(16, 185, 129, 0.03), rgba(0, 0, 0, 0.6));
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 0 25px rgba(0, 0, 0, 0.8);
+}
+
+.sentinel-channel-legend {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-code);
+    font-size: 0.7rem;
+    margin-bottom: 6px;
+}
+
+.legend-channel {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.legend-line {
+    width: 14px;
+    height: 2.5px;
+    border-radius: 2px;
+}
+
+.legend-line.line-green {
+    background: var(--accent-emerald, #10b981);
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.8);
+}
+
+.legend-line.line-red {
+    background: #ef4444;
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.8);
+}
+
+.channel-val {
+    font-weight: 700;
+}
+
+.channel-val.val-flatline {
+    color: #ef4444;
+}
+
+.channel-local .channel-val {
+    color: var(--accent-emerald, #10b981);
+}
+
+.sentinel-canvas-wrapper {
+    position: relative;
+    width: 100%;
+    height: 110px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #020608;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sentinel-canvas-wrapper canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.sentinel-scanline {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(180deg, rgba(16, 185, 129, 0.08) 0%, transparent 40%, rgba(16, 185, 129, 0.03) 100%);
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.sentinel-oscilloscope-footer {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-code);
+    font-size: 0.66rem;
+    color: var(--text-tertiary);
+    margin-top: 6px;
+    padding-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* Tabs & Sockets Table */
+.sentinel-tabs-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+    align-items: center;
+}
+
+.sentinel-tab {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    font-size: 0.76rem;
+    padding: 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sentinel-tab:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.sentinel-tab.active {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.sentinel-audit-btn {
+    margin-left: auto;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: var(--accent-emerald, #10b981);
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s;
+}
+
+.sentinel-audit-btn:hover {
+    background: rgba(16, 185, 129, 0.22);
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+}
+
+.sentinel-table-wrapper {
+    height: 120px;
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sentinel-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-code);
+    font-size: 0.72rem;
+    text-align: left;
+}
+
+.sentinel-table th {
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-tertiary);
+    font-weight: 600;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sentinel-table td {
+    padding: 5px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    color: var(--text-secondary);
+}
+
+.badge-clean {
+    color: var(--accent-emerald, #10b981);
+    font-weight: 600;
+}
+
+.badge-wan-blocked {
+    color: #ef4444;
+    font-weight: 600;
+}
+
+.sentinel-log-container {
+    height: 120px;
+    overflow-y: auto;
+    font-family: var(--font-code);
+    font-size: 0.72rem;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 6px;
+    padding: 8px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    color: var(--text-tertiary);
+}
+
+.sentinel-compact-footer {
+    display: flex;
+    justify-content: space-between;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+
+.footer-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.footer-stat-label {
+    font-size: 0.68rem;
+    color: var(--text-tertiary);
+    font-family: var(--font-code);
+}
+
+.footer-stat-val {
+    font-size: 0.76rem;
+    font-weight: 600;
+    font-family: var(--font-code);
+    color: var(--text-primary);
+}
+
+
+

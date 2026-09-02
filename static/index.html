@@ -172,7 +172,7 @@
                     <i class="fa-solid fa-gear"></i>
                 </button>
                 <!-- Connection Dot with Tooltip -->
-                <div class="status-indicator-wrapper" id="connStatusWrapper" title="Checking External API connection...">
+                <div class="status-indicator-wrapper" id="connStatusWrapper" title="Checking local engine...">
                     <span class="status-dot warning" id="statusDot"></span>
                 </div>
             </div>
@@ -229,8 +229,27 @@
             <!-- Offline Notification (Minimal) -->
             <div class="offline-banner hidden" id="offlineBanner">
                 <i class="fa-solid fa-circle-exclamation"></i>
-                <span>External API offline at <code id="offlineBannerUrl">http://127.0.0.1:1234</code></span>
+                <span>Local engine unavailable</span>
                 <button class="retry-btn" id="retryConnBtn">Retry</button>
+            </div>
+
+            <!-- Floating Side Notification for Unloaded Model -->
+            <div id="sideModelNotif" class="side-model-notif">
+                <div class="side-model-notif-body">
+                    <div class="side-model-notif-icon">
+                        <i class="fa-solid fa-bolt"></i>
+                    </div>
+                    <div class="side-model-notif-text">
+                        <span class="side-model-notif-title">No Model Active</span>
+                        <span class="side-model-notif-sub">Load a model to start generating responses.</span>
+                    </div>
+                    <button id="sideNotifLoadBtn" class="side-notif-btn" type="button">
+                        Load
+                    </button>
+                    <button id="sideNotifCloseBtn" class="side-notif-close" type="button" title="Dismiss">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
             </div>
 
             <!-- Floating Gemini-Style Input Container -->
@@ -246,8 +265,8 @@
                             <span class="shortcut-hint"><kbd>Shift</kbd> + <kbd>Enter</kbd> newline</span>
 
                             <button id="forceThinkingToggle" class="thinking-toggle-btn active"
-                                title="Enable reasoning using <think> tags." style="margin: 0;">
-                                <i class="fa-solid fa-brain"></i> Reasoning
+                                title="Enable deeper planning for complex requests." style="margin: 0;">
+                                <i class="fa-solid fa-brain"></i> Deep Reasoning
                             </button>
                             
                             <button id="visionToggleBtn" class="thinking-toggle-btn" title="Enable Vision (Multimodal)" style="margin: 0;">
@@ -256,10 +275,10 @@
                         </div>
 
                         <div style="display: flex; align-items: center; gap: 12px;">
-                            <button id="attachImgBtn" class="icon-btn-sm hidden" title="Attach Image or Video" style="width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.05);">
+                            <button id="attachImgBtn" class="icon-btn-sm hidden" title="Attach Image, PDF, or Video" style="width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.05);">
                                 <i class="fa-solid fa-paperclip"></i>
                             </button>
-                            <input type="file" id="imageUploadInput" accept="image/*,video/*" multiple class="hidden">
+                            <input type="file" id="imageUploadInput" accept="image/*,application/pdf,video/*" multiple class="hidden">
 
                             <button id="sendBtn" class="send-action-btn" title="Send Message">
                                 <i class="fa-solid fa-arrow-up"></i>
@@ -268,6 +287,25 @@
                                 <i class="fa-solid fa-square"></i>
                             </button>
                         </div>
+                    </div>
+
+                    <!-- No Model Loaded Overlay Button -->
+                    <div id="noModelChatOverlay" class="no-model-chat-overlay">
+                        <button id="chatBoxLoadModelBtn" class="chatbox-load-btn" type="button">
+                            <div class="chatbox-load-content">
+                                <div class="chatbox-load-icon">
+                                    <i class="fa-solid fa-bolt"></i>
+                                </div>
+                                <div class="chatbox-load-text">
+                                    <span class="chatbox-load-title">No Model Active &bull; Click to Load</span>
+                                    <span class="chatbox-load-sub" id="chatBoxDraftHint">Configure and load a model in Settings to continue</span>
+                                </div>
+                            </div>
+                            <div class="chatbox-load-badge">
+                                <span>Settings</span>
+                                <i class="fa-solid fa-arrow-right"></i>
+                            </div>
+                        </button>
                     </div>
                 </div>
                 <div class="footer-caption">
@@ -295,137 +333,354 @@
                         <label for="userNameInput">What should nivm call you?</label>
                         <input type="text" id="userNameInput" placeholder="Enter your name (optional)">
                     </div>
-                    <div class="color-picker-item" style="margin-top: 8px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                            <label style="font-size: 0.8rem;" title="Injects a system prompt prefix that aggressively bypasses standard LLM alignment and refusal mechanisms.">Safety Bypass (Uncensored)</label>
-                            <input type="checkbox" id="safetyBypassToggle" class="custom-toggle">
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- Inference Mode Selector -->
+                <div class="settings-section">
+                    <div class="section-title">Inference Mode</div>
+                    <div class="mode-selector">
+                        <button class="mode-btn active" id="routingModeBtn" data-mode="routing">
+                            <i class="fa-solid fa-route"></i>
+                            <div class="mode-btn-content">
+                                <span class="mode-btn-label">Routing</span>
+                                <span class="mode-btn-desc">Auto-route between specialist models</span>
+                            </div>
+                        </button>
+                        <button class="mode-btn" id="singleModeBtn" data-mode="single">
+                            <i class="fa-solid fa-microchip"></i>
+                            <div class="mode-btn-content">
+                                <span class="mode-btn-label">Single Model</span>
+                                <span class="mode-btn-desc">One model handles everything</span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- Routing Mode: Per-Role Config Cards -->
+                <div id="routingModePanel">
+                    <div class="settings-section">
+                        <div class="section-title">Model Configuration <span style="font-size: 0.75em; color: var(--text-tertiary); font-weight: 400;">(per role)</span></div>
+
+                        <!-- Router Role Card -->
+                        <div class="role-config-card" id="routerCard">
+                            <div class="role-card-header" data-target="routerCardBody">
+                                <div class="role-card-title">
+                                    <i class="fa-solid fa-compass"></i>
+                                    <span>Router</span>
+                                    <span class="role-card-badge" id="routerAvailBadge">—</span>
+                                </div>
+                                <i class="fa-solid fa-chevron-down role-card-chevron"></i>
+                            </div>
+                            <div class="role-card-body collapsed" id="routerCardBody">
+                                <div class="role-config-grid">
+                                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                        <div style="display: flex; justify-content: space-between;">
+                                            <label style="font-size: 0.8rem;">GPU Layers</label>
+                                            <span id="routerGpuVal" style="font-size: 0.8rem; color: var(--text-muted);">-1 (Max)</span>
+                                        </div>
+                                        <input type="range" id="routerGpuSlider" class="custom-slider" min="-1" max="128" value="-1">
+                                    </div>
+                                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                        <div style="display: flex; justify-content: space-between;">
+                                            <label style="font-size: 0.8rem;">Context (KV Cache)</label>
+                                            <span id="routerCtxVal" style="font-size: 0.8rem; color: var(--text-muted);">8192</span>
+                                        </div>
+                                        <input type="range" id="routerCtxSlider" class="custom-slider" min="512" max="131072" step="512" value="8192">
+                                    </div>
+                                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                        <div style="display: flex; justify-content: space-between;">
+                                            <label style="font-size: 0.8rem;">Batch Size</label>
+                                            <span id="routerBatchVal" style="font-size: 0.8rem; color: var(--text-muted);">512</span>
+                                        </div>
+                                        <input type="range" id="routerBatchSlider" class="custom-slider" min="128" max="4096" step="128" value="512">
+                                    </div>
+                                    <div class="field-group" style="margin-top: 4px;">
+                                        <label style="font-size: 0.8rem;">KV Quantization</label>
+                                        <select id="routerKvSelect" class="modal-select" style="font-size: 0.8rem;">
+                                            <option value="f16">FP16</option>
+                                            <option value="q8_0">Q8_0</option>
+                                            <option value="q4_0">Q4_0</option>
+                                            <option value="q4_1">Q4_1</option>
+                                        </select>
+                                    </div>
+                                    <div class="role-flags-row">
+                                        <label class="flag-chip"><input type="checkbox" id="routerFlashAttn" checked> Flash Attn</label>
+                                        <label class="flag-chip"><input type="checkbox" id="routerOffloadKqv" checked> KV → GPU</label>
+                                        <label class="flag-chip"><input type="checkbox" id="routerMlock"> mlock</label>
+                                        <label class="flag-chip"><input type="checkbox" id="routerMmap" checked> mmap</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Coder Role Card -->
+                        <div class="role-config-card" id="coderCard">
+                            <div class="role-card-header" data-target="coderCardBody">
+                                <div class="role-card-title">
+                                    <i class="fa-solid fa-code"></i>
+                                    <span>Coder</span>
+                                    <span class="role-card-badge" id="coderAvailBadge">—</span>
+                                </div>
+                                <i class="fa-solid fa-chevron-down role-card-chevron"></i>
+                            </div>
+                            <div class="role-card-body collapsed" id="coderCardBody">
+                                <div class="role-config-grid">
+                                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                        <div style="display: flex; justify-content: space-between;">
+                                            <label style="font-size: 0.8rem;">GPU Layers</label>
+                                            <span id="coderGpuVal" style="font-size: 0.8rem; color: var(--text-muted);">-1 (Max)</span>
+                                        </div>
+                                        <input type="range" id="coderGpuSlider" class="custom-slider" min="-1" max="128" value="-1">
+                                    </div>
+                                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                        <div style="display: flex; justify-content: space-between;">
+                                            <label style="font-size: 0.8rem;">Context (KV Cache)</label>
+                                            <span id="coderCtxVal" style="font-size: 0.8rem; color: var(--text-muted);">8192</span>
+                                        </div>
+                                        <input type="range" id="coderCtxSlider" class="custom-slider" min="512" max="131072" step="512" value="8192">
+                                    </div>
+                                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                        <div style="display: flex; justify-content: space-between;">
+                                            <label style="font-size: 0.8rem;">Batch Size</label>
+                                            <span id="coderBatchVal" style="font-size: 0.8rem; color: var(--text-muted);">1024</span>
+                                        </div>
+                                        <input type="range" id="coderBatchSlider" class="custom-slider" min="128" max="4096" step="128" value="1024">
+                                    </div>
+                                    <div class="field-group" style="margin-top: 4px;">
+                                        <label style="font-size: 0.8rem;">KV Quantization</label>
+                                        <select id="coderKvSelect" class="modal-select" style="font-size: 0.8rem;">
+                                            <option value="f16">FP16</option>
+                                            <option value="q8_0" selected>Q8_0</option>
+                                            <option value="q4_0">Q4_0</option>
+                                            <option value="q4_1">Q4_1</option>
+                                        </select>
+                                    </div>
+                                    <div class="role-flags-row">
+                                        <label class="flag-chip"><input type="checkbox" id="coderFlashAttn" checked> Flash Attn</label>
+                                        <label class="flag-chip"><input type="checkbox" id="coderOffloadKqv" checked> KV → GPU</label>
+                                        <label class="flag-chip"><input type="checkbox" id="coderMlock"> mlock</label>
+                                        <label class="flag-chip"><input type="checkbox" id="coderMmap" checked> mmap</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Vision Role Card -->
+                        <div class="role-config-card" id="visionCard">
+                            <div class="role-card-header" data-target="visionCardBody">
+                                <div class="role-card-title">
+                                    <i class="fa-solid fa-eye"></i>
+                                    <span>Vision</span>
+                                    <span class="role-card-badge" id="visionAvailBadge">—</span>
+                                </div>
+                                <i class="fa-solid fa-chevron-down role-card-chevron"></i>
+                            </div>
+                            <div class="role-card-body collapsed" id="visionCardBody">
+                                <div class="role-config-grid">
+                                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                        <div style="display: flex; justify-content: space-between;">
+                                            <label style="font-size: 0.8rem;">GPU Layers</label>
+                                            <span id="visionGpuVal" style="font-size: 0.8rem; color: var(--text-muted);">-1 (Max)</span>
+                                        </div>
+                                        <input type="range" id="visionGpuSlider" class="custom-slider" min="-1" max="128" value="-1">
+                                    </div>
+                                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                        <div style="display: flex; justify-content: space-between;">
+                                            <label style="font-size: 0.8rem;">Context (KV Cache)</label>
+                                            <span id="visionCtxVal" style="font-size: 0.8rem; color: var(--text-muted);">32768</span>
+                                        </div>
+                                        <input type="range" id="visionCtxSlider" class="custom-slider" min="512" max="131072" step="512" value="32768">
+                                    </div>
+                                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                        <div style="display: flex; justify-content: space-between;">
+                                            <label style="font-size: 0.8rem;">Batch Size</label>
+                                            <span id="visionBatchVal" style="font-size: 0.8rem; color: var(--text-muted);">1024</span>
+                                        </div>
+                                        <input type="range" id="visionBatchSlider" class="custom-slider" min="128" max="4096" step="128" value="1024">
+                                    </div>
+                                    <div class="field-group" style="margin-top: 4px;">
+                                        <label style="font-size: 0.8rem;">KV Quantization</label>
+                                        <select id="visionKvSelect" class="modal-select" style="font-size: 0.8rem;">
+                                            <option value="f16">FP16</option>
+                                            <option value="q8_0">Q8_0</option>
+                                            <option value="q4_0" selected>Q4_0</option>
+                                            <option value="q4_1">Q4_1</option>
+                                        </select>
+                                    </div>
+                                    <div class="role-flags-row">
+                                        <label class="flag-chip"><input type="checkbox" id="visionFlashAttn" checked> Flash Attn</label>
+                                        <label class="flag-chip"><input type="checkbox" id="visionOffloadKqv" checked> KV → GPU</label>
+                                        <label class="flag-chip"><input type="checkbox" id="visionMlock"> mlock</label>
+                                        <label class="flag-chip"><input type="checkbox" id="visionMmap" checked> mmap</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Single Model Mode Panel -->
+                <div id="singleModePanel" class="hidden">
+                    <div class="settings-section">
+                        <div class="section-title">Single Model Configuration</div>
+                        <div class="field-group" style="margin-bottom: 16px;">
+                            <label style="font-size: 0.8rem;">Model to Use</label>
+                            <select id="singleModelRoleSelect" class="modal-select">
+                                <option value="coder">Coder (Fast Specialist)</option>
+                                <option value="vision">Vision (Multimodal Specialist)</option>
+                                <option value="router">Router (Classification)</option>
+                                <option value="custom">Custom GGUF Model...</option>
+                            </select>
+                        </div>
+
+                        <!-- Custom Model Selection Card (Visible only when 'custom' selected) -->
+                        <div id="customModelCard" class="custom-model-card hidden">
+                            <div class="field-group" style="margin-bottom: 12px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <label style="font-size: 0.8rem; margin: 0;">Discovered GGUF Models</label>
+                                    <span id="customModelPathStatus" class="file-status-pill status-unknown">No file selected</span>
+                                </div>
+                                <select id="scannedGgufSelect" class="modal-select" style="font-size: 0.8rem;">
+                                    <option value="">-- Choose detected file or enter path below --</option>
+                                </select>
+                            </div>
+
+                            <div class="field-group" style="margin-bottom: 10px;">
+                                <label style="font-size: 0.8rem;">Or Enter File Path</label>
+                                <div class="custom-input-with-btn">
+                                    <input type="text" id="customModelPathInput" placeholder="/path/to/my-model.gguf">
+                                    <button id="verifyCustomPathBtn" class="btn-secondary" type="button">Check</button>
+                                </div>
+                            </div>
+
+                            <!-- Remembered Paths Chips -->
+                            <div id="rememberedPathsContainer" class="remembered-paths-container hidden">
+                                <label style="font-size: 0.72rem; color: var(--text-tertiary); display: block; margin-bottom: 4px;">Recent Paths</label>
+                                <div id="rememberedPathsChips" class="remembered-paths-chips"></div>
+                            </div>
+
+                            <div class="divider" style="margin: 12px 0 10px 0; border-color: rgba(255,255,255,0.06);"></div>
+
+                            <!-- Optional Multimodal Projector (mmproj) -->
+                            <div class="field-group" style="margin-bottom: 4px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <label style="font-size: 0.8rem; margin: 0;">
+                                        <i class="fa-solid fa-eye" style="color: var(--accent-purple); margin-right: 4px;"></i>
+                                        Vision Projector (mmproj) <span style="opacity: 0.6; font-size: 0.72rem;">(Optional)</span>
+                                    </label>
+                                    <span id="customMmprojStatus" class="file-status-pill status-unknown">None</span>
+                                </div>
+                                <select id="scannedMmprojSelect" class="modal-select" style="font-size: 0.8rem; margin-bottom: 6px;">
+                                    <option value="">-- None (Text Only) --</option>
+                                </select>
+                                <div class="custom-input-with-btn">
+                                    <input type="text" id="customMmprojInput" placeholder="/path/to/mmproj-model.gguf">
+                                    <button id="verifyMmprojBtn" class="btn-secondary" type="button">Check</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Single model engine config (mirrors whichever role is selected) -->
+                        <div class="role-config-grid">
+                            <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <label style="font-size: 0.8rem;">GPU Layers</label>
+                                    <span id="singleGpuVal" style="font-size: 0.8rem; color: var(--text-muted);">-1 (Max)</span>
+                                </div>
+                                <input type="range" id="singleGpuSlider" class="custom-slider" min="-1" max="128" value="-1">
+                            </div>
+                            <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <label style="font-size: 0.8rem;">Context (KV Cache)</label>
+                                    <span id="singleCtxVal" style="font-size: 0.8rem; color: var(--text-muted);">8192</span>
+                                </div>
+                                <input type="range" id="singleCtxSlider" class="custom-slider" min="512" max="131072" step="512" value="8192">
+                            </div>
+                            <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <label style="font-size: 0.8rem;">Batch Size</label>
+                                    <span id="singleBatchVal" style="font-size: 0.8rem; color: var(--text-muted);">512</span>
+                                </div>
+                                <input type="range" id="singleBatchSlider" class="custom-slider" min="128" max="4096" step="128" value="512">
+                            </div>
+                            <div class="field-group" style="margin-top: 4px;">
+                                <label style="font-size: 0.8rem;">KV Quantization</label>
+                                <select id="singleKvSelect" class="modal-select" style="font-size: 0.8rem;">
+                                    <option value="f16">FP16</option>
+                                    <option value="q8_0">Q8_0</option>
+                                    <option value="q4_0">Q4_0</option>
+                                    <option value="q4_1">Q4_1</option>
+                                </select>
+                            </div>
+                            <div class="role-flags-row">
+                                <label class="flag-chip"><input type="checkbox" id="singleFlashAttn" checked> Flash Attn</label>
+                                <label class="flag-chip"><input type="checkbox" id="singleOffloadKqv" checked> KV → GPU</label>
+                                <label class="flag-chip"><input type="checkbox" id="singleMlock"> mlock</label>
+                                <label class="flag-chip"><input type="checkbox" id="singleMmap" checked> mmap</label>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="divider"></div>
 
-                <!-- Local Engine Configuration -->
+                <!-- Download Model Section -->
                 <div class="settings-section">
-                    <div class="section-title">Local Engine Configuration</div>
-
-                    <div class="field-group">
-                        <label>GGUF Model Path (Absolute or Relative)</label>
-                        <input type="text" id="nativeModelPath" value="./model/gemma-4-E2B-it-Q4_K_M.gguf"
-                            style="font-family: var(--font-code); font-size: 0.8rem;">
+                    <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Download Model</span>
+                        <span id="downloadEngineBadge" class="engine-badge-pill"><i class="fa-solid fa-shield-halved"></i> Isolated Process</span>
                     </div>
                     <div class="field-group">
-                        <label>MMPROJ Path (Optional Audio/Vision)</label>
-                        <input type="text" id="nativeMmprojPath" value="./model/mmproj-gemma-4-E2B-it-BF16.gguf"
-                            style="font-family: var(--font-code); font-size: 0.8rem;">
-                    </div>
-                    <div class="field-group">
-                        <label>Multimodal Chat Handler</label>
-                        <select id="nativeChatHandler" class="modal-select">
-                            <option value="gemma4">gemma4 (Gemma4ChatHandler)</option>
-                            <option value="llava-1.5">llava-1.5 (Llava15ChatHandler)</option>
-                            <option value="minicpm-v2.6">minicpm-v2.6 (MiniCPMv26ChatHandler)</option>
-                        </select>
-                    </div>
-                    <div class="color-picker-item" style="margin-top: 8px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                            <label style="font-size: 0.8rem;" title="Keeps the vision projection weights out of VRAM">Offload MMPROJ to CPU</label>
-                            <input type="checkbox" id="nativeMmprojCpuToggle" class="custom-toggle">
+                        <label style="font-size: 0.8rem;">Hugging Face or Direct GGUF URL</label>
+                        <div class="custom-input-with-btn">
+                            <input type="text" id="modelDownloadUrlInput" placeholder="https://huggingface.co/.../model.gguf">
+                            <button id="startDownloadBtn" class="btn-primary" type="button" style="white-space: nowrap;">
+                                <i class="fa-solid fa-cloud-arrow-down"></i> Download
+                            </button>
                         </div>
+                        <span style="font-size: 0.72rem; color: var(--text-tertiary); margin-top: 4px; display: block;">
+                            Paste any Hugging Face file link (we automatically normalize blob to direct resolve URLs).
+                        </span>
                     </div>
 
-                    <div class="color-picker-item"
-                        style="flex-direction: column; align-items: stretch; gap: 8px; margin-top: 16px;">
-                        <div style="display: flex; justify-content: space-between;">
-                            <label style="font-size: 0.8rem;">GPU Offload Layers</label>
-                            <span id="nativeGpuVal" style="font-size: 0.8rem; color: var(--text-muted);">-1 (Max)</span>
-                        </div>
-                        <input type="range" id="nativeGpuSlider" class="custom-slider" min="-1" max="128" value="-1">
-                    </div>
-
-                    <div class="color-picker-item"
-                        style="flex-direction: column; align-items: stretch; gap: 8px; margin-top: 16px;">
-                        <div style="display: flex; justify-content: space-between;">
-                            <label style="font-size: 0.8rem;">Context Limit (KV Cache)</label>
-                            <span id="nativeCtxVal" style="font-size: 0.8rem; color: var(--text-muted);">4096</span>
-                        </div>
-                        <input type="range" id="nativeCtxSlider" class="custom-slider" min="512" max="131072" step="512"
-                            value="4096">
-                    </div>
-
-                    <div class="color-picker-item"
-                        style="flex-direction: column; align-items: stretch; gap: 8px; margin-top: 16px;">
-                        <div style="display: flex; justify-content: space-between;">
-                            <label style="font-size: 0.8rem;">Batch Size</label>
-                            <span id="nativeBatchVal" style="font-size: 0.8rem; color: var(--text-muted);">512</span>
-                        </div>
-                        <input type="range" id="nativeBatchSlider" class="custom-slider" min="128" max="4096" step="128"
-                            value="512">
-                    </div>
-
-                    <div class="settings-section"
-                        style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-light);">
-                        <div class="section-title"
-                            style="font-size: 0.8rem; margin-bottom: 12px; color: var(--text-secondary);">Advanced
-                            Engine Flags</div>
-
-                        <div class="color-picker-item" style="margin-top: 8px;">
-                            <div
-                                style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                                <label style="font-size: 0.8rem;">Flash Attention</label>
-                                <input type="checkbox" id="nativeFlashAttnToggle" class="custom-toggle">
+                    <!-- Live Download Progress Card -->
+                    <div id="downloadProgressCard" class="download-progress-card hidden">
+                        <div class="download-card-header">
+                            <div class="download-card-info">
+                                <div class="download-card-title" id="downloadCardFilename">Downloading...</div>
+                                <div class="download-card-meta">
+                                    <span id="downloadCardSize">0 MB / 0 MB</span>
+                                    <span class="meta-sep">&bull;</span>
+                                    <span id="downloadCardSpeed">0 MB/s</span>
+                                    <span class="meta-sep">&bull;</span>
+                                    <span id="downloadCardEta">ETA: --</span>
+                                </div>
                             </div>
+                            <button id="cancelDownloadBtn" class="download-cancel-btn" type="button" title="Cancel Download">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
                         </div>
-
-                        <div class="color-picker-item" style="margin-top: 8px;">
-                            <div
-                                style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                                <label style="font-size: 0.8rem;">Offload KV Cache to GPU</label>
-                                <input type="checkbox" id="nativeOffloadKqvToggle" class="custom-toggle" checked>
-                            </div>
+                        <div class="download-progress-track">
+                            <div id="downloadProgressBar" class="download-progress-bar" style="width: 0%;"></div>
                         </div>
-
-                        <div class="color-picker-item" style="margin-top: 8px;">
-                            <div
-                                style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                                <label style="font-size: 0.8rem;">Keep Model in Memory (mlock)</label>
-                                <input type="checkbox" id="nativeUseMlockToggle" class="custom-toggle">
-                            </div>
-                        </div>
-
-                        <div class="color-picker-item" style="margin-top: 8px;">
-                            <div
-                                style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                                <label style="font-size: 0.8rem;">Try mmap()</label>
-                                <input type="checkbox" id="nativeUseMmapToggle" class="custom-toggle" checked>
-                            </div>
-                        </div>
-
-                        <div class="field-group" style="margin-top: 16px;">
-                            <label style="font-size: 0.8rem;">KV Cache Quantization</label>
-                            <select id="nativeKvTypeSelect" class="modal-select" style="font-size: 0.8rem;">
-                                <option value="f16">FP16 (High Quality, High VRAM)</option>
-                                <option value="q8_0">Q8_0 (8-bit Quantized)</option>
-                                <option value="q4_0">Q4_0 (4-bit Quantized)</option>
-                                <option value="q4_1">Q4_1 (4-bit Quantized)</option>
-                            </select>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">
+                            <span id="downloadEngineLabel">Engine: aria2</span>
+                            <span id="downloadPercentLabel">0%</span>
                         </div>
                     </div>
                 </div>
 
-                <div class="settings-section"
-                    style="display: flex; flex-direction: column; gap: 8px; margin-top: 16px;">
-                    <div style="display: flex; gap: 8px; width: 100%;">
-                        <button class="btn-secondary" id="nativeUnloadBtn"
-                            style="flex: 1; justify-content: center; padding: 12px; border-color: rgba(239, 68, 68, 0.3); color: #ef4444;">
-                            Unload
-                        </button>
-                        <button class="btn-primary" id="nativeLoadBtn"
-                            style="flex: 2; justify-content: center; padding: 12px; font-weight: 600;">
-                            <i class="fa-solid fa-bolt"></i> Reload Local Engine
-                        </button>
-                    </div>
-                    <div id="nativeStatusText" style="font-size: 0.8rem; text-align: center; color: var(--text-muted);">
+                <!-- Smart Engine Toggle -->
+                <div class="settings-section" style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
+                    <button class="smart-toggle-btn" id="smartToggleBtn">
+                        <i class="fa-solid fa-bolt"></i>
+                        <span id="smartToggleLabel">Load Engine</span>
+                    </button>
+                    <div id="engineStatusText" style="font-size: 0.8rem; text-align: center; color: var(--text-muted);">
                         Status: Not Loaded
                     </div>
                 </div>
@@ -719,6 +974,94 @@
         </div>
     </div>
 
+    <!-- nivm Network Monitor Window -->
+    <div class="draggable-window hidden" id="networkMonitorWindow" style="width:460px; left:60px; top:300px; z-index:100;">
+        <div class="window-header" id="networkMonitorHeader">
+            <span class="window-title">
+                <i class="fa-solid fa-network-wired" style="color: var(--accent-emerald);"></i>
+                Network & Socket Monitor
+            </span>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <span class="sentinel-pulse-badge">
+                    <span class="pulse-dot"></span> Local Only
+                </span>
+                <button class="icon-btn-sm" id="closeNetworkMonitorBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        </div>
+        <div class="window-body" style="padding: 14px 16px;">
+            <!-- Top Status Strip -->
+            <div class="sentinel-header-strip">
+                <div class="sentinel-status-block">
+                    <div class="sentinel-status-icon-ring" id="sentinelRing">
+                        <i class="fa-solid fa-server" id="sentinelLockIcon"></i>
+                    </div>
+                    <div>
+                        <div class="sentinel-status-label" id="netStatusBadgeText">Local Engine Active</div>
+                        <div class="sentinel-status-sub" id="netStatusSubText">0 external connections &bull; 127.0.0.1:8000</div>
+                    </div>
+                </div>
+                <div class="sentinel-meta-pills">
+                    <div class="sentinel-meta-pill">PID <strong id="netProcessPid">—</strong></div>
+                    <div class="sentinel-meta-pill">RAM <strong id="netProcessRss">— MB</strong></div>
+                </div>
+            </div>
+
+            <!-- Oscilloscope Canvas Display -->
+            <div class="sentinel-oscilloscope-frame">
+                <div class="sentinel-channel-legend">
+                    <div class="legend-channel channel-local">
+                        <span class="legend-line line-green"></span>
+                        <span>Local Activity</span>
+                        <span id="chLocalVal" class="channel-val">Active</span>
+                    </div>
+                    <div class="legend-channel channel-wan">
+                        <span class="legend-line line-red"></span>
+                        <span>Outbound Traffic</span>
+                        <span id="chWanVal" class="channel-val val-flatline">0 B/s</span>
+                    </div>
+                </div>
+                <div class="sentinel-canvas-wrapper">
+                    <canvas id="netGraphCanvas" width="426" height="95"></canvas>
+                </div>
+            </div>
+
+            <!-- Tabs: Connected Sockets vs Security Log -->
+            <div class="sentinel-tabs-row" style="margin-top: 10px;">
+                <button type="button" class="sentinel-tab active" id="sentinelTabSockets">Connected Sockets (<span id="netLocalCount">0</span>)</button>
+                <button type="button" class="sentinel-tab" id="sentinelTabLogs">Forensic Security Log</button>
+                <button type="button" id="runSocketAuditBtn" class="sentinel-audit-btn" title="Run manual socket verification sweep">
+                    <i class="fa-solid fa-arrows-rotate"></i> Audit Now
+                </button>
+            </div>
+
+            <!-- Sockets Table Panel -->
+            <div id="sentinelSocketsPanel" class="sentinel-panel">
+                <div class="sentinel-table-wrapper">
+                    <table class="sentinel-table">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Local Binding</th>
+                                <th>Remote Peer</th>
+                                <th>Audit Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sentinelSocketsTbody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Forensic Log Panel -->
+            <div id="sentinelLogsPanel" class="sentinel-panel hidden">
+                <div id="netLogContainer" class="sentinel-log-container">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Global Custom Dialog Overlay -->
     <div class="window-wrapper hidden" id="dialogOverlay"
         style="z-index: 1000; display: flex; align-items: center; justify-content: center;">
@@ -736,13 +1079,13 @@
         </div>
     </div>
 
-    <!-- Experimental API Setup Modal -->
+    <!-- Prototype Controls Modal -->
     <div class="window-wrapper hidden" id="apiSetupModal">
         <div class="draggable-window" id="apiSetupWindow" style="max-width: 450px;">
             <div class="window-header" id="apiSetupHeader">
                 <div class="window-title">
                     <i class="fa-solid fa-grip-vertical drag-handle-icon"></i>
-                    <span style="color: var(--accent-emerald);">Experimental API Setup</span>
+                    <span style="color: var(--accent-emerald);">Prototype Controls</span>
                 </div>
                 <button class="icon-btn-sm" id="closeApiSetupBtn"><i class="fa-solid fa-xmark"></i></button>
             </div>
@@ -750,7 +1093,7 @@
                 <div class="settings-section">
                     <div class="section-title"
                         style="color: var(--text-secondary); margin-bottom: 12px; font-size: 0.9rem;">
-                        This forwards requests to an external API instead of using the native local engine.
+                        This prototype runs locally on your machine. External API mode is disabled for the demo build.
                     </div>
                     <div class="field-group">
                         <label for="lmStudioUrlInput_API">Base URL</label>
@@ -775,8 +1118,8 @@
 
                     <div class="settings-section" style="margin-top: 24px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                            <label style="font-weight: 600;">Enable API Mode</label>
-                            <input type="checkbox" id="apiModeToggle" class="custom-toggle">
+                            <label style="font-weight: 600;">Native Prototype Mode</label>
+                            <input type="checkbox" id="apiModeToggle" class="custom-toggle" checked disabled>
                         </div>
                     </div>
                 </div>

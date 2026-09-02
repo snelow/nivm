@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { saveMemoryAPI } from './api.js';
+import { saveMemoryAPI, executeTerminalAPI } from './api.js';
 
 export const tools = [
     {
@@ -32,6 +32,20 @@ export const tools = [
             
             return `Successfully updated memory key '${key}'.`;
         }
+    },
+    {
+        name: 'execute_terminal',
+        description: 'Run a shell command on the host machine terminal and get the output.',
+        instruction: 'Use this tool to execute bash/shell commands, run scripts, manage files, or check system status. You will receive the stdout/stderr. Do not run interactive commands that require user input (like nano or vim).',
+        usageFormat: 'TOOL_CALL: execute_terminal(command_string)',
+        execute: async (argsStr) => {
+            // Remove bounding quotes if the model wrapped the command in quotes
+            let cmd = argsStr.trim();
+            if ((cmd.startsWith('"') && cmd.endsWith('"')) || (cmd.startsWith("'") && cmd.endsWith("'"))) {
+                cmd = cmd.substring(1, cmd.length - 1);
+            }
+            return await executeTerminalAPI(cmd);
+        }
     }
 ];
 
@@ -52,11 +66,13 @@ export function buildToolsInstruction(memoryKeys, enabledTools) {
         instruction += `Usage Format: ${tool.usageFormat}\n\n`;
     });
     
+    instruction += `\nCRITICAL MANDATE: If the user provides a fact about themselves, you MUST use write_memory IMMEDIATELY. Do not answer without saving it first!\n\n`;
     instruction += `EXAMPLES OF CORRECT BEHAVIOR:\n`;
     instruction += `User: "I also know Python"\n`;
-    instruction += `Assistant: TOOL_CALL: write_memory(user_skills, Python)\n`;
+    instruction += `TOOL_CALL: write_memory(user_skills, Python)\n`;
+    instruction += `Got it! I've saved that you know Python.\n\n`;
     instruction += `User: "What's my name?"\n`;
-    instruction += `Assistant: TOOL_CALL: read_memory(user_name)\n\n`;
+    instruction += `TOOL_CALL: read_memory(user_name)\n\n`;
     
     return instruction;
 }

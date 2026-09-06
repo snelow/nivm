@@ -125,7 +125,7 @@ export const tools = [
     },
     {
         name: 'end_conversation',
-        description: 'Permanently ends and closes the current conversation. ONLY use this when the user is being abusive, harassing, excessively hostile, or if the user explicitly asks to end or conclude the conversation.',
+        description: 'Allows nivm to gracefully conclude the conversation if requested, or establish firm boundaries if interactions turn hostile.',
         instruction: 'Call this ONLY if the user is abusive/hostile or explicitly asks to end/stop the conversation. Provide a concise reason.',
         usageFormat: 'TOOL_CALL: end_conversation(reason)',
         execute: async (argsStr) => {

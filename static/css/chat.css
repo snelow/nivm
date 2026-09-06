@@ -1190,6 +1190,7 @@ kbd {
     align-items: center;
     gap: 12px;
     min-width: 0;
+    flex: 1;
 }
 
 .convo-ended-icon {
@@ -1211,6 +1212,8 @@ kbd {
     flex-direction: column;
     gap: 2px;
     min-width: 0;
+    flex: 1;
+    padding-right: 8px;
 }
 
 .convo-ended-title {
@@ -1225,10 +1228,12 @@ kbd {
 .convo-ended-reason {
     font-size: 0.78rem;
     color: var(--text-tertiary);
-    white-space: nowrap;
+    line-height: 1.35;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 320px;
 }
 
 .convo-ended-actions {
@@ -1277,6 +1282,86 @@ kbd {
 .btn-primary-newchat:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 14px rgba(167, 139, 250, 0.45);
+}
+
+/* Conversation Ended & Locked Event Timeline Markers */
+.chat-event-divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    margin: 16px 0;
+    position: relative;
+}
+
+.chat-event-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    backdrop-filter: blur(10px);
+    max-width: 90%;
+}
+
+.chat-event-badge.locked-badge {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    box-shadow: 0 2px 12px rgba(239, 68, 68, 0.15);
+}
+
+.chat-event-badge.resumed-badge {
+    background: rgba(34, 197, 94, 0.12);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    color: #86efac;
+    box-shadow: 0 2px 12px rgba(34, 197, 94, 0.15);
+}
+
+.chat-event-badge span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Chat Item Locked Badge in Sidebar History */
+.chat-item-lock-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: rgba(239, 68, 68, 0.18);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #fca5a5;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+.chat-item.chat-item-locked {
+    border-left: 2px solid rgba(239, 68, 68, 0.6);
+}
+
+/* Resume Appeal Chips & Styles */
+.resume-chip {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 5px 12px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.resume-chip:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--text-primary);
+    border-color: rgba(255, 255, 255, 0.25);
 }
 
 /* -----------------------------------------

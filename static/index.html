@@ -409,6 +409,50 @@
         </main>
     </div>
 
+    <!-- Resume Appeal Decision Modal -->
+    <div class="window-wrapper hidden" id="resumeAppealModal" style="z-index: 950; display: flex; align-items: center; justify-content: center;">
+        <div class="draggable-window" id="resumeAppealWindow" style="max-width: 490px; width: 92%;">
+            <div class="window-header" id="resumeAppealWindowHeader">
+                <div class="window-title">
+                    <i class="fa-solid fa-hand-holding-heart" style="color: var(--accent-purple, #a855f7);"></i>
+                    <span>Resume Conversation</span>
+                </div>
+                <button class="icon-btn-sm" id="closeResumeAppealBtn" type="button"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="window-body" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 14px;">
+                <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5;">
+                    nivm previously concluded this conversation with remark:
+                    <div style="margin-top: 6px; padding: 10px 14px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; color: #fca5a5; font-size: 0.84rem; line-height: 1.4;" id="resumeAppealReasonDisplay">
+                        Conversation concluded.
+                    </div>
+                </div>
+                <div style="font-size: 0.84rem; color: var(--text-muted); line-height: 1.4;">
+                    nivm will review how the conversation went and decide whether she wants to continue or keep it closed.
+                </div>
+                <div class="field-group" style="display: flex; flex-direction: column; gap: 6px;">
+                    <label for="resumeAppealInput" style="font-size: 0.82rem; font-weight: 500; color: var(--text-secondary);">Message to nivm (optional):</label>
+                    <textarea id="resumeAppealInput" rows="3" style="width: 100%; resize: vertical; padding: 10px 12px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border); color: var(--text-primary); font-family: inherit; font-size: 0.88rem;" placeholder="e.g. My bad earlier, can we start fresh?"></textarea>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;" id="resumeAppealChips">
+                    <button type="button" class="resume-chip" data-text="I apologize for earlier, let's start fresh.">"I apologize, let's start fresh"</button>
+                    <button type="button" class="resume-chip" data-text="Hey, I'm ready to continue now.">"Ready to continue now"</button>
+                    <button type="button" class="resume-chip" data-text="Just a test or misunderstanding, can we talk?">"Just a misunderstanding"</button>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px; gap: 10px;">
+                    <button type="button" id="resumeAppealForceBtn" class="btn-subtle-resume" style="font-size: 0.78rem; opacity: 0.75;" title="Skip asking the model and unlock immediately">
+                        <i class="fa-solid fa-unlock-keyhole"></i> Force Unlock
+                    </button>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" class="btn-secondary" id="cancelResumeAppealBtn">Cancel</button>
+                        <button type="button" class="btn-primary" id="submitResumeAppealBtn">
+                            <i class="fa-solid fa-paper-plane"></i> Ask nivm
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Draggable Settings Window -->
     <div class="window-wrapper hidden" id="settingsModal">
         <div class="draggable-window" id="settingsWindow">

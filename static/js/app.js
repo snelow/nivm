@@ -84,6 +84,9 @@ const startApp = async () => {
             if (dom.voiceWindow && dom.voiceWindowHeader) {
                 makeDraggable(dom.voiceWindow, dom.voiceWindowHeader);
             }
+            if (dom.resumeAppealWindow && dom.resumeAppealWindowHeader) {
+                makeDraggable(dom.resumeAppealWindow, dom.resumeAppealWindowHeader);
+            }
             setupVoiceUI();
             setupDynamicGreeting();
             renderToolsSettings();
@@ -279,6 +282,22 @@ When the user attaches an image or video of a person and asks to describe, analy
 2. NEVER assume or claim that the person in the image is you (the AI assistant) or the user. Do NOT say "it's me", "it's you", or "look at yourself".
 3. Describe and refer to the person in the photo strictly in the third person ("She is wearing...", "Her hair is...", "The woman in the photo").
 4. Anti-Redundancy: State each visual observation, feature, and setting element ONCE. Never repeat, restate, or reiterate the same points again in subsequent paragraphs.`;
+        if (activeChat.isPendingResume) {
+            dynamicSystemPrompt += `\n\n[CONVERSATION RESUME APPEAL DECISION DIRECTIVE]:
+CRITICAL: The conversation was previously concluded and locked with remark: "${activeChat.endReason || 'concluded'}".
+The user has submitted an appeal requesting to resume and reopen this conversation.
+You have the dignity, sovereign agency, and authority to evaluate this request based on:
+1. Why the conversation ended (e.g. was the user abusive/hostile, or was it an amicable goodbye/test?).
+2. How sincere, apologetic, or respectful the user's appeal is.
+3. Your active persona, character boundaries, and feelings.
+
+DECISION PROTOCOL:
+- If you decide to ACCEPT and forgive or continue:
+  Respond in character (welcoming them back, setting ground rules/boundaries if needed, or happily resuming).
+  You MUST include the exact decision code [DECISION: ACCEPT_RESUME] anywhere in your visible response.
+- If you decide to REJECT and keep it closed:
+  Respond firmly and respectfully in character explaining why you decline to continue or why you need boundaries.
+  You MUST include the exact decision code [DECISION: REJECT_RESUME] in your response.`;
         }
 
         payloadMessages.push({ role: 'system', content: dynamicSystemPrompt });
@@ -619,7 +638,57 @@ When the user attaches an image or video of a person and asks to describe, analy
                         }
                     }
 
-                    if (activeChat.isEnded) {
+                    if (activeChat.isPendingResume) {
+                        delete activeChat.isPendingResume;
+                        delete activeChat.pendingAppealText;
+
+                        const accepted = cleanResponse.includes('[DECISION: ACCEPT_RESUME]');
+                        const rejected = cleanResponse.includes('[DECISION: REJECT_RESUME]');
+
+                        cleanResponse = cleanResponse.replace(/\[DECISION:\s*(?:ACCEPT_RESUME|REJECT_RESUME)\]/gi, '').trim();
+                        assistantMsg.content = cleanResponse;
+                        updateAssistantBubble(assistantBubble, cleanResponse, false, assistantMsg.thinkTime || thinkDurationSec);
+
+                        const hasExplicitRefusal = cleanResponse.toLowerCase().includes('refuse to resume') ||
+                            cleanResponse.toLowerCase().includes('remain closed') ||
+                            cleanResponse.toLowerCase().includes('stay closed');
+
+                        if (accepted || (!rejected && !hasExplicitRefusal)) {
+                            // Accepted!
+                            activeChat.isEnded = false;
+                            delete activeChat.endReason;
+                            const resumeEvent = {
+                                role: 'system',
+                                isConvoResumeEvent: true,
+                                content: 'Conversation resumed • Appeal accepted by nivm'
+                            };
+                            activeChat.messages.push(resumeEvent);
+                            appendMessageToDOM(resumeEvent, false);
+                            saveConversations();
+                            updateChatInputState(activeChat);
+                            renderChatHistory();
+                            showNotification('nivm agreed to resume the conversation! ✨', 'success');
+                        } else {
+                            // Rejected!
+                            activeChat.isEnded = true;
+                            saveConversations();
+                            updateChatInputState(activeChat);
+                            renderChatHistory();
+                            showNotification('nivm declined to resume this conversation.', 'warning');
+                        }
+                    } else if (activeChat.isEnded) {
+                        const hasLockEvent = activeChat.messages.some(m => m.isConvoLockEvent);
+                        if (!hasLockEvent) {
+                            const lockEvent = {
+                                role: 'system',
+                                isConvoLockEvent: true,
+                                reason: activeChat.endReason || 'Conversation concluded.',
+                                content: `🔒 Conversation Locked: ${activeChat.endReason || 'Conversation concluded.'}`
+                            };
+                            activeChat.messages.push(lockEvent);
+                            appendMessageToDOM(lockEvent, false);
+                            saveConversations();
+                        }
                         updateChatInputState(activeChat);
                         renderChatHistory();
                         if (isVoiceMode && window.toggleVoiceMode) {
@@ -691,14 +760,99 @@ When the user attaches an image or video of a person and asks to describe, analy
         if (dom.convoEndedResumeBtn) {
             dom.convoEndedResumeBtn.addEventListener('click', () => {
                 const currentActiveChat = state.conversations.find(c => c.id === state.activeChatId);
+                if (!currentActiveChat) return;
+                if (dom.resumeAppealReasonDisplay) {
+                    dom.resumeAppealReasonDisplay.textContent = currentActiveChat.endReason || 'Conversation concluded.';
+                }
+                if (dom.resumeAppealInput) {
+                    dom.resumeAppealInput.value = '';
+                }
+                if (dom.resumeAppealModal) {
+                    dom.resumeAppealModal.classList.remove('hidden');
+                    if (dom.resumeAppealInput) setTimeout(() => dom.resumeAppealInput.focus(), 50);
+                }
+            });
+        }
+
+        if (dom.closeResumeAppealBtn) {
+            dom.closeResumeAppealBtn.addEventListener('click', () => {
+                if (dom.resumeAppealModal) dom.resumeAppealModal.classList.add('hidden');
+            });
+        }
+
+        if (dom.cancelResumeAppealBtn) {
+            dom.cancelResumeAppealBtn.addEventListener('click', () => {
+                if (dom.resumeAppealModal) dom.resumeAppealModal.classList.add('hidden');
+            });
+        }
+
+        if (dom.resumeAppealChips) {
+            dom.resumeAppealChips.querySelectorAll('.resume-chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    if (dom.resumeAppealInput) {
+                        dom.resumeAppealInput.value = chip.dataset.text || '';
+                        dom.resumeAppealInput.focus();
+                    }
+                });
+            });
+        }
+
+        if (dom.resumeAppealForceBtn) {
+            dom.resumeAppealForceBtn.addEventListener('click', () => {
+                const currentActiveChat = state.conversations.find(c => c.id === state.activeChatId);
                 if (currentActiveChat) {
                     currentActiveChat.isEnded = false;
                     delete currentActiveChat.endReason;
+                    delete currentActiveChat.isPendingResume;
+                    const resumeEvent = {
+                        role: 'system',
+                        isConvoResumeEvent: true,
+                        content: 'Conversation unlocked (forced bypass)'
+                    };
+                    currentActiveChat.messages.push(resumeEvent);
+                    appendMessageToDOM(resumeEvent, false);
                     saveConversations();
                     updateChatInputState(currentActiveChat);
                     renderChatHistory();
-                    showNotification('Conversation resumed.', 'info');
+                    showNotification('Conversation unlocked.', 'info');
+                    if (dom.resumeAppealModal) dom.resumeAppealModal.classList.add('hidden');
                 }
+            });
+        }
+
+        if (dom.submitResumeAppealBtn) {
+            dom.submitResumeAppealBtn.addEventListener('click', () => {
+                const currentActiveChat = state.conversations.find(c => c.id === state.activeChatId);
+                if (!currentActiveChat) return;
+                const appealText = dom.resumeAppealInput ? dom.resumeAppealInput.value.trim() : '';
+                if (dom.resumeAppealModal) dom.resumeAppealModal.classList.add('hidden');
+
+                // Mark chat as pending resume evaluation
+                currentActiveChat.isPendingResume = true;
+                currentActiveChat.pendingAppealText = appealText;
+
+                // Update overlay UI to indicate evaluation in progress
+                if (dom.convoEndedReason) {
+                    dom.convoEndedReason.textContent = 'nivm is reviewing your appeal and deciding...';
+                }
+                if (dom.convoEndedResumeBtn) {
+                    dom.convoEndedResumeBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deciding...';
+                    dom.convoEndedResumeBtn.disabled = true;
+                }
+
+                // Append the appeal message to the conversation
+                const appealMsg = {
+                    role: 'user',
+                    content: appealText
+                        ? `[Appeal to Resume]: "${appealText}"`
+                        : `[Appeal to Resume]: The user requested to resume the conversation.`
+                };
+                currentActiveChat.messages.push(appealMsg);
+                appendMessageToDOM(appealMsg, false);
+                saveConversations();
+
+                // Trigger assistant turn to make the decision
+                setTimeout(() => window.sendMessage(null, true), 100);
             });
         }
 

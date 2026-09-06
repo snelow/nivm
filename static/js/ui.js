@@ -222,7 +222,8 @@ export function renderChatHistory() {
         const title = document.createElement('span');
         title.className = 'chat-item-title';
         if (chat.isEnded) {
-            title.innerHTML = `<i class="fa-solid fa-lock" style="font-size: 0.72rem; opacity: 0.6; margin-right: 5px;" title="Conversation Ended"></i> ${escapeHtml(chat.title || 'New Chat')}`;
+            title.innerHTML = `<span class="chat-item-lock-pill"><i class="fa-solid fa-lock"></i> Locked</span> ${escapeHtml(chat.title || 'New Chat')}`;
+            item.classList.add('chat-item-locked');
         } else {
             title.textContent = chat.title || 'New Chat';
         }
@@ -253,6 +254,7 @@ export function updateChatInputState(activeChat) {
             if (endReasonEl) {
                 const reason = activeChat.endReason || 'Conversation concluded.';
                 endReasonEl.textContent = reason;
+                endReasonEl.title = reason;
             }
         }
         if (dom.userPrompt) {
@@ -667,6 +669,32 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
             bubble.textContent = content;
         }
     } else if (role === 'system') {
+        if (msg.isConvoLockEvent) {
+            bubble.style.cssText = 'background: transparent; border: none; padding: 0; width: 100%;';
+            const cleanReason = msg.reason || (typeof content === 'string' ? content.replace(/^🔒\s*Conversation Locked:?\s*/i, '') : 'Conversation concluded.');
+            bubble.innerHTML = `
+            <div class="chat-event-divider locked-divider">
+                <div class="chat-event-badge locked-badge" title="${escapeHtml(cleanReason)}">
+                    <i class="fa-solid fa-lock"></i>
+                    <span>Conversation locked • ${escapeHtml(cleanReason)}</span>
+                </div>
+            </div>`;
+            wrapper.appendChild(bubble);
+            row.appendChild(wrapper);
+            return { bubble, actions: null };
+        } else if (msg.isConvoResumeEvent) {
+            bubble.style.cssText = 'background: transparent; border: none; padding: 0; width: 100%;';
+            bubble.innerHTML = `
+            <div class="chat-event-divider resumed-divider">
+                <div class="chat-event-badge resumed-badge">
+                    <i class="fa-solid fa-unlock"></i>
+                    <span>${escapeHtml(typeof content === 'string' ? content : 'Conversation resumed')}</span>
+                </div>
+            </div>`;
+            wrapper.appendChild(bubble);
+            row.appendChild(wrapper);
+            return { bubble, actions: null };
+        }
         bubble.style.cssText = 'background: transparent; border: none; padding: 0; width: 100%;';
         const innerHtml = window.marked && content ? marked.parse(content) : escapeHtml(content);
         bubble.innerHTML = `

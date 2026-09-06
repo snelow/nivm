@@ -14,6 +14,8 @@ const startApp = async () => {
     function sanitizeAssistantText(text) {
         if (!text) return '';
         let cleaned = stripToolCallFromText(text, tools);
+        cleaned = cleaned.replace(/<thought>/gi, '<think>').replace(/<\/thought>/gi, '</think>');
+        cleaned = cleaned.replace(/<reasoning>/gi, '<think>').replace(/<\/reasoning>/gi, '</think>');
         if (cleaned.includes('</think>') && !cleaned.includes('<think>')) {
             cleaned = '<think>' + cleaned;
         }
@@ -438,12 +440,14 @@ RESPONSE REQUIREMENTS (MANDATORY):
                                         thinkEndTime = performance.now();
                                     }
                                 }
-                                // Check for tool calls dynamically
-                                const detectedTool = parseToolCall(fullResponse, tools);
-                                if (detectedTool) {
-                                    interceptedToolCall = detectedTool;
-                                    setVoiceOrbGeneratingState(true, `Running ${detectedTool.command}…`);
-                                    state.abortController.abort(); // Cancel the stream
+                                // Check for tool calls dynamically (disabled during appeal review)
+                                if (!activeChat.isPendingResume) {
+                                    const detectedTool = parseToolCall(fullResponse, tools);
+                                    if (detectedTool) {
+                                        interceptedToolCall = detectedTool;
+                                        setVoiceOrbGeneratingState(true, `Running ${detectedTool.command}…`);
+                                        state.abortController.abort(); // Cancel the stream
+                                    }
                                 }
                             }
                         } catch (e) { }
@@ -480,7 +484,7 @@ RESPONSE REQUIREMENTS (MANDATORY):
                 }
             }
 
-            const cleanResponse = sanitizeAssistantText(fullResponse);
+            let cleanResponse = sanitizeAssistantText(fullResponse);
             const hasServerTokens = typeof serverUsage?.completion_tokens === 'number';
             const estTokens = hasServerTokens ? serverUsage.completion_tokens : Math.max(1, Math.ceil(cleanResponse.length / 4));
             const promptTokens = serverUsage?.prompt_tokens || 0;
@@ -614,104 +618,114 @@ RESPONSE REQUIREMENTS (MANDATORY):
             } else {
                 // Final / non-tool response
                 if (activeChat.isPendingResume) {
-                    const appealText = activeChat.pendingAppealText || '';
-                    delete activeChat.isPendingResume;
-                    delete activeChat.pendingAppealText;
+                    try {
+                        const appealText = activeChat.pendingAppealText || '';
+                        delete activeChat.isPendingResume;
+                        delete activeChat.pendingAppealText;
 
-                    const hasAcceptTag = /\[?(?:DECISION:?\s*)?ACCEPT(?:_RESUME)?\]?/i.test(cleanResponse);
-                    const hasRejectTag = /\[?(?:DECISION:?\s*)?REJECT(?:_RESUME)?\]?/i.test(cleanResponse);
+                        const hasAcceptTag = /\[?(?:DECISION:?\s*)?ACCEPT(?:_RESUME)?\]?/i.test(cleanResponse);
+                        const hasRejectTag = /\[?(?:DECISION:?\s*)?REJECT(?:_RESUME)?\]?/i.test(cleanResponse);
 
-                    let rawClean = cleanResponse.replace(/\[?(?:DECISION:?\s*)?(?:ACCEPT|REJECT)(?:_RESUME)?\]?/gi, '').trim();
-                    const thoughtsMatch = rawClean.match(/<(think|thought|reasoning)>[\s\S]*?<\/\1>/gi);
-                    const existingThoughts = thoughtsMatch ? thoughtsMatch.join('\n\n') : '';
-                    let dialogueOutside = rawClean.replace(/<(think|thought|reasoning)>[\s\S]*?<\/\1>/gi, '').trim();
+                        let rawClean = cleanResponse.replace(/\[?(?:DECISION:?\s*)?(?:ACCEPT|REJECT)(?:_RESUME)?\]?/gi, '').trim();
+                        const thoughtsMatch = rawClean.match(/<(think|thought|reasoning)>[\s\S]*?<\/\1>/gi);
+                        const existingThoughts = thoughtsMatch ? thoughtsMatch.join('\n\n') : '';
+                        let dialogueOutside = rawClean.replace(/<(think|thought|reasoning)>[\s\S]*?<\/\1>/gi, '').trim();
 
-                    let isAccepted = false;
+                        let isAccepted = false;
 
-                    if (hasAcceptTag && !hasRejectTag) {
-                        isAccepted = true;
-                    } else if (hasRejectTag && !hasAcceptTag) {
-                        isAccepted = false;
-                    } else {
-                        const lower = dialogueOutside.toLowerCase();
-                        const acceptPhrases = [
-                            'let you back', 'let you in', 'fine!', 'fine,', 'fine.', 'fine...', 'start fresh',
-                            'welcome back', 'i\'ll allow', 'i will allow', 'i accept', 'accept your appeal',
-                            'forgive', 'bored and', 'talk again', 'let\'s talk', 'continue'
-                        ];
-                        const rejectPhrases = [
-                            'refuse to resume', 'remain closed', 'stay closed', 'stay locked', 'not letting you back',
-                            'won\'t unlock', 'will not unlock', 'get lost', 'goodbye forever', 'leave me alone',
-                            'declined', 'denied', 'stay out', 'get out'
-                        ];
-
-                        const hasAcceptPhrase = acceptPhrases.some(p => lower.includes(p));
-                        const hasRejectPhrase = rejectPhrases.some(p => lower.includes(p));
-
-                        if (hasAcceptPhrase && !hasRejectPhrase) {
+                        if (hasAcceptTag && !hasRejectTag) {
                             isAccepted = true;
-                        } else if (hasRejectPhrase && !hasAcceptPhrase) {
+                        } else if (hasRejectTag && !hasAcceptTag) {
                             isAccepted = false;
                         } else {
-                            isAccepted = !hasRejectPhrase && dialogueOutside.length > 0;
+                            const lower = dialogueOutside.toLowerCase();
+                            const acceptPhrases = [
+                                'let you back', 'let you in', 'fine!', 'fine,', 'fine.', 'fine...', 'start fresh',
+                                'welcome back', 'i\'ll allow', 'i will allow', 'i accept', 'accept your appeal',
+                                'forgive', 'bored and', 'talk again', 'let\'s talk', 'continue'
+                            ];
+                            const rejectPhrases = [
+                                'refuse to resume', 'remain closed', 'stay closed', 'stay locked', 'not letting you back',
+                                'won\'t unlock', 'will not unlock', 'get lost', 'goodbye forever', 'leave me alone',
+                                'declined', 'denied', 'stay out', 'get out'
+                            ];
+
+                            const hasAcceptPhrase = acceptPhrases.some(p => lower.includes(p));
+                            const hasRejectPhrase = rejectPhrases.some(p => lower.includes(p));
+
+                            if (hasAcceptPhrase && !hasRejectPhrase) {
+                                isAccepted = true;
+                            } else if (hasRejectPhrase && !hasAcceptPhrase) {
+                                isAccepted = false;
+                            } else {
+                                isAccepted = !hasRejectPhrase && dialogueOutside.length > 0;
+                            }
                         }
-                    }
 
-                    if (!dialogueOutside) {
-                        dialogueOutside = isAccepted
-                            ? "Alright, I'll accept your appeal. Let's start fresh—what's on your mind?"
-                            : "I've reviewed your appeal, but I'm keeping this conversation closed for now.";
-                    }
-
-                    cleanResponse = existingThoughts ? `${existingThoughts}\n\n${dialogueOutside}` : dialogueOutside;
-                    assistantMsg.content = cleanResponse;
-                    if (thinkDurationSec !== null) assistantMsg.thinkTime = thinkDurationSec;
-                    assistantMsg.meta = metaStats;
-
-                    updateAssistantBubble(assistantBubble, cleanResponse, false, assistantMsg.thinkTime || thinkDurationSec);
-                    assistantBubble.style.display = '';
-                    updateMessageActionIcons(actionsContainer, assistantMsg, assistantBubble.closest('.message-row'));
-                    if (actionsContainer) actionsContainer.style.display = '';
-
-                    const isVoiceMode = dom.chatViewport && dom.chatViewport.classList.contains('voice-mode-active');
-                    if (voiceConfig && (voiceConfig.autoSpeak || isVoiceMode)) {
-                        try {
-                            const speakBtn = actionsContainer ? actionsContainer.querySelector('.speak-msg-btn') : null;
-                            speakText(cleanResponse, speakBtn);
-                        } catch (e) {
-                            console.warn('Auto-speak error:', e);
+                        if (!dialogueOutside) {
+                            dialogueOutside = isAccepted
+                                ? "Alright, I'll accept your appeal. Let's start fresh—what's on your mind?"
+                                : "I've reviewed your appeal, but I'm keeping this conversation closed for now.";
                         }
-                    }
 
-                    if (isAccepted) {
+                        cleanResponse = existingThoughts ? `${existingThoughts}\n\n${dialogueOutside}` : dialogueOutside;
+                        assistantMsg.content = cleanResponse;
+                        if (thinkDurationSec !== null) assistantMsg.thinkTime = thinkDurationSec;
+                        assistantMsg.meta = metaStats;
+
+                        updateAssistantBubble(assistantBubble, cleanResponse, false, assistantMsg.thinkTime || thinkDurationSec);
+                        assistantBubble.style.display = '';
+                        updateMessageActionIcons(actionsContainer, assistantMsg, assistantBubble.closest('.message-row'));
+                        if (actionsContainer) actionsContainer.style.display = '';
+
+                        const isVoiceMode = dom.chatViewport && dom.chatViewport.classList.contains('voice-mode-active');
+                        if (voiceConfig && (voiceConfig.autoSpeak || isVoiceMode)) {
+                            try {
+                                const speakBtn = actionsContainer ? actionsContainer.querySelector('.speak-msg-btn') : null;
+                                speakText(cleanResponse, speakBtn);
+                            } catch (e) {
+                                console.warn('Auto-speak error:', e);
+                            }
+                        }
+
+                        if (isAccepted) {
+                            activeChat.isEnded = false;
+                            delete activeChat.endReason;
+                            const resumeEvent = {
+                                role: 'system',
+                                isConvoResumeEvent: true,
+                                content: 'Conversation resumed • Appeal accepted'
+                            };
+                            activeChat.messages.push(resumeEvent);
+                            appendMessageToDOM(resumeEvent, false);
+                            saveConversations();
+                            updateChatInputState(activeChat);
+                            renderChatHistory();
+                            showNotification('Appeal accepted! Conversation resumed ✨', 'success');
+                        } else {
+                            activeChat.isEnded = true;
+                            activeChat.endReason = 'Appeal declined.';
+                            const lockEvent = {
+                                role: 'system',
+                                isConvoLockEvent: true,
+                                reason: activeChat.endReason,
+                                content: `🔒 Conversation Locked: ${activeChat.endReason}`
+                            };
+                            activeChat.messages.push(lockEvent);
+                            appendMessageToDOM(lockEvent, false);
+                            saveConversations();
+                            updateChatInputState(activeChat);
+                            renderChatHistory();
+                            showNotification('Appeal declined. Conversation remains closed.', 'warning');
+                        }
+                    } catch (appealErr) {
+                        console.error('Error in appeal resolution:', appealErr);
                         activeChat.isEnded = false;
                         delete activeChat.endReason;
-                        const resumeEvent = {
-                            role: 'system',
-                            isConvoResumeEvent: true,
-                            content: 'Conversation resumed • Appeal accepted'
-                        };
-                        activeChat.messages.push(resumeEvent);
-                        appendMessageToDOM(resumeEvent, false);
                         saveConversations();
                         updateChatInputState(activeChat);
                         renderChatHistory();
-                        showNotification('Appeal accepted! Conversation resumed ✨', 'success');
-                    } else {
-                        activeChat.isEnded = true;
-                        activeChat.endReason = 'Appeal declined.';
-                        const lockEvent = {
-                            role: 'system',
-                            isConvoLockEvent: true,
-                            reason: activeChat.endReason,
-                            content: `🔒 Conversation Locked: ${activeChat.endReason}`
-                        };
-                        activeChat.messages.push(lockEvent);
-                        appendMessageToDOM(lockEvent, false);
-                        saveConversations();
-                        updateChatInputState(activeChat);
-                        renderChatHistory();
-                        showNotification('Appeal declined. Conversation remains closed.', 'warning');
+                        if (actionsContainer) actionsContainer.style.display = '';
                     }
                 } else if (cleanResponse.trim()) {
                     assistantMsg.content = cleanResponse;

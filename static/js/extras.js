@@ -6,6 +6,7 @@ let clickCount = 0;
 let clickResetTimer = null;
 let blehHideTimer = null;
 let hypeCount = 0;
+let glitchTimer = null;
 
 /**
  * Synthesizes a playful anime-style "bleh~" tongue-out sound via Web Audio API.
@@ -70,7 +71,45 @@ export function playBlehSound() {
 }
 
 /**
- * Plays a cheerful celebratory chime when opening the Creator card.
+ * Cybernetic holographic chime sound effect.
+ */
+export function playCyberGlitchSound() {
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+
+        // Smooth digital hologram arpeggio
+        const freqs = [320, 480, 640, 960];
+        freqs.forEach((f, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            const t = now + i * 0.045;
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(f, t);
+            osc.frequency.exponentialRampToValueAtTime(f * 1.25, t + 0.12);
+
+            gain.gain.setValueAtTime(0.001, t);
+            gain.gain.linearRampToValueAtTime(0.12, t + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start(t);
+            osc.stop(t + 0.26);
+        });
+
+        setTimeout(() => {
+            try { ctx.close(); } catch (_) {}
+        }, 500);
+    } catch (_) {}
+}
+
+/**
+ * Plays a cheerful celebratory chime.
  */
 export function playFanfareSound() {
     try {
@@ -83,13 +122,13 @@ export function playFanfareSound() {
         notes.forEach((freq, idx) => {
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
-            const t = now + idx * 0.08;
+            const t = now + idx * 0.075;
 
             osc.type = 'sine';
             osc.frequency.setValueAtTime(freq, t);
 
             gain.gain.setValueAtTime(0.001, t);
-            gain.gain.exponentialRampToValueAtTime(0.2, t + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
             gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
 
             osc.connect(gain);
@@ -192,6 +231,35 @@ function spawnFloatingHeart(x, y) {
 }
 
 /**
+ * Triggers full-screen cyber glitch effect across the site.
+ */
+export function triggerSiteGlitch() {
+    playCyberGlitchSound();
+
+    let glitchOverlay = document.getElementById('siteGlitchOverlay');
+    if (!glitchOverlay) {
+        glitchOverlay = document.createElement('div');
+        glitchOverlay.id = 'siteGlitchOverlay';
+        glitchOverlay.className = 'site-glitch-overlay';
+        document.body.appendChild(glitchOverlay);
+    }
+
+    if (glitchTimer) clearTimeout(glitchTimer);
+
+    document.body.classList.add('site-glitch-active');
+    glitchOverlay.classList.remove('hidden');
+    glitchOverlay.classList.add('active');
+
+    glitchTimer = setTimeout(() => {
+        document.body.classList.remove('site-glitch-active');
+        glitchOverlay.classList.remove('active');
+        setTimeout(() => {
+            glitchOverlay.classList.add('hidden');
+        }, 250);
+    }, 750);
+}
+
+/**
  * Triggers the pixel art "Bleh~!" visual and sound effect.
  */
 export function triggerBlehEasterEgg() {
@@ -217,89 +285,17 @@ export function triggerBlehEasterEgg() {
 }
 
 /**
- * Lightweight canvas confetti explosion for the Creator Card.
- */
-function launchConfetti() {
-    const canvas = document.getElementById('confettiCanvas');
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
-    const colors = ['#a855f7', '#ec4899', '#38bdf8', '#facc15', '#10b981', '#ffffff'];
-    const particles = [];
-    const count = 75;
-
-    for (let i = 0; i < count; i++) {
-        particles.push({
-            x: canvas.width / 2 + (Math.random() - 0.5) * 160,
-            y: canvas.height * 0.45,
-            vx: (Math.random() - 0.5) * 14,
-            vy: -Math.random() * 12 - 4,
-            size: Math.random() * 7 + 4,
-            color: colors[Math.floor(Math.random() * colors.length)],
-            rotation: Math.random() * 360,
-            rSpeed: (Math.random() - 0.5) * 10,
-            alpha: 1
-        });
-    }
-
-    let animId;
-    const startTime = performance.now();
-
-    function render(t) {
-        const elapsed = (t - startTime) / 1000;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        let activeCount = 0;
-        for (const p of particles) {
-            p.x += p.vx;
-            p.y += p.vy;
-            p.vy += 0.4;
-            p.vx *= 0.98;
-            p.rotation += p.rSpeed;
-            if (elapsed > 1.2) {
-                p.alpha = Math.max(0, p.alpha - 0.02);
-            }
-
-            if (p.alpha > 0 && p.y < canvas.height + 20) {
-                activeCount++;
-                ctx.save();
-                ctx.globalAlpha = p.alpha;
-                ctx.translate(p.x, p.y);
-                ctx.rotate((p.rotation * Math.PI) / 180);
-                ctx.fillStyle = p.color;
-                ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.7);
-                ctx.restore();
-            }
-        }
-
-        if (activeCount > 0 && elapsed < 3.5) {
-            animId = requestAnimationFrame(render);
-        } else {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            cancelAnimationFrame(animId);
-        }
-    }
-
-    animId = requestAnimationFrame(render);
-}
-
-/**
  * Opens the Creator Card modal.
  */
-export function openCreatorModal(withConfetti = true) {
+export function openCreatorModal(withGlitch = true) {
     const modal = document.getElementById('creatorModal');
     if (!modal) return;
 
     modal.classList.remove('hidden');
 
-    if (withConfetti) {
-        launchConfetti();
-        playFanfareSound();
+    if (withGlitch) {
+        triggerSiteGlitch();
+        setTimeout(() => playFanfareSound(), 200);
     }
 }
 
@@ -323,8 +319,7 @@ export function initExtras() {
             clickCount = 0;
         }, 8000);
 
-        if (clickCount >= 15) {
-            clickCount = 0;
+        if (clickCount > 0 && clickCount % 15 === 0) {
             triggerBlehEasterEgg();
         }
     };
@@ -362,15 +357,14 @@ export function initExtras() {
         closeCreatorBtn.addEventListener('click', closeCreatorModal);
     }
 
-    const dismissCreatorBtn = document.getElementById('dismissCreatorBtn');
-    if (dismissCreatorBtn) {
-        dismissCreatorBtn.addEventListener('click', closeCreatorModal);
-    }
-
+    // Dismiss by clicking anywhere on background overlay outside window
     const creatorModal = document.getElementById('creatorModal');
+    const creatorWindow = document.getElementById('creatorWindow');
     if (creatorModal) {
         creatorModal.addEventListener('click', (e) => {
-            if (e.target === creatorModal) closeCreatorModal();
+            if (!creatorWindow || !creatorWindow.contains(e.target)) {
+                closeCreatorModal();
+            }
         });
     }
 
@@ -379,7 +373,7 @@ export function initExtras() {
     if (avatarWrap) {
         avatarWrap.addEventListener('click', () => {
             avatarWrap.classList.remove('spin');
-            void avatarWrap.offsetWidth; // trigger reflow
+            void avatarWrap.offsetWidth;
             avatarWrap.classList.add('spin');
             playWhooshSound();
             const rect = avatarWrap.getBoundingClientRect();
@@ -401,8 +395,8 @@ export function initExtras() {
             const clickY = e.clientY || (rect.top);
             spawnFloatingHeart(clickX, clickY);
 
-            if (hypeCount === 10) {
-                launchConfetti();
+            if (hypeCount > 0 && hypeCount % 10 === 0) {
+                triggerSiteGlitch();
             }
         });
     }
@@ -410,4 +404,5 @@ export function initExtras() {
     // Expose helpers on window
     window.__nivm_openCreator = openCreatorModal;
     window.__nivm_triggerBleh = triggerBlehEasterEgg;
+    window.__nivm_triggerGlitch = triggerSiteGlitch;
 }

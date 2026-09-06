@@ -637,18 +637,31 @@ function setOrbSpeakingState(active) {
     if (convOrb) {
         if (active) {
             convOrb.classList.add('speaking');
+            convOrb.classList.remove('thinking');
         } else {
             convOrb.classList.remove('speaking');
+            if (state.isGenerating) {
+                convOrb.classList.add('thinking');
+            }
         }
     }
 
     const voiceConvStage = document.getElementById('voiceConversationStage');
     if (voiceConvStage) {
         voiceConvStage.classList.toggle('speaking', !!active);
+        if (!active && state.isGenerating) {
+            voiceConvStage.classList.add('thinking');
+        }
     }
     const statusEl = document.getElementById('voiceStageStatus');
     if (statusEl) {
-        statusEl.textContent = active ? 'Speaking... (tap orb to stop)' : 'Tap orb to speak';
+        if (active) {
+            statusEl.textContent = 'Speaking... (tap orb to stop)';
+        } else if (state.isGenerating) {
+            statusEl.textContent = 'Thinking… (tap orb to cancel)';
+        } else {
+            statusEl.textContent = 'Tap orb to speak';
+        }
     }
 
     // 4. Drive Dynamic Web Audio Visualizer
@@ -656,6 +669,33 @@ function setOrbSpeakingState(active) {
         startDynamicVisualizer();
     } else {
         stopDynamicVisualizer();
+    }
+}
+
+export function setVoiceOrbGeneratingState(isGenerating, statusText = null) {
+    const convOrb = dom.voiceConversationOrb;
+    const voiceConvStage = document.getElementById('voiceConversationStage');
+    const statusEl = document.getElementById('voiceStageStatus');
+
+    if (convOrb) {
+        if (isGenerating) {
+            convOrb.classList.add('thinking');
+            convOrb.classList.remove('listening');
+        } else {
+            convOrb.classList.remove('thinking');
+        }
+    }
+
+    if (voiceConvStage) {
+        voiceConvStage.classList.toggle('thinking', !!isGenerating);
+    }
+
+    if (statusEl) {
+        if (isGenerating) {
+            statusEl.textContent = statusText || 'Thinking… (tap orb to cancel)';
+        } else if (!isSpeaking()) {
+            statusEl.textContent = 'Tap orb to speak';
+        }
     }
 }
 
@@ -1193,7 +1233,7 @@ export async function setupVoiceUI() {
 
             if (promptText && !isFillerOnly(promptText)) {
                 // Send transcribed speech text to the model
-                if (statusEl) statusEl.textContent = `"${promptText}"`;
+                setVoiceOrbGeneratingState(true, 'Thinking…');
                 if (dom.userPrompt) dom.userPrompt.value = promptText;
                 if (dom.sendBtn) dom.sendBtn.click();
             } else if (promptText && isFillerOnly(promptText)) {
@@ -1216,7 +1256,7 @@ export async function setupVoiceUI() {
     }
 
     async function startVoiceModeRecording() {
-        if (voiceModeIsRecording) return;
+        if (voiceModeIsRecording || state.isGenerating || isSpeaking()) return;
 
         try {
             voiceModeStream = await navigator.mediaDevices.getUserMedia({
@@ -1436,6 +1476,15 @@ export async function setupVoiceUI() {
         dom.voiceConversationOrb.addEventListener('click', () => {
             if (isSpeaking()) {
                 stopSpeaking();
+                return;
+            }
+
+            if (state.isGenerating) {
+                // If model is currently generating, cancel generation (same as stop button)
+                if (state.abortController) {
+                    state.abortController.abort();
+                }
+                setVoiceOrbGeneratingState(false);
                 return;
             }
 

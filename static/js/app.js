@@ -4,7 +4,7 @@ import { fetchApiSettings, saveApiSettings, smartToggleEngine, scanLocalGgufs, s
 import { setupNodesCanvas, setupMatrixCanvas, setupFluidCanvas, setupFlowFieldCanvas, applyThemeState, colorCycleLoop, saveThemeConfig } from './theme.js';
 import { makeDraggable, setupDynamicGreeting, renderChatHistory, renderActiveChat, switchChat, createNewChat, appendMessageToDOM, scrollToBottom, toggleSendStopButtons, updateAssistantBubble, updateMessageActionIcons, renderMemoryDrawer, renderToolsSettings, showAlert, showConfirm, showNotification, setupHistoryUI, setupVisionUI, setupAudioRecording, clearAttachedImage, updateVisionAvailabilityUI, setVisionEnabled, buildToolTraceHtml, populateStatsModal } from './ui.js';
 import { tools, buildToolsInstruction, parseToolCall, stripToolCallFromText } from './tools.js';
-import { setupVoiceUI, voiceConfig, speakText, stopSpeaking } from './voice.js';
+import { setupVoiceUI, voiceConfig, speakText, stopSpeaking, setVoiceOrbGeneratingState } from './voice.js';
 
 // Export state for UI modules that need direct access
 window.__nivm_state = state;
@@ -302,6 +302,7 @@ When the user attaches an image or video of a person and asks to describe, analy
 
         state.isGenerating = true;
         toggleSendStopButtons(true);
+        setVoiceOrbGeneratingState(true, 'Thinking…');
         state.abortController = new AbortController();
 
         let fullResponse = '';
@@ -390,6 +391,7 @@ When the user attaches an image or video of a person and asks to describe, analy
                                         hasStartedReasoning = true;
                                         thinkStartTime = performance.now();
                                         fullResponse += '<think>' + delta.reasoning_content;
+                                        setVoiceOrbGeneratingState(true, 'Thinking…');
                                     } else {
                                         fullResponse += delta.reasoning_content;
                                     }
@@ -401,6 +403,7 @@ When the user attaches an image or video of a person and asks to describe, analy
                                         if (thinkStartTime && !thinkEndTime) {
                                             thinkEndTime = performance.now();
                                         }
+                                        setVoiceOrbGeneratingState(true, 'Responding…');
                                     }
                                     fullResponse += delta.content;
                                     // If model streamed </think> without an opening <think>, auto-wrap it
@@ -418,6 +421,7 @@ When the user attaches an image or video of a person and asks to describe, analy
                                 const detectedTool = parseToolCall(fullResponse, tools);
                                 if (detectedTool) {
                                     interceptedToolCall = detectedTool;
+                                    setVoiceOrbGeneratingState(true, `Running ${detectedTool.command}…`);
                                     state.abortController.abort(); // Cancel the stream
                                 }
                             }
@@ -478,6 +482,7 @@ When the user attaches an image or video of a person and asks to describe, analy
 
             state.isGenerating = false;
             toggleSendStopButtons(false);
+            setVoiceOrbGeneratingState(false);
 
             // Update Global Usage Stats
             state.usageStats.totalTokens += metaStats.estTokens;

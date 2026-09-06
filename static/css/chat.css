@@ -1932,6 +1932,24 @@ body.voice-mode-active.voice-mode-collapsed .voice-stage-status {
     box-shadow: 0 0 22px #ffffff, 0 0 45px var(--voice-accent, #22c55e), 0 0 65px var(--voice-accent-glow, rgba(34, 197, 94, 0.5));
 }
 
+.voice-stage-large-orb.thinking .voice-orb-glow {
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.8) 0%, var(--voice-accent, #22c55e) 45%, transparent 75%);
+    opacity: 0.9;
+    transform: scale(1.3);
+    animation: orbSpeakingGlow 1.4s ease-in-out infinite alternate;
+}
+
+.voice-stage-large-orb.thinking .voice-orb-core {
+    transform: scale(1.12);
+    box-shadow: 0 0 20px #ffffff, 0 0 40px var(--voice-accent, #22c55e), 0 0 55px var(--voice-accent-glow, rgba(34, 197, 94, 0.45));
+    animation: orbSpeakingPulse 1.2s ease-in-out infinite alternate;
+}
+
+.voice-stage-large-orb.thinking .voice-orb-rings {
+    transform: scale(1.25);
+    animation: orbRotate 6s linear infinite;
+}
+
 .voice-conversation-waveform {
     display: flex;
     align-items: center;

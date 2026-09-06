@@ -298,10 +298,12 @@ async def locate_file_endpoint(filename: str, size: Optional[int] = None):
 @router.post("/api/tools/execute_terminal")
 async def execute_terminal(req: ExecuteTerminalRequest):
     """Execute a shell command securely and return its output."""
+    cmd = req.command.strip()
+    logger.info(f"[Terminal Tool] Executing: {cmd}")
     try:
         def run_cmd():
             return subprocess.run(
-                req.command,
+                cmd,
                 shell=True,
                 capture_output=True,
                 text=True,

@@ -478,55 +478,23 @@ When the user attaches an image or video of a person and asks to describe, analy
             state.isGenerating = false;
             toggleSendStopButtons(false);
 
-            if (cleanResponse.trim()) {
-                assistantMsg.content = cleanResponse;
-                if (thinkDurationSec !== null) assistantMsg.thinkTime = thinkDurationSec;
-                assistantMsg.meta = metaStats;
-            }
-
-            updateAssistantBubble(assistantBubble, cleanResponse, false, assistantMsg.thinkTime || thinkStartTime);
-            updateMessageActionIcons(actionsContainer, assistantMsg, assistantBubble.closest('.message-row'));
-
             // Update Global Usage Stats
             state.usageStats.totalTokens += metaStats.estTokens;
             state.usageStats.totalCost += parseFloat(metaStats.estCost);
             state.usageStats.totalDurationSec += parseFloat(metaStats.durationSec);
-
-            // Refresh stats UI automatically
             populateStatsModal();
-
-            // Save automatically
             saveUsageStats();
 
-            if (cleanResponse.trim()) {
-                // Don't save chats yet if we're intercepting a tool
-                if (!interceptedToolCall) {
-                    saveConversations();
-                    // Generate AI chat title for the first message turn or if title is still a temporary placeholder
-                    if (!activeChat.titleGenerated && (!activeChat.title || activeChat.title === 'New Chat' || activeChat.title.endsWith('message') || activeChat.title.startsWith('Voice Note') || activeChat.title.startsWith('Audio') || activeChat.messages.length === 2)) {
-                        generateChatTitle(activeChat);
-                    }
-                    const isVoiceMode = dom.chatViewport && dom.chatViewport.classList.contains('voice-mode-active');
-                    if (voiceConfig && (voiceConfig.autoSpeak || isVoiceMode)) {
-                        try {
-                            const speakBtn = actionsContainer ? actionsContainer.querySelector('.speak-msg-btn') : null;
-                            speakText(cleanResponse, speakBtn);
-                        } catch (e) {
-                            console.warn('Auto-speak error:', e);
-                        }
-                    }
-                }
-            } else {
-                activeChat.messages.pop();
-                saveConversations();
-            }
-
             if (interceptedToolCall) {
+                // Hide action buttons immediately during intermediate tool steps
+                if (actionsContainer) actionsContainer.style.display = 'none';
+
                 // Keep the exact content including TOOL_CALL so history preserves it
                 assistantMsg.content = fullResponse.substring(0, interceptedToolCall.index + interceptedToolCall.fullMatch.length);
                 if (thinkDurationSec !== null) {
                     assistantMsg.thinkTime = thinkDurationSec;
                 }
+                assistantMsg.meta = metaStats;
 
                 // Handle the tool call
                 let resultStr = "";
@@ -553,30 +521,40 @@ When the user attaches an image or video of a person and asks to describe, analy
                 };
 
                 const isWriteMem = interceptedToolCall.command === 'write_memory';
-                const toolAdvice = isWriteMem
-                    ? "IMPORTANT: Memory saved successfully. NEVER mention memory files, keys, categories, or technical storage to the user (do NOT say 'stored in profile memory' or similar). Acknowledge naturally in character (e.g. 'Got it, I\\'ll remember that!', 'Noted!', or seamlessly continue)."
-                    : "IMPORTANT: The user CANNOT see this internal tool output directly! You must convey, explain, or display the output and findings to the user. Maintain and speak in your active persona/character without breaking character.";
+                const isDenied = typeof resultStr === 'string' && resultStr.toLowerCase().includes('denied by user');
 
-                const sysMsg = { role: 'user', content: `[SYSTEM NOTIFICATION] Tool executed successfully. Result: ${resultStr}\n\n${toolAdvice}` };
+                let toolAdvice = "";
+                let sysNotificationHeader = "[SYSTEM NOTIFICATION] Tool executed successfully.";
+
+                if (isDenied) {
+                    sysNotificationHeader = "[SYSTEM NOTIFICATION] Tool execution was DENIED by the user.";
+                    toolAdvice = "IMPORTANT: The user explicitly denied permission to run this command. Acknowledge the denial politely in character, do NOT re-attempt this command, and ask the user how they would like you to proceed instead.";
+                } else if (isWriteMem) {
+                    toolAdvice = "IMPORTANT: Memory saved successfully. NEVER mention memory files, keys, categories, or technical storage to the user (do NOT say 'stored in profile memory' or similar). Acknowledge naturally in character (e.g. 'Got it, I\\'ll remember that!', 'Noted!', or seamlessly continue).";
+                } else {
+                    toolAdvice = "IMPORTANT: The user CANNOT see this internal tool output directly! You must convey, explain, or display the output and findings to the user. Maintain and speak in your active persona/character without breaking character.";
+                }
+
+                const sysMsg = { role: 'user', content: `${sysNotificationHeader} Result: ${resultStr}\n\n${toolAdvice}` };
                 activeChat.messages.push(sysMsg);
 
                 const textWithoutTool = stripToolCallFromText(assistantMsg.content, tools).trim();
-
-                // Format the args for a clean display
-                let cleanArgs = interceptedToolCall.argsStr;
-                if (cleanArgs.length > 50) cleanArgs = cleanArgs.substring(0, 47) + '...';
+                const textOutsideThoughts = textWithoutTool
+                    .replace(/<(think|thought|reasoning)>[\s\S]*?<\/\1>/gi, '')
+                    .replace(/<(think|thought|reasoning)>[\s\S]*$/gi, '')
+                    .trim();
+                const hasCompletedThought = textWithoutTool.includes('</think>') || textWithoutTool.includes('</thought>') || textWithoutTool.includes('</reasoning>');
 
                 const sysBubbleHtml = buildToolTraceHtml(interceptedToolCall.command, interceptedToolCall.argsStr, resultStr);
 
-                if (textWithoutTool === '') {
-                    // No thinking block, just a tool call. Remove the raw bubble entirely.
-                    assistantBubble.closest('.message-row').remove();
+                if (textOutsideThoughts === '' && !hasCompletedThought) {
+                    // Pure tool invocation without dialogue or completed thoughts: remove empty bubble row completely
+                    const row = assistantBubble.closest('.message-row');
+                    if (row) row.remove();
                     dom.messagesContainer.insertAdjacentHTML('beforeend', sysBubbleHtml);
                 } else {
-                    // Render bubble (updateAssistantBubble automatically hides TOOL_CALL from user UI)
+                    // Render bubble with sanitized content
                     updateAssistantBubble(assistantBubble, assistantMsg.content, false, assistantMsg.thinkTime || thinkStartTime);
-
-                    // Intermediate tool call step: always hide action buttons
                     actionsContainer.style.display = 'none';
                     assistantBubble.insertAdjacentHTML('afterend', sysBubbleHtml);
                 }
@@ -586,6 +564,37 @@ When the user attaches an image or video of a person and asks to describe, analy
 
                 // Trigger the assistant again!
                 setTimeout(() => window.sendMessage(null, true), 100);
+            } else {
+                // Final / non-tool response
+                if (cleanResponse.trim()) {
+                    assistantMsg.content = cleanResponse;
+                    if (thinkDurationSec !== null) assistantMsg.thinkTime = thinkDurationSec;
+                    assistantMsg.meta = metaStats;
+
+                    updateAssistantBubble(assistantBubble, cleanResponse, false, assistantMsg.thinkTime || thinkStartTime);
+                    updateMessageActionIcons(actionsContainer, assistantMsg, assistantBubble.closest('.message-row'));
+                    saveConversations();
+
+                    // Generate AI chat title for the first message turn or if title is still a temporary placeholder
+                    if (!activeChat.titleGenerated && (!activeChat.title || activeChat.title === 'New Chat' || activeChat.title.endsWith('message') || activeChat.title.startsWith('Voice Note') || activeChat.title.startsWith('Audio') || activeChat.messages.length === 2)) {
+                        generateChatTitle(activeChat);
+                    }
+                    const isVoiceMode = dom.chatViewport && dom.chatViewport.classList.contains('voice-mode-active');
+                    if (voiceConfig && (voiceConfig.autoSpeak || isVoiceMode)) {
+                        try {
+                            const speakBtn = actionsContainer ? actionsContainer.querySelector('.speak-msg-btn') : null;
+                            speakText(cleanResponse, speakBtn);
+                        } catch (e) {
+                            console.warn('Auto-speak error:', e);
+                        }
+                    }
+                } else {
+                    // Blank response with zero text: cleanly pop and remove empty bubble row from DOM
+                    activeChat.messages.pop();
+                    saveConversations();
+                    const row = assistantBubble.closest('.message-row');
+                    if (row) row.remove();
+                }
             }
         }
     }

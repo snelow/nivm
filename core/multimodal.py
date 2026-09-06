@@ -66,24 +66,55 @@ def _transcribe_audio_file(filepath_or_bytes, max_duration_s=180) -> str:
 
 def transcribe_speech_bytes(audio_bytes: bytes, max_duration_s=60) -> str:
     """
-    Fast, direct speech transcription for Voice Mode from raw audio bytes (WebM, WAV, Ogg, MP3).
-    Returns clean transcribed text without timestamps.
+    High-accuracy, direct speech transcription for Voice Mode from raw audio bytes (WebM, WAV, Ogg, MP3).
+    Normalizes audio loudness to 16kHz mono WAV to preserve clear speech onset and endings.
     """
     if not audio_bytes or len(audio_bytes) < 100:
         return ""
     model = _get_whisper_model()
     if not model:
         return ""
+
+    import tempfile
+    from pydub import AudioSegment, effects
+
+    temp_in = None
+    temp_wav = None
     try:
-        audio_stream = io.BytesIO(audio_bytes)
+        ext = ".webm"
+        if audio_bytes[:4] == b"RIFF":
+            ext = ".wav"
+        elif audio_bytes[:4] == b"OggS":
+            ext = ".ogg"
+
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tf:
+            tf.write(audio_bytes)
+            temp_in = tf.name
+
+        # Load and verify audio volume to prevent silence hallucinations
+        audio = AudioSegment.from_file(temp_in)
+        if len(audio) < 200 or audio.dBFS < -45.0 or audio.max_dBFS < -40.0:
+            return ""
+
+        # Normalize loudness and resample to 16kHz 16-bit mono WAV for optimal Whisper accuracy
+        norm_audio = effects.normalize(audio).set_frame_rate(16000).set_channels(1)
+
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as wf:
+            temp_wav = wf.name
+            norm_audio.export(temp_wav, format="wav")
+
         segments, info = model.transcribe(
-            audio_stream,
-            beam_size=3,
-            best_of=3,
-            vad_filter=True,
-            vad_parameters=dict(min_silence_duration_ms=400),
+            temp_wav,
+            language="en",
+            beam_size=5,
+            best_of=5,
+            vad_filter=False,
+            initial_prompt="A user speaking commands, queries, or thoughts to an AI assistant.",
             condition_on_previous_text=False
         )
+
+        SILENCE_HALLUCINATIONS = {"you", "thank you", "thanks for watching", "bye", "subscribe", "subtitles by", "the end"}
+
         parts = []
         for segment in segments:
             if segment.end > max_duration_s:
@@ -92,11 +123,22 @@ def transcribe_speech_bytes(audio_bytes: bytes, max_duration_s=60) -> str:
                 continue
             text = segment.text.strip()
             if text:
+                clean_lower = text.lower().strip(" .!?,:;-")
+                if clean_lower in SILENCE_HALLUCINATIONS and len(audio) < 3000:
+                    continue
                 parts.append(text)
+
         return " ".join(parts).strip()
     except Exception as e:
         logger.warning(f"Voice Mode audio transcription error: {e}")
         return ""
+    finally:
+        for p in (temp_in, temp_wav):
+            if p and os.path.exists(p):
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
 
 
 def _process_video(filepath: str, content_list: list):
@@ -306,13 +348,13 @@ def _process_pdf(filepath: str, content_list: list):
 def _process_audio(filepath: str, content_list: list):
     """Convert audio file to WAV base64 with automatic speech transcription."""
     try:
-        from pydub import AudioSegment
+        from pydub import AudioSegment, effects
         audio = AudioSegment.from_file(filepath)
         dur_s = len(audio) / 1000.0
         m, s = divmod(dur_s, 60)
 
-        # 16kHz mono WAV
-        audio_mono = audio.set_frame_rate(16000).set_channels(1)
+        # Normalize and resample to 16kHz mono WAV
+        audio_mono = effects.normalize(audio).set_frame_rate(16000).set_channels(1)
         wav_io = io.BytesIO()
         export_seg = audio_mono[:60000]
         export_seg.export(wav_io, format="wav")

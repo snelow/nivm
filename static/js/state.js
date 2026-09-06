@@ -44,6 +44,7 @@ Core Directives:
     usageStats: JSON.parse(localStorage.getItem('nivm_usageStats') || '{"totalTokens": 0, "totalCost": 0, "totalDurationSec": 0}'),
     memory: {},
     enabledTools: JSON.parse(localStorage.getItem('nivm_enabledTools') || '{"read_memory": true, "write_memory": true, "execute_terminal": false}'),
+    terminalSecurityMode: localStorage.getItem('nivm_terminalSecurityMode') || 'dangerous',
     visionEnabled: false,
     attachedImages: []
 };
@@ -93,4 +94,9 @@ export function saveUsageStats() {
 
 export function saveEnabledTools() {
     localStorage.setItem('nivm_enabledTools', JSON.stringify(state.enabledTools));
+}
+
+export function saveTerminalSecurityMode(mode) {
+    state.terminalSecurityMode = mode;
+    localStorage.setItem('nivm_terminalSecurityMode', mode);
 }

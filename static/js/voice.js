@@ -1144,16 +1144,17 @@ export async function setupVoiceUI() {
                 return;
             }
 
-            let promptText = (voiceModeTranscript || '').trim();
+            let promptText = '';
 
-            // If WebSpeech did not capture transcript, use sovereign offline Faster-Whisper via /api/stt
-            if (!promptText && voiceModeAudioChunks.length > 0) {
+            // ALWAYS prioritize sovereign offline Faster-Whisper via /api/stt directly from recorded audio
+            if (voiceModeAudioChunks.length > 0) {
                 try {
-                    if (statusEl) statusEl.textContent = 'Transcribing...';
+                    if (statusEl) statusEl.textContent = 'Transcribing with Whisper...';
                     const mimeType = voiceModeMediaRecorder?.mimeType || 'audio/webm';
                     const audioBlob = new Blob(voiceModeAudioChunks, { type: mimeType });
+                    const ext = mimeType.includes('wav') ? '.wav' : (mimeType.includes('ogg') ? '.ogg' : '.webm');
                     const formData = new FormData();
-                    formData.append('audio', audioBlob, 'recording.webm');
+                    formData.append('audio', audioBlob, `voice_recording${ext}`);
                     const res = await fetch('/api/stt', {
                         method: 'POST',
                         body: formData
@@ -1164,9 +1165,25 @@ export async function setupVoiceUI() {
                             promptText = data.text.trim();
                         }
                     }
+
+                    // If multimodal (mmproj/vision) is active, also attach raw audio to message payload
+                    if (state.visionEnabled && audioBlob.size > 500) {
+                        const audioFile = new File([audioBlob], `voice_input_${Date.now()}${ext}`, { type: audioBlob.type });
+                        state.attachedImages.push({
+                            file: audioFile,
+                            type: audioBlob.type,
+                            url: URL.createObjectURL(audioBlob)
+                        });
+                        if (window.renderImagePreviews) window.renderImagePreviews();
+                    }
                 } catch (sttErr) {
-                    console.warn('STT transcription fallback notice:', sttErr);
+                    console.warn('Faster-Whisper STT notice:', sttErr);
                 }
+            }
+
+            // Fallback only if /api/stt returned nothing
+            if (!promptText && voiceModeTranscript) {
+                promptText = voiceModeTranscript.trim();
             }
 
             if (!promptText && dom.userPrompt) {
@@ -1361,9 +1378,7 @@ export async function setupVoiceUI() {
                                 return;
                             }
 
-                            if (statusEl) statusEl.textContent = `"${voiceModeTranscript}"`;
-                            if (dom.userPrompt) dom.userPrompt.value = voiceModeTranscript;
-
+                            if (statusEl) statusEl.textContent = `Listening... ("${voiceModeTranscript}")`;
                             // Reset silence timer on every new speech chunk
                             clearVoiceSilenceTimer();
 

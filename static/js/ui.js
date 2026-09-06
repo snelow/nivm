@@ -1,4 +1,4 @@
-import { state, saveConversations, saveEnabledTools } from './state.js';
+import { state, saveConversations, saveEnabledTools, saveTerminalSecurityMode } from './state.js';
 import { dom } from './dom.js';
 import { tools, parseToolCall, stripToolCallFromText } from './tools.js';
 
@@ -304,10 +304,11 @@ export function buildToolTraceHtml(command, argsStr, resultStr = null) {
     }
     const previewArgs = cleanArgs.length > 55 ? cleanArgs.substring(0, 52) + '…' : cleanArgs;
 
-    const isError = resultStr && (resultStr.toLowerCase().includes('error') || resultStr.toLowerCase().includes('failed'));
-    const statusClass = isError ? 'error' : 'success';
-    const statusText = isError ? 'Failed' : 'Executed';
-    const statusIcon = isError ? 'fa-triangle-exclamation' : 'fa-check';
+    const isDenied = resultStr && resultStr.toLowerCase().includes('denied');
+    const isError = !isDenied && resultStr && (resultStr.toLowerCase().includes('error') || resultStr.toLowerCase().includes('failed'));
+    const statusClass = isDenied ? 'warning' : (isError ? 'error' : 'success');
+    const statusText = isDenied ? 'Denied' : (isError ? 'Failed' : 'Executed');
+    const statusIcon = isDenied ? 'fa-ban' : (isError ? 'fa-triangle-exclamation' : 'fa-check');
 
     const fullInvocation = `${command}(${cleanArgs})`;
     const escapedInvocation = escapeHtml(fullInvocation).replace(/'/g, "\\'");
@@ -648,6 +649,11 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
 
     if (role === 'assistant' && (hasToolCall || isFollowedByNotification)) {
         const textWithoutTool = stripToolCallFromText(content, tools).trim();
+        const textOutsideThoughts = textWithoutTool
+            .replace(/<(think|thought|reasoning)>[\s\S]*?<\/\1>/gi, '')
+            .replace(/<(think|thought|reasoning)>[\s\S]*$/gi, '')
+            .trim();
+        const hasCompletedThought = textWithoutTool.includes('</think>') || textWithoutTool.includes('</thought>') || textWithoutTool.includes('</reasoning>');
         
         let toolCommand = msg.toolExecution?.command || detectedTool?.command || null;
         let argsStr = msg.toolExecution?.argsStr || detectedTool?.argsStr || null;
@@ -689,8 +695,8 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
         if (toolCommand) {
             const sysBubbleHtml = buildToolTraceHtml(toolCommand, argsStr, resultStr);
             
-            if (textWithoutTool === '') {
-                // No thinking block, just a tool call. Remove wrapper and add trace to row.
+            if (textOutsideThoughts === '' && !hasCompletedThought) {
+                // Pure tool step: remove wrapper and render only the clean tool badge
                 wrapper.remove();
                 row.insertAdjacentHTML('beforeend', sysBubbleHtml);
             } else {
@@ -957,7 +963,11 @@ function deduplicateConsecutiveParagraphs(text) {
         answerText = answerText.replace(/<think>[\s\S]*$/gi, '').replace(/<\/think>/gi, '').trim();
         answerText = deduplicateConsecutiveParagraphs(answerText);
         
-        if (thinkContent) {
+        // If the model put its entire text inside <think> and output zero text outside,
+        // promote it to answerText so the user is never left with an empty bubble or hidden reply!
+        if (!isGenerating && answerText === '' && thinkContent) {
+            answerText = thinkContent;
+        } else if (thinkContent) {
             let thinkDuration = null;
             if (typeof thinkStartTimeOrDuration === 'number') {
                 if (isGenerating && thinkStartTimeOrDuration > 100000) {
@@ -985,7 +995,7 @@ function deduplicateConsecutiveParagraphs(text) {
                 <div class="thinking-content">${parsedThink}</div>
             </details>`;
         }
-    } else if (processedText.includes('<think>')) {
+    } else if (isGenerating && processedText.includes('<think>')) {
         stopThinkingPhraseRotation();
         const parts = processedText.split('<think>');
         answerText = deduplicateConsecutiveParagraphs(parts[0].trim());
@@ -1010,6 +1020,13 @@ function deduplicateConsecutiveParagraphs(text) {
             </summary>
             <div class="thinking-content">${parsedStreaming}</div>
         </details>`;
+    } else if (!isGenerating && processedText.includes('<think>')) {
+        // Generation completed with an unclosed <think> tag:
+        // Strip the dangling <think> tag so the model's text renders cleanly as the visible response
+        stopThinkingPhraseRotation();
+        const cleanContent = processedText.replace(/<\/?think>/gi, '').trim();
+        answerText = deduplicateConsecutiveParagraphs(cleanContent);
+        thinkingHtml = '';
     } else if (isGenerating && processedText.trim() === '') {
         const pendingStatus = bubbleElement.dataset.initialStatus;
         const pendingIcon = bubbleElement.dataset.initialIcon;
@@ -1049,7 +1066,7 @@ function deduplicateConsecutiveParagraphs(text) {
         if (isGenerating && !thinkingHtml) {
             answerText = '<div style="opacity: 0.6; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-circle-notch fa-spin"></i> <span>Processing...</span></div>';
         } else if (!isGenerating && !thinkingHtml) {
-            answerText = '*(Empty response)*';
+            answerText = '';
         }
     }
 
@@ -1061,6 +1078,16 @@ function deduplicateConsecutiveParagraphs(text) {
     }
 
     bubbleElement.innerHTML = thinkingHtml + parsedAnswer;
+
+    // If completely blank (no thoughts and no answer), hide the empty bubble wrapper so no blank message is shown
+    if (!thinkingHtml && !parsedAnswer.trim()) {
+        bubbleElement.style.display = 'none';
+        const actionsEl = bubbleElement.closest('.message-wrapper')?.querySelector('.message-actions');
+        if (actionsEl) actionsEl.style.display = 'none';
+    } else {
+        bubbleElement.style.display = '';
+    }
+
     attachCodeCopyButtons(bubbleElement);
 }
 
@@ -1400,22 +1427,27 @@ export function renderToolsSettings() {
     tools.forEach(tool => {
         const isEnabled = state.enabledTools[tool.name] === true;
         
+        const cardContainer = document.createElement('div');
+        cardContainer.className = 'tool-setting-card';
+        cardContainer.style.marginBottom = '12px';
+        cardContainer.style.background = 'rgba(255, 255, 255, 0.03)';
+        cardContainer.style.border = '1px solid var(--glass-border)';
+        cardContainer.style.borderRadius = '8px';
+        cardContainer.style.overflow = 'hidden';
+
         const wrap = document.createElement('div');
         wrap.className = 'tool-setting-row';
         wrap.style.display = 'flex';
         wrap.style.alignItems = 'center';
         wrap.style.justifyContent = 'space-between';
-        wrap.style.marginBottom = '12px';
-        wrap.style.padding = '8px';
-        wrap.style.background = 'rgba(255, 255, 255, 0.03)';
-        wrap.style.borderRadius = '8px';
+        wrap.style.padding = '10px 12px';
         
         const infoWrap = document.createElement('div');
         
         const title = document.createElement('div');
         title.style.fontWeight = '500';
         title.style.color = 'var(--text-primary)';
-        title.innerHTML = `<i class="fa-solid fa-screwdriver-wrench" style="font-size: 0.8em; margin-right: 6px; color: var(--accent-purple);"></i>${tool.name}`;
+        title.innerHTML = `<i class="fa-solid fa-screwdriver-wrench" style="font-size: 0.8em; margin-right: 6px; color: var(--accent-purple);"></i>${escapeHtml(tool.name)}`;
         
         const desc = document.createElement('div');
         desc.style.fontSize = '0.85em';
@@ -1432,18 +1464,65 @@ export function renderToolsSettings() {
         toggleBtn.style.fontSize = '0.85em';
         toggleBtn.textContent = isEnabled ? 'Enabled' : 'Disabled';
         
-        toggleBtn.onclick = () => {
-            const newState = !(state.enabledTools[tool.name] === true);
-            state.enabledTools[tool.name] = newState;
-            saveEnabledTools();
-            
-            toggleBtn.className = newState ? 'btn-primary' : 'btn-secondary';
-            toggleBtn.textContent = newState ? 'Enabled' : 'Disabled';
-        };
-        
         wrap.appendChild(infoWrap);
         wrap.appendChild(toggleBtn);
-        dom.toolsConfigContainer.appendChild(wrap);
+        cardContainer.appendChild(wrap);
+
+        if (tool.name === 'execute_terminal') {
+            const secWrap = document.createElement('div');
+            secWrap.className = 'terminal-sec-setting';
+            secWrap.style.padding = '10px 12px';
+            secWrap.style.borderTop = '1px solid rgba(255, 255, 255, 0.06)';
+            secWrap.style.background = 'rgba(0, 0, 0, 0.2)';
+            secWrap.style.display = isEnabled ? 'block' : 'none';
+
+            const currentMode = state.terminalSecurityMode || 'dangerous';
+
+            secWrap.innerHTML = `
+                <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-shield-halved" style="color: var(--accent-purple); font-size: 0.9em;"></i>
+                    <span>Execution Permission Level</span>
+                </div>
+                <div style="font-size: 0.78rem; color: var(--text-tertiary); margin-bottom: 8px; line-height: 1.35;">
+                    Specify when nivm must ask for your explicit confirmation before executing terminal commands.
+                </div>
+                <select class="form-select terminal-sec-mode-select" style="width: 100%; padding: 6px 10px; font-size: 0.82rem; background: rgba(18, 18, 21, 0.9); border: 1px solid var(--glass-border); border-radius: 6px; color: var(--text-primary);">
+                    <option value="dangerous" ${currentMode === 'dangerous' ? 'selected' : ''}>⚠️ Ask on dangerous commands only (Recommended)</option>
+                    <option value="always" ${currentMode === 'always' ? 'selected' : ''}>🔒 Always ask for confirmation</option>
+                    <option value="never" ${currentMode === 'never' ? 'selected' : ''}>⚡ Never ask (Full Autonomous)</option>
+                </select>
+            `;
+
+            const selectEl = secWrap.querySelector('.terminal-sec-mode-select');
+            selectEl.onchange = (e) => {
+                const newMode = e.target.value;
+                saveTerminalSecurityMode(newMode);
+                showNotification(`Terminal security: ${newMode === 'dangerous' ? 'Dangerous only' : (newMode === 'always' ? 'Always ask' : 'Never ask')}`, 'info');
+            };
+
+            toggleBtn.onclick = () => {
+                const newState = !(state.enabledTools[tool.name] === true);
+                state.enabledTools[tool.name] = newState;
+                saveEnabledTools();
+                
+                toggleBtn.className = newState ? 'btn-primary' : 'btn-secondary';
+                toggleBtn.textContent = newState ? 'Enabled' : 'Disabled';
+                secWrap.style.display = newState ? 'block' : 'none';
+            };
+
+            cardContainer.appendChild(secWrap);
+        } else {
+            toggleBtn.onclick = () => {
+                const newState = !(state.enabledTools[tool.name] === true);
+                state.enabledTools[tool.name] = newState;
+                saveEnabledTools();
+                
+                toggleBtn.className = newState ? 'btn-primary' : 'btn-secondary';
+                toggleBtn.textContent = newState ? 'Enabled' : 'Disabled';
+            };
+        }
+
+        dom.toolsConfigContainer.appendChild(cardContainer);
     });
 }
 
@@ -1664,6 +1743,10 @@ window.showAlert = showAlert;
 
 export function showConfirm(title, message) {
     return new Promise(resolve => {
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+        }
+
         dom.dialogTitle.textContent = title;
         dom.dialogMessage.textContent = message;
         
@@ -1680,18 +1763,208 @@ export function showConfirm(title, message) {
         dom.dialogActions.appendChild(confirmBtn);
         
         dom.dialogOverlay.classList.remove('hidden');
+        cancelBtn.focus();
+
+        const onOverlayMouseDown = (e) => {
+            if (e.target === dom.dialogOverlay) {
+                e.stopPropagation();
+                e.preventDefault();
+                dom.dialogBox.classList.remove('dialog-shake');
+                void dom.dialogBox.offsetWidth;
+                dom.dialogBox.classList.add('dialog-shake');
+            }
+        };
+        dom.dialogOverlay.addEventListener('mousedown', onOverlayMouseDown);
+
+        const onKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                cleanup();
+                resolve(false);
+            } else if (e.key === 'Tab') {
+                const focusables = [cancelBtn, confirmBtn];
+                if (e.shiftKey && document.activeElement === focusables[0]) {
+                    e.preventDefault();
+                    focusables[1].focus();
+                } else if (!e.shiftKey && document.activeElement === focusables[1]) {
+                    e.preventDefault();
+                    focusables[0].focus();
+                }
+            }
+        };
+        window.addEventListener('keydown', onKeyDown, true);
+
+        const cleanup = () => {
+            dom.dialogOverlay.classList.add('hidden');
+            dom.dialogOverlay.removeEventListener('mousedown', onOverlayMouseDown);
+            window.removeEventListener('keydown', onKeyDown, true);
+            dom.dialogBox.classList.remove('dialog-shake');
+        };
         
         cancelBtn.addEventListener('click', () => {
-            dom.dialogOverlay.classList.add('hidden');
+            cleanup();
             resolve(false);
         });
         
         confirmBtn.addEventListener('click', () => {
-            dom.dialogOverlay.classList.add('hidden');
+            cleanup();
             resolve(true);
         });
     });
 }
+
+export function promptTerminalPermission(command, reasons = []) {
+    return new Promise(resolve => {
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+        }
+
+        const iconEl = dom.dialogOverlay.querySelector('.dialog-icon');
+        const originalIconClass = iconEl ? iconEl.className : '';
+        const originalIconStyle = iconEl ? iconEl.getAttribute('style') : null;
+
+        if (iconEl) {
+            iconEl.className = 'fa-solid fa-shield-halved dialog-icon';
+            iconEl.style.color = '#f59e0b';
+        }
+
+        dom.dialogTitle.textContent = 'Terminal Permission Request';
+
+        let reasonsHtml = '';
+        if (reasons && reasons.length > 0) {
+            reasonsHtml = `
+                <div style="margin-bottom: 12px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 10px 12px;">
+                    <div style="font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.06em; color: #f87171; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Flagged Potential Risk
+                    </div>
+                    <ul style="margin: 0; padding-left: 18px; font-size: 0.82rem; color: #fca5a5; line-height: 1.45;">
+                        ${reasons.map(r => `<li>${escapeHtml(r)}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        } else {
+            reasonsHtml = `
+                <div style="margin-bottom: 12px; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+                    The assistant requested permission to execute a shell command on your local system.
+                </div>
+            `;
+        }
+
+        dom.dialogMessage.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                ${reasonsHtml}
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); font-weight: 600;">Command to Execute</span>
+                        <button type="button" id="copyTerminalPromptCmdBtn" style="background: none; border: none; color: var(--text-tertiary); font-size: 0.78rem; cursor: pointer; padding: 2px 6px; border-radius: 4px; display: flex; align-items: center; gap: 4px;" title="Copy command">
+                            <i class="fa-regular fa-copy"></i> Copy
+                        </button>
+                    </div>
+                    <div style="background: rgba(0, 0, 0, 0.65); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; padding: 10px 14px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.88rem; color: #67e8f9; word-break: break-all; max-height: 110px; overflow-y: auto; line-height: 1.45;">
+                        <span style="color: #34d399; user-select: none; font-weight: 600; margin-right: 6px;">$</span>${escapeHtml(command)}
+                    </div>
+                </div>
+                <div style="font-size: 0.78rem; color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                    <i class="fa-solid fa-folder-open" style="color: var(--accent-purple);"></i>
+                    <span>Target Directory: <code>nivm root</code></span>
+                </div>
+            </div>
+        `;
+
+        const copyBtn = dom.dialogMessage.querySelector('#copyTerminalPromptCmdBtn');
+        if (copyBtn) {
+            copyBtn.onclick = () => {
+                navigator.clipboard.writeText(command);
+                copyBtn.innerHTML = '<i class="fa-solid fa-check" style="color: #34d399;"></i> Copied!';
+                setTimeout(() => {
+                    copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i> Copy';
+                }, 2000);
+            };
+        }
+
+        const denyBtn = document.createElement('button');
+        denyBtn.className = 'btn-secondary';
+        denyBtn.style.padding = '8px 16px';
+        denyBtn.style.fontSize = '0.88rem';
+        denyBtn.textContent = 'Deny';
+
+        const allowBtn = document.createElement('button');
+        allowBtn.className = 'btn-primary';
+        allowBtn.style.padding = '8px 18px';
+        allowBtn.style.fontSize = '0.88rem';
+        allowBtn.style.background = 'linear-gradient(135deg, #059669 0%, #10b981 100%)';
+        allowBtn.style.borderColor = '#34d399';
+        allowBtn.innerHTML = '<i class="fa-solid fa-terminal" style="margin-right: 6px;"></i> Allow Execution';
+
+        dom.dialogActions.innerHTML = '';
+        dom.dialogActions.appendChild(denyBtn);
+        dom.dialogActions.appendChild(allowBtn);
+
+        const prevMaxWidth = dom.dialogBox.style.maxWidth;
+        dom.dialogBox.style.maxWidth = '480px';
+
+        dom.dialogOverlay.classList.remove('hidden');
+        denyBtn.focus();
+
+        const onOverlayMouseDown = (e) => {
+            if (e.target === dom.dialogOverlay) {
+                e.stopPropagation();
+                e.preventDefault();
+                dom.dialogBox.classList.remove('dialog-shake');
+                void dom.dialogBox.offsetWidth;
+                dom.dialogBox.classList.add('dialog-shake');
+            }
+        };
+        dom.dialogOverlay.addEventListener('mousedown', onOverlayMouseDown);
+
+        const cleanup = () => {
+            dom.dialogOverlay.classList.add('hidden');
+            dom.dialogOverlay.removeEventListener('mousedown', onOverlayMouseDown);
+            window.removeEventListener('keydown', onKeyDown, true);
+            dom.dialogBox.classList.remove('dialog-shake');
+            dom.dialogBox.style.maxWidth = prevMaxWidth || '';
+            if (iconEl) {
+                if (originalIconClass) iconEl.className = originalIconClass;
+                if (originalIconStyle !== null) iconEl.setAttribute('style', originalIconStyle);
+                else iconEl.removeAttribute('style');
+            }
+        };
+
+        const onKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                cleanup();
+                resolve(false);
+            } else if (e.key === 'Tab') {
+                const focusables = [copyBtn, denyBtn, allowBtn].filter(Boolean);
+                const first = focusables[0];
+                const last = focusables[focusables.length - 1];
+                if (e.shiftKey && document.activeElement === first) {
+                    e.preventDefault();
+                    last.focus();
+                } else if (!e.shiftKey && document.activeElement === last) {
+                    e.preventDefault();
+                    first.focus();
+                }
+            }
+        };
+        window.addEventListener('keydown', onKeyDown, true);
+
+        denyBtn.addEventListener('click', () => {
+            cleanup();
+            resolve(false);
+        });
+
+        allowBtn.addEventListener('click', () => {
+            cleanup();
+            resolve(true);
+        });
+    });
+}
+window.promptTerminalPermission = promptTerminalPermission;
+
 
 export function setupHistoryUI() {
     // Search logic

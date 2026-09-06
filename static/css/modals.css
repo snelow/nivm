@@ -2772,4 +2772,71 @@ body.site-glitch-active {
     100% { opacity: 1; transform: scale(1.2) rotate(45deg); }
 }
 
+/* Reze Boom Explosion Mode */
+.reze-screen-shake {
+    animation: rezeScreenShake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes rezeScreenShake {
+    0%, 100% { transform: translate(0, 0); }
+    15% { transform: translate(-6px, 4px) rotate(-0.5deg); }
+    30% { transform: translate(6px, -4px) rotate(0.5deg); }
+    45% { transform: translate(-4px, 3px) rotate(-0.3deg); }
+    60% { transform: translate(4px, -2px) rotate(0.3deg); }
+    75% { transform: translate(-2px, 1px); }
+    90% { transform: translate(1px, -1px); }
+}
+
+.reze-boom-particle {
+    position: fixed;
+    z-index: 10000;
+    pointer-events: none;
+    font-size: 1.45rem;
+    filter: drop-shadow(0 0 10px rgba(255, 68, 0, 0.9));
+    animation: rezeParticleBurst 0.9s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes rezeParticleBurst {
+    0% {
+        transform: translate(-50%, -50%) scale(0.4) rotate(0deg);
+        opacity: 1;
+    }
+    60% {
+        opacity: 1;
+    }
+    100% {
+        transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(1.35) rotate(var(--rot));
+        opacity: 0;
+    }
+}
+
+.bleh-easter-egg-container.reze-boom-active .bleh-speech-bubble {
+    background: #1f070a;
+    color: #ff3838;
+    border-color: #ff3838;
+    box-shadow: 0 0 20px rgba(255, 56, 56, 0.7), 2px 2px 0px #880815;
+    animation: boomBubblePulse 0.25s ease-in-out infinite alternate;
+}
+
+.bleh-easter-egg-container.reze-boom-active .bleh-speech-bubble::after {
+    border-top-color: #ff3838;
+}
+
+.bleh-easter-egg-container.reze-boom-active .bleh-pixel-avatar {
+    border-color: #ff3838 !important;
+    box-shadow: 0 0 26px rgba(255, 56, 56, 0.9), 0 0 0 3px #ff1a00 !important;
+    animation: rezeAvatarVibrate 0.3s ease infinite alternate;
+}
+
+@keyframes boomBubblePulse {
+    0% { transform: scale(1) translateY(0); }
+    100% { transform: scale(1.1) translateY(-5px); }
+}
+
+@keyframes rezeAvatarVibrate {
+    0% { transform: scale(1) rotate(-1.5deg); }
+    100% { transform: scale(1.08) rotate(2deg); }
+}
+
+
 

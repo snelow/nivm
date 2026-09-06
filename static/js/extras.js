@@ -231,6 +231,111 @@ function spawnFloatingHeart(x, y) {
 }
 
 /**
+ * Synthesizes a punchy retro/cyber explosion sound with pin pull click via Web Audio API.
+ */
+export function playExplosionSound() {
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+
+        // 1. Initial metallic grenade pin pull click
+        const clickOsc = ctx.createOscillator();
+        const clickGain = ctx.createGain();
+        clickOsc.type = 'square';
+        clickOsc.frequency.setValueAtTime(2200, now);
+        clickOsc.frequency.exponentialRampToValueAtTime(500, now + 0.05);
+        clickGain.gain.setValueAtTime(0.2, now);
+        clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+        clickOsc.connect(clickGain);
+        clickGain.connect(ctx.destination);
+        clickOsc.start(now);
+        clickOsc.stop(now + 0.06);
+
+        // 2. White noise explosion burst
+        const bufferSize = Math.floor(ctx.sampleRate * 0.9);
+        const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            output[i] = Math.random() * 2 - 1;
+        }
+
+        const whiteNoise = ctx.createBufferSource();
+        whiteNoise.buffer = noiseBuffer;
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(950, now + 0.04);
+        filter.frequency.exponentialRampToValueAtTime(55, now + 0.75);
+
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.001, now);
+        noiseGain.gain.setValueAtTime(0.001, now + 0.03);
+        noiseGain.gain.linearRampToValueAtTime(0.42, now + 0.06);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
+
+        whiteNoise.connect(filter);
+        filter.connect(noiseGain);
+        noiseGain.connect(ctx.destination);
+
+        whiteNoise.start(now + 0.03);
+        whiteNoise.stop(now + 0.9);
+
+        // 3. Sub-bass boom oscillator
+        const subOsc = ctx.createOscillator();
+        const subGain = ctx.createGain();
+        subOsc.type = 'sine';
+        subOsc.frequency.setValueAtTime(150, now + 0.04);
+        subOsc.frequency.exponentialRampToValueAtTime(30, now + 0.55);
+
+        subGain.gain.setValueAtTime(0.001, now + 0.04);
+        subGain.gain.linearRampToValueAtTime(0.45, now + 0.07);
+        subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+
+        subOsc.connect(subGain);
+        subGain.connect(ctx.destination);
+
+        subOsc.start(now + 0.04);
+        subOsc.stop(now + 0.7);
+
+        setTimeout(() => {
+            try { ctx.close(); } catch (_) {}
+        }, 1100);
+    } catch (e) {
+        console.warn('Audio synthesis warning:', e);
+    }
+}
+
+/**
+ * Spawns explosion spark and flame particles around the Reze avatar.
+ */
+function spawnExplosionParticles(centerX, centerY) {
+    const symbols = ['💥', '🔥', '✨', '⚡', '💣'];
+    for (let i = 0; i < 18; i++) {
+        const p = document.createElement('div');
+        p.className = 'reze-boom-particle';
+        p.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 45 + Math.random() * 85;
+        const tx = Math.cos(angle) * dist;
+        const ty = Math.sin(angle) * dist - 25;
+
+        p.style.left = `${centerX}px`;
+        p.style.top = `${centerY}px`;
+        p.style.setProperty('--tx', `${tx}px`);
+        p.style.setProperty('--ty', `${ty}px`);
+        p.style.setProperty('--rot', `${(Math.random() - 0.5) * 360}deg`);
+
+        document.body.appendChild(p);
+        setTimeout(() => {
+            if (p.parentNode) p.parentNode.removeChild(p);
+        }, 950);
+    }
+}
+
+
+/**
  * Triggers full-screen cyber glitch effect across the site.
  */
 export function triggerSiteGlitch() {
@@ -268,6 +373,11 @@ export function triggerBlehEasterEgg() {
     const container = document.getElementById('blehEasterEgg');
     if (!container) return;
 
+    // Reset any previous boom state to clean Bleh mode
+    container.classList.remove('reze-boom-active');
+    const bubbleText = container.querySelector('.bleh-bubble-text');
+    if (bubbleText) bubbleText.textContent = 'Bleh~!';
+
     if (blehHideTimer) clearTimeout(blehHideTimer);
 
     container.classList.remove('hidden');
@@ -282,6 +392,53 @@ export function triggerBlehEasterEgg() {
             container.classList.remove('bleh-animate-out');
         }, 350);
     }, 3800);
+}
+
+/**
+ * Triggers Reze's Bomb Devil explosion mode with "Boom!" text, audio roar, screen shake, and particles.
+ */
+export function triggerRezeExplosion() {
+    playExplosionSound();
+
+    const container = document.getElementById('blehEasterEgg');
+    if (!container) return;
+
+    // Activate fiery boom styling & text
+    container.classList.add('reze-boom-active');
+    const bubbleText = container.querySelector('.bleh-bubble-text');
+    if (bubbleText) bubbleText.textContent = 'Boom!';
+
+    // Screen shake
+    document.body.classList.remove('reze-screen-shake');
+    void document.body.offsetWidth;
+    document.body.classList.add('reze-screen-shake');
+    setTimeout(() => {
+        document.body.classList.remove('reze-screen-shake');
+    }, 450);
+
+    // Particle blast from avatar
+    const avatar = container.querySelector('.bleh-pixel-avatar');
+    if (avatar) {
+        const rect = avatar.getBoundingClientRect();
+        spawnExplosionParticles(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    }
+
+    if (blehHideTimer) clearTimeout(blehHideTimer);
+
+    container.classList.remove('hidden');
+    container.classList.remove('bleh-animate-out');
+    container.classList.add('bleh-animate-in');
+
+    blehHideTimer = setTimeout(() => {
+        container.classList.remove('bleh-animate-in');
+        container.classList.add('bleh-animate-out');
+        setTimeout(() => {
+            container.classList.add('hidden');
+            container.classList.remove('bleh-animate-out');
+            container.classList.remove('reze-boom-active');
+            if (bubbleText) bubbleText.textContent = 'Bleh~!';
+        }, 350);
+    }, 4000);
 }
 
 /**
@@ -311,16 +468,23 @@ export function closeCreatorModal() {
  * Initializes all easter egg triggers, click handlers, and modal bindings.
  */
 export function initExtras() {
-    // 1. New Chat 15-clicks tracker
+    // 1. New Chat 15-clicks tracker (15 taps = Bleh, another 15 = Boom!)
     const handleNewChatClick = () => {
         clickCount++;
         if (clickResetTimer) clearTimeout(clickResetTimer);
         clickResetTimer = setTimeout(() => {
             clickCount = 0;
-        }, 8000);
+        }, 16000);
 
         if (clickCount > 0 && clickCount % 15 === 0) {
-            triggerBlehEasterEgg();
+            const step = Math.floor(clickCount / 15);
+            if (step % 2 === 0) {
+                // 30, 60, 90... Explode with Boom!
+                triggerRezeExplosion();
+            } else {
+                // 15, 45, 75... Bleh~!
+                triggerBlehEasterEgg();
+            }
         }
     };
 
@@ -330,8 +494,19 @@ export function initExtras() {
     if (newChatBtn) newChatBtn.addEventListener('click', handleNewChatClick);
     if (convoEndedNewChatBtn) convoEndedNewChatBtn.addEventListener('click', handleNewChatClick);
 
-    // 2. Pixel art container click to dismiss early
+    // 2. Pixel art container click handlers
     const blehContainer = document.getElementById('blehEasterEgg');
+    const blehAvatar = blehContainer ? blehContainer.querySelector('.bleh-pixel-avatar') : null;
+
+    // Clicking Reze's avatar or pin choker detonates the Boom explosion directly!
+    if (blehAvatar) {
+        blehAvatar.addEventListener('click', (e) => {
+            e.stopPropagation();
+            triggerRezeExplosion();
+        });
+    }
+
+    // Clicking anywhere else on the bubble / container dismisses early
     if (blehContainer) {
         blehContainer.addEventListener('click', () => {
             blehContainer.classList.remove('bleh-animate-in');
@@ -339,6 +514,7 @@ export function initExtras() {
             setTimeout(() => {
                 blehContainer.classList.add('hidden');
                 blehContainer.classList.remove('bleh-animate-out');
+                blehContainer.classList.remove('reze-boom-active');
             }, 250);
         });
     }
@@ -404,5 +580,7 @@ export function initExtras() {
     // Expose helpers on window
     window.__nivm_openCreator = openCreatorModal;
     window.__nivm_triggerBleh = triggerBlehEasterEgg;
+    window.__nivm_triggerBoom = triggerRezeExplosion;
     window.__nivm_triggerGlitch = triggerSiteGlitch;
 }
+

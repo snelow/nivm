@@ -1,0 +1,55 @@
+{
+  "description": "Nivm Sovereign Offline TTS Pronunciation Lexicon. Maps acronyms, anime expressions, internet slang, and phonetically challenging terms into natural Kokoro-compatible syllables.",
+  "exact": {
+    "nivm": "Nim",
+    "baka": "bah-ka",
+    "tsundere": "tsoon-deh-reh",
+    "yandere": "yahn-deh-reh",
+    "kuudere": "koo-deh-reh",
+    "dandere": "dahn-deh-reh",
+    "senpai": "sen-pie",
+    "kouhai": "ko-high",
+    "kawaii": "kah-wah-ee",
+    "sugoi": "soo-goy",
+    "nani": "nah-nee",
+    "yamete": "yah-meh-teh",
+    "chotto": "cho-toh",
+    "ara ara": "ah-rah ah-rah",
+    "e-to": "eh-toh",
+    "ano": "ah-noh",
+    "onii-chan": "oh-nee chahn",
+    "onee-san": "oh-neh sahn",
+    "uwu": "oo-woo",
+    "owo": "oh-woh",
+    "arigatou": "ah-ree-gah-toh",
+    "gomen": "go-men",
+    "itadakimasu": "ee-tah-dah-kee-mahs"
+  },
+  "patterns": [
+    {
+      "pattern": "\\b(h+m+p+h+|h+m+p+f+)\\b",
+      "replacement": "humph",
+      "flags": "i"
+    },
+    {
+      "pattern": "\\b(t+c+h+)\\b",
+      "replacement": "tsk",
+      "flags": "i"
+    },
+    {
+      "pattern": "\\b(nya+)\\b",
+      "replacement": "nyah",
+      "flags": "i"
+    },
+    {
+      "pattern": "\\b(p+f+f+t*)\\b",
+      "replacement": "poof",
+      "flags": "i"
+    },
+    {
+      "pattern": "\\b(m+p+h+)\\b",
+      "replacement": "humph",
+      "flags": "i"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
-# 🛡️ nivm — Sovereign On-Premise Multimodal AI Workbench
+# nivm — Sovereign On-Premise Multimodal AI Workbench
 
-> **100% Offline • Zero Cloud Leakage • Native GGUF Acceleration • Smart Multi-Model Routing • Air-Gapped Sentinel**
+> 100% Offline • Zero Cloud Leakage • Native GGUF Acceleration • Bidirectional Neural Voice (TTS & STT) • Multimodal Vision • Air-Gapped Sentinel
 
 ```text
     ███╗   ██╗██╗██╗   ██╗███╗   ███╗
@@ -9,258 +9,266 @@
     ██║╚██╗██║██║╚██╗ ██╔╝██║╚██╔╝██║
     ██║ ╚████║██║ ╚████╔╝ ██║ ╚═╝ ██║
     ╚═╝  ╚═══╝╚═╝  ╚═══╝  ╚═╝     ╚═╝
-   Native Inference Virtual Machine
+       Native Inference Virtual Machine
 ```
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg)](https://fastapi.tiangolo.com)
-[![llama.cpp](https://img.shields.io/badge/Engine-llama.cpp%20Native-orange.svg)](https://github.com/ggerganov/llama.cpp)
+[![llama.cpp](https://img.shields.io/badge/Engine-llama.cpp%20CUDA%20%2F%20Metal-orange.svg)](https://github.com/ggerganov/llama.cpp)
+[![Kokoro TTS](https://img.shields.io/badge/Neural%20TTS-Kokoro%20v1.0-purple.svg)](https://huggingface.co/hexgrad/Kokoro-82M)
+[![Faster-Whisper](https://img.shields.io/badge/Neural%20STT-Faster--Whisper%20INT8-blueviolet.svg)](https://github.com/SYSTRAN/faster-whisper)
 [![Air--Gap Verified](https://img.shields.io/badge/Air--Gap-100%25%20Verified%20Local-success.svg)]()
 
 ---
 
-## 📌 Executive Summary
+## Overview
 
-**nivm** (*Native Inference Virtual Machine*) is an industrial-grade, fully air-gapped local AI workbench engineered for confidential technical work. It enables engineers, researchers, and defense/industrial personnel to run high-performance open-weight Large Language Models (LLMs) and Vision-Language Models (VLMs) directly on local workstations and edge hardware—**with verifiable zero-byte external cloud egress**.
+> **Note**: This is a personal hobby project built for myself to have a fast, private, all-in-one local AI environment on my own machine—not a commercial product, SaaS, or startup. Feel free to explore, fork, or adapt it for your own personal setups.
 
-From parsing multi-page confidential PDFs and engineering piping & instrument diagrams (P&IDs) to real-time coding assistance and agentic host terminal execution, **nivm keeps 100% of your data, models, and execution strictly on your physical machine.**
+**nivm** (*Native Inference Virtual Machine*) is a fully air-gapped local AI workbench built for private technical work. It runs open-weight Large Language Models (LLMs) and Vision-Language Models (VLMs) directly on your local hardware with verifiable zero-byte external network egress.
 
----
-
-## 🚨 The Problem: The Enterprise & Industrial Dilemma
-
-In refineries, manufacturing plants, defense-linked units, and financial institutions, routine technical knowledge work (schematic reviews, engineering calculations, internal tooling scripts, board notes, inspection reports) contains highly sensitive data:
-- **P&IDs and Blueprints**: Proprietary design parameters and valve schematics.
-- **Financials & Contracts**: Unreleased vendor bids and strategic negotiations.
-- **Internal Infrastructure Code**: Credentials, architecture topologies, and private APIs.
-
-Using commercial cloud AI (ChatGPT, Claude, Copilot) violates data sovereignty regulations and risks massive intellectual property leaks. Meanwhile, completely disabling AI results in massive productivity loss. **nivm solves this paradox by bringing the full power of frontier open-weight models to on-premise silicon.**
+From parsing multi-page PDFs and blueprints to natural bidirectional voice conversations and agentic host terminal execution, **nivm keeps 100% of your data, models, and audio strictly on your physical machine.**
 
 ---
 
-## ✨ Key Highlights & Value Propositions
+## Core Capabilities & Architecture
 
-| Feature | Description |
-| :--- | :--- |
-| **🔒 100% Verifiable Sovereignty** | Built-in **Network & Socket Sentinel** monitors active OS sockets in real-time, providing hardware-level proof of $0.00\text{ B/s}$ external WAN egress. |
-| **🧠 Smart Multi-Model Routing** | A zero-latency local router model triages user queries and hot-swaps specialist GGUFs (Code, Vision, General, Reasoning) in under 3 seconds. |
-| **👁️ Deep Multimodal Ingestion** | Native processing of multi-page technical PDFs (`PyMuPDF`), high-resolution visual schematics (`mmproj` vision handler), audio, and video frames. |
-| **⚡ Native C++ Hardware Engine** | Powered by `llama.cpp` with Flash Attention, configurable GPU layer offloading (CUDA / ROCm / Metal / CPU), and KV cache quantization (Q8_0 / Q4_0). |
-| **🚀 Memory-Safe Isolated Downloader** | Pulls Hugging Face GGUF models via an independent background process (`aria2c` + kernel page cache eviction via `posix_fadvise`) with zero system memory crashes. |
-| **🛠️ Agentic Tool Execution** | Built-in long-term key-value memory drawer and secure host terminal execution for autonomous local scripting and verification. |
-| **🛡️ Auto-Fallback Safeguard** | Automatically verifies model integrity; if a custom GGUF is missing or corrupt, it instantly reverts to the last-known-good specialist with zero downtime. |
+### 1. Bidirectional Sovereign Voice Engine
+- **Neural Speech Synthesis (TTS)**: Built-in Kokoro v1.0 (ONNX Runtime) delivering natural voice synthesis on CPU/GPU with zero GPU VRAM footprint on inference.
+- **Vocal Profiles**: Selectable acoustic profiles (Heart, Bella, Sarah, Nicole, Emma/FRIDAY) with real-time rate, expressivity, and audio DSP post-processing (sibilance de-esser, presence EQ, soft fade-out).
+- **Offline Speech-to-Text (STT)**: Integrated Faster-Whisper (`/api/stt`) running on CPU with Voice Activity Detection (VAD) and time-domain RMS metering for fluid local speech input.
+- **Custom Phonetic Lexicon**: Interactive pronunciation dictionary with live draft audio preview, backed by an offline CMUdict dataset (135,000+ words) and protected core terminology.
+- **Dynamic Iridescent Orb**: Real-time frequency-modulated audio visualizer and glowing orb for conversational voice mode (fullscreen and docked).
+
+### 2. Dual Inference Architecture (Native GGUF + Multimodal API Mode)
+- **Native GGUF Engine**: Powered by `llama.cpp` with Flash Attention, KV-cache quantization (`q4_0`, `q8_0`, `f16`), split GPU layer offloading, and autonomous intent routing.
+- **External Multimodal API Mode**: Seamlessly connect to Google Gemini (e.g. `gemini-3.5-flash-lite`, `gemini-1.5-pro`), OpenAI, Groq, Ollama, LM Studio, or OpenRouter with zero code modifications.
+- **Unified Media Pipeline**: Ingest images, multi-page PDFs, and video keyframes across both local GGUF models (`mmproj`) and external multimodal API endpoints.
+
+### 3. Integrated In-Browser File Explorer
+- Browse workstation disks, drives, and directory shortcuts (`Desktop`, `Downloads`, `Home`, `Workspace`, `Models`) directly inside the UI.
+- Filter `.gguf` files with instant model activation and automatic companion `mmproj` pairing.
+
+### 4. Reasoning Engine & Anti-Redundancy Pipeline
+- Deep reasoning block (`<think>`) extraction and collapsible thinking accordion blocks with rotation indicators and duration counters.
+- **Consecutive Paragraph Deduplication**: Automatic detection and elimination of redundant model output loops.
+- Audio text sanitization: strips escaped characters (`\n`, `/n`, markdown tags) to prevent verbal clutter in TTS playback.
+
+### 5. Cyber Glassmorphism Interface
+- 4 interactive dynamic canvas backgrounds: Neural Synapses, Matrix Rain, WebGL Fluid Dynamics, and Cyber Flowfield.
+- Floating draggable window management, categorized long-term memory drawer, and token/cost analytics.
 
 ---
 
-## 💡 Core Novelty & Competitive Differentiation
+## Capability Comparison Matrix
 
-When evaluating on-premise AI, technical evaluators and compliance judges frequently ask: **"How is this different from Ollama, LM Studio, or a generic chat wrapper?"**
-
-`nivm` is fundamentally architected for **zero-trust industrial environments**, introducing five distinct technical novelties:
-
-### 1. 🔍 Forensic Proof of Sovereignty (vs. "Blind Trust")
-- **The Status Quo**: Existing tools (Ollama, LM Studio, Open WebUI) claim to run locally, but frequently ping external registries, update servers, and telemetry beacons in the background without user visibility.
-- **The nivm Novelty**: Introduces a real-time, hardware-level **Network & Socket Sentinel**. By hooking directly into kernel process tables via `psutil`, `nivm` monitors every active socket descriptor and renders a live dual-channel CRT oscilloscope proving **0.00 B/s external WAN egress**. It delivers mathematically auditable, forensic proof of isolation to security officers.
-
-### 2. ⚡ Autonomous Specialist Routing & Hot-Swapping (vs. Monolithic GPU Hogging)
-- **The Status Quo**: Running a single 70B+ model to handle both coding and visual tasks demands costly $15,000+ multi-GPU enterprise servers. Alternatively, switching models in UI dropdowns takes 30–60 seconds and fragments memory.
-- **The nivm Novelty**: An agile **Specialist-Orchestrated Architecture**. A microsecond local classifier triages intent and dynamically swaps dedicated compact specialists (e.g., Qwen 2.5 Coder vs. Gemma Vision with `mmproj`) in **under 3 seconds**. It achieves frontier-class quality across diverse domains on standard, affordable consumer workstations (RTX 3060/4060 or Apple Silicon).
-
-### 3. 📐 Native Industrial Multimodal Ingestion (vs. Simple Image Pasting)
-- **The Status Quo**: Most local tools only accept simple pasted JPEGs or offload OCR to cloud APIs.
-- **The nivm Novelty**: A native multi-format pipeline combining `PyMuPDF` for vector document page rasterization, OpenCV for video frame sampling, and direct GGUF multimodal projector (`mmproj`) binding. It digests full engineering P&IDs, blueprints, and multi-page technical reports completely offline without external OCR binaries.
-
-### 4. 🛡️ Kernel-Guarded, Process-Isolated Model Provisioning (vs. OOM Daemon Crashes)
-- **The Status Quo**: Downloading 15GB–20GB GGUF models inside the server process causes Linux dirty-page buffer bloat and system memory thrashing, frequently triggering the kernel OOM killer and killing active LLM sessions.
-- **The nivm Novelty**: Complete process isolation via a detached worker (`download_worker.py`) running in its own OS process group. By combining `falloc` instant block pre-allocation with Linux kernel page cache eviction (`posix_fadvise(POSIX_FADV_DONTNEED)`), worker resident memory remains strictly **under 25MB RSS** throughout 20GB+ downloads.
-
-### 5. 🔄 Self-Healing Model Registry with Auto-Fallback (vs. Fatal Crashes)
-- **The Status Quo**: Missing, renamed, or corrupted model files cause unhandled Python exceptions and immediate server failure.
-- **The nivm Novelty**: Built-in state verification and dynamic fallback. If a selected model fails integrity or path checks, `nivm` seamlessly falls back to the last-known-good specialist with zero downtime, notifying the user via non-blocking toast alerts.
-
-### 🥊 Feature Comparison Matrix
-
-| Capability | Commercial Cloud AI (Claude / ChatGPT) | Standard Local Tools (Ollama / LM Studio) | **nivm (This Project)** |
+| Capability | Commercial Cloud AI (ChatGPT / Claude) | Standard Local Tools (Ollama / LM Studio) | nivm (This Project) |
 | :--- | :---: | :---: | :---: |
-| **Data Privacy & Air-Gap** | ❌ None (Data leaves premises) | ⚠️ Partial (Silent telemetry/pings) | **✅ 100% Air-Gapped & Audited** |
-| **Forensic Socket Sentinel** | ❌ None | ❌ None | **✅ Live Dual-Channel Oscilloscope** |
-| **Dynamic Intent Routing** | ❌ Monolithic Model | ❌ Manual Dropdown Switching | **✅ Autonomous Sub-3s Hot-Swap** |
-| **Industrial Document Ingestion** | ⚠️ Cloud Ingestion Only | ❌ Basic Image Only | **✅ Multi-Page PDF + P&ID + mmproj** |
-| **OOM-Protected Downloader** | N/A (Cloud hosted) | ⚠️ Crashes host on large pulls | **✅ Isolated Worker (posix_fadvise)** |
-| **Self-Healing Fallback** | ❌ Server Error 500 | ❌ Process Crash | **✅ Instant Revert to Known-Good** |
-| **Host Terminal Tool Execution** | ❌ Sandboxed/Restricted | ❌ Chat Only | **✅ Integrated Agentic Execution** |
+| **Data Privacy & Air-Gap** | None (Data leaves premises) | Partial (Silent telemetry/pings) | **100% Air-Gapped & Audited** |
+| **Bidirectional Voice (TTS & STT)** | Cloud Stream Only | None / Plugin dependent | **Built-In (Kokoro + Faster-Whisper)** |
+| **Pronunciation Dictionary** | None | None | **Interactive UI + Preview Audio** |
+| **Forensic Socket Sentinel** | None | None | **Live Dual-Channel Oscilloscope** |
+| **Dynamic Intent Routing** | Monolithic Model | Manual Dropdown Switching | **Autonomous Sub-3s Hot-Swap** |
+| **Industrial Document Ingestion** | Cloud Ingestion Only | Basic Image Only | **Multi-Page PDF + mmproj + Video** |
+| **OOM-Protected Downloader** | N/A (Cloud hosted) | Crashes host on large pulls | **Isolated Worker (`posix_fadvise`)** |
+| **In-Browser File Explorer** | None | Basic OS Dialog Only | **Full Virtual File Navigator** |
+| **Dual Mode (Native + Ext API)** | Cloud only | Local only | **Seamless 1-Click Toggle** |
 
 ---
 
-## 🏛️ System Architecture
+## System Architecture
 
 ```mermaid
 flowchart TB
-    subgraph Client ["Client Tier (Browser UI)"]
-        UI["Modern Glassmorphism Web App"]
-        Chat["Streaming Chat & Markdown"]
-        NetMon["Real-Time Oscilloscope & Socket Sentinel"]
-        MemUI["Long-Term Memory Drawer"]
+    subgraph Client ["Client Tier (Browser WebApp)"]
+        UI["Glassmorphism Reactive UI"]
+        VoiceOrb["Dynamic Voice Orb & Audio Waveform"]
+        NetMon["Real-Time Socket Oscilloscope"]
+        FileNav["In-Browser Model & File Browser"]
+        MemUI["Categorized Long-Term Memory Drawer"]
     end
 
     subgraph Gateway ["Application Gateway (FastAPI)"]
         API["FastAPI Async REST / SSE Engine"]
+        TTS["Kokoro v1.0 Neural TTS Engine"]
+        STT["Faster-Whisper Speech-to-Text Engine"]
         Router["Smart Query Classifier / Router"]
-        Tools["Tool Dispatcher (Terminal, Memory)"]
+        Tools["Agentic Tool Dispatcher (Terminal, Memory)"]
     end
 
     subgraph Storage ["Local Storage & Cache"]
         ModelsDir["Local GGUF Models (/models)"]
-        SettingsJSON["Local Settings & Path History"]
-        MemoryJSON["Persistent Key-Value Store"]
+        SettingsJSON["User Settings & Audio Config"]
+        MemoryJSON["Persistent Memory Store"]
+        PronounceJSON["Custom Phonetic Lexicon"]
     end
 
-    subgraph Downloader ["Isolated Worker Process"]
-        Worker["download_worker.py (Detached Process)"]
-        Aria2["aria2c (falloc + 16MB cache)"]
-        Advise["Kernel Cache Eviction (posix_fadvise)"]
+    subgraph Engines ["Dual Inference Execution"]
+        subgraph LocalEngine ["Native GGUF Engine (llama.cpp)"]
+            ModelMgr["Dynamic ModelManager (Hot-Swap)"]
+            CoderModel["Specialist: Code (Qwen 2.5 Coder)"]
+            VisionModel["Specialist: Vision (Gemma + mmproj)"]
+            GeneralModel["Specialist: General / Reasoning (Phi-4 / Qwen)"]
+        end
+        subgraph ExternalAPI ["External API Proxy (Optional)"]
+            GeminiAPI["Google Gemini 2.5/3.5 Flash & Pro"]
+            OpenAIAPI["OpenAI / Groq / OpenRouter"]
+        end
     end
 
-    subgraph NativeEngine ["Inference Engine (llama.cpp)"]
-        ModelMgr["Dynamic ModelManager (Hot-Swap)"]
-        CoderModel["Specialist: Code (Qwen 2.5 Coder)"]
-        VisionModel["Specialist: Vision (Gemma + mmproj)"]
-        GeneralModel["Specialist: General / Reasoning (Phi-4 / Qwen)"]
-    end
-
-    UI -->|HTTP / SSE| API
+    UI -->|HTTP / SSE Streaming| API
+    VoiceOrb -->|WebM Audio / TTS WAV| API
     NetMon -->|psutil Telemetry| API
     API --> Router
+    API --> TTS
+    API --> STT
     Router -->|Select Role| ModelMgr
-    ModelMgr -->|Load / Unload| NativeEngine
+    ModelMgr --> LocalEngine
+    API --> ExternalAPI
     API --> Tools
     Tools --> Storage
-    API -->|Spawn Worker| Worker
-    Worker --> ModelsDir
-    ModelsDir --> NativeEngine
+    TTS --> PronounceJSON
+    FileNav --> ModelsDir
 ```
 
 ---
 
-## 🔬 Deep-Dive: Core Modules
+## Directory Structure
 
-### 1. Dynamic Multi-Model Orchestration (`engine.py` & `router.py`)
-Instead of forcing a single massive model to handle every task (which hogs 32GB+ of VRAM), `nivm` uses an agile specialist approach:
-- **Router Role**: Evaluates incoming context (tokens, file attachments, intent) with minimal overhead.
-- **Coder Role** (`Qwen2.5-Coder`): Specialized in Python, C++, Bash, SQL, and architectural logic.
-- **Vision Role** (`Gemma-VLM` + `mmproj`): High-fidelity visual OCR and schematic inspection.
-- **Single Model Mode**: Allows manual override to any custom GGUF with path history memory and automatic corruption fallback.
-- **Sub-3s Hot Swapping**: Frees host RAM via rigorous pointer deallocation and garbage collection before instantiating the new model.
-
-### 2. Multimodal Technical Document Pipeline
-- **PDF Page Rasterization**: Uses `PyMuPDF` to render engineering PDFs at 300 DPI directly into RGB pixel buffers.
-- **Vision Projector Integration**: Utilizes `llama-cpp-python`'s CLIP/Gemma multimodal chat handler (`mmproj-*-BF16.gguf`) to bind visual tokens directly into the LLM context.
-- **Media Support**: Automatically extracts frames from `.mp4`/`.mkv` videos and audio tracks for multi-angle inspection.
-
-### 3. Memory-Isolated Model Downloader (`download_worker.py`)
-Downloading 10GB–20GB GGUF models often crashes systems due to RAM buffer accumulation:
-- **Complete Decoupling**: Launched via `subprocess.Popen(..., start_new_session=True)` in an isolated OS process group.
-- **Hardware-Level Allocation**: Uses `--file-allocation=falloc` and `-x 4 -s 4` with `--disk-cache=16M` to prevent Linux kernel dirty-page bloat.
-- **Zero-RAM Streaming Fallback**: Built-in HTTP chunked streamer calls `os.posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED)` every 16MB, commanding the Linux kernel to flush written chunks from page cache. Memory usage stays **under 25MB RSS** regardless of file size.
-- **Hugging Face Direct**: Automatically normalizes any pasted Hugging Face `/blob/` web link into a direct streaming `/resolve/` endpoint.
-
-### 4. Network & Hardware Sentinel (`network_monitor.py`)
-- **Oscilloscope**: Dual-channel CRT-style oscilloscope displaying live local loopback throughput (`127.0.0.1`) while proving external WAN egress is flatlined at $0.00\text{ B/s}$.
-- **Forensic Sockets Table**: Uses `psutil` to inspect every open socket descriptor bound to the application process, verifying strict loopback isolation.
+```text
+nivm/
+├── core/
+│   ├── config.py           # System defaults, LLM hyperparams & base prompts
+│   ├── engine.py           # llama.cpp ModelManager with sub-3s model hot-swapping
+│   ├── router.py           # Zero-latency local query classifier & intent router
+│   ├── models_router.py    # GGUF model scanning, validation & registry
+│   ├── multimodal.py       # Faster-Whisper STT, OpenCV keyframing & PDF rasterizer
+│   ├── tts.py              # Kokoro v1.0 neural TTS, audio DSP filters & stutter normalizer
+│   ├── pronunciation_dict.json # Default phonetic pronunciation lexicon
+│   ├── storage.py          # Atomic JSON persistence & settings management
+│   ├── file_services.py    # In-browser filesystem navigation & drive shortcuts
+│   ├── downloader.py       # Multi-connection aria2 download orchestrator
+│   ├── download_worker.py  # Isolated background process with kernel cache eviction
+│   ├── network_monitor.py  # Real-time socket monitoring and hardware telemetry
+│   ├── benchmark.py        # Token throughput and inference performance benchmarks
+│   └── api_v1.py           # OpenAI-compatible API routes
+├── models/
+│   ├── tts/kokoro/         # Kokoro ONNX model weights & voice embeddings
+│   └── *.gguf              # User local GGUF models & mmproj vision projectors
+├── static/
+│   ├── css/
+│   │   ├── variables.css   # Color palette, spacing & elevation tokens
+│   │   ├── base.css        # Reset, typography & core element styles
+│   │   ├── backgrounds.css # Canvas layer positioning & transitions
+│   │   ├── layout.css      # App grid, sidebar, header & chat containers
+│   │   ├── modals.css      # Windows, settings, file explorer & pronunciation manager
+│   │   ├── chat.css        # Message bubbles, actions & status indicators
+│   │   ├── markdown.css    # Syntax highlighting & rendered document styling
+│   │   └── main.css        # Global entry stylesheet
+│   ├── js/
+│   │   ├── app.js          # Core application orchestration & message streaming
+│   │   ├── voice.js        # Voice conversation mode, recording & pronunciation UI
+│   │   ├── api.js          # REST & SSE streaming communications
+│   │   ├── ui.js           # DOM rendering, reasoning parser & deduplication
+│   │   ├── tools.js        # Client tool declarations & execution bridges
+│   │   ├── state.js        # Centralized application reactive state
+│   │   ├── theme.js        # Canvas dynamic backgrounds (Synapse, Fluid)
+│   │   ├── flowfield.js    # Cyber flowfield canvas engine
+│   │   └── dom.js          # Cached DOM element references
+│   ├── vendor/
+│   │   ├── marked.min.js   # Fast markdown parser
+│   │   ├── highlight.min.js# Code syntax highlighting
+│   │   ├── webgl-fluid.js  # WebGL fluid physics simulation
+│   │   └── ...             # Icons and offline fonts
+│   └── index.html          # Main single-page application interface
+├── User files/             # User chats, persistent memories & custom pronunciations
+├── main.py                 # FastAPI application root & API route bindings
+├── requirements.txt        # Python dependency manifest
+└── run.sh                  # One-click launch, hardware detector & venv manager
+```
 
 ---
 
-## 📊 Hardware Requirements & Compatibility
+## Hardware Requirements
 
-| Component | Minimum | Recommended | Industrial / Workstation |
+| Component | Minimum | Recommended | Workstation |
 | :--- | :--- | :--- | :--- |
 | **CPU** | 4 Cores (x86_64 / ARM64) | 8 Cores (AVX2 / AVX-512) | 16+ Cores (AMD Threadripper / Intel Xeon) |
 | **RAM** | 8 GB DDR4 | 16 GB - 32 GB DDR5 | 64 GB+ ECC RAM |
-| **GPU (Optional)** | None (Pure CPU inference) | 6 GB - 8 GB VRAM (RTX 3060 / 4060) | 16 GB - 24 GB VRAM (RTX 4090 / A5000) |
-| **Acceleration** | OpenBLAS / CPU threads | CUDA 12.x / Metal / ROCm | Dual GPU with Split Offload |
-| **OS** | Linux (Ubuntu, Fedora, RHEL) | Linux / WSL2 / macOS | Red Hat Enterprise Linux / Rocky Linux |
+| **GPU (Optional)** | None (Pure CPU inference) | 4 GB - 8 GB VRAM (RTX 3050 / 3060 / 4060) | 16 GB - 24 GB VRAM (RTX 4090 / A5000) |
+| **Acceleration** | OpenBLAS / CPU threads | CUDA 12.x / Apple Metal / ROCm | Dual GPU with Split Offload |
+| **OS** | Linux (Ubuntu, Fedora, Arch, RHEL) | Linux / WSL2 / macOS | Red Hat Enterprise Linux / Rocky Linux |
 
 ---
 
-## ⚡ Quickstart Guide
+## Quickstart Guide
 
 ### 1. Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/nivm.git
+git clone https://github.com/snelow/nivm.git
 cd nivm
 
-# Automated setup (creates virtualenv & installs all dependencies)
+# Automated setup (creates virtual environment & installs dependencies)
 ./run.sh --setup
 ```
 
-### 2. Launch the Workbench
+### 2. Launch
 
 ```bash
 # Start the local server
 ./run.sh
 ```
 
-Open your browser and navigate to:
+The launch script automatically detects:
+- GPU hardware and CUDA driver status
+- `aria2c` multi-connection downloader availability
+- Kokoro Neural TTS model files (downloads automatically if missing)
+- Offline CMUdict pronunciation dataset
+
+Navigate to:
 ```text
 http://127.0.0.1:8000
 ```
 
-### 3. Model Setup
-1. Open the **Settings Modal** (gear icon in the sidebar).
-2. Use the **Download Model** card to paste any Hugging Face GGUF link (e.g., `https://huggingface.co/bartowski/Qwen2.5-Coder-3B-Instruct-GGUF/blob/main/...`).
-3. Click **Download**—the isolated downloader will fetch the model with live speed, ETA, and progress tracking.
-4. Click **Load Engine** to activate instant offline inference!
+### 3. CLI Flags
+
+```bash
+./run.sh -h, --help       # Display help menu
+./run.sh -p 8080          # Run on custom port (default: 8000)
+./run.sh --no-reload      # Run in production mode without hot-reloading
+./run.sh --kill           # Terminate any conflicting process bound to port 8000
+```
 
 ---
 
-## 🔮 Roadmap & Planned Implementations
+## Roadmap
 
-To evolve `nivm` from a local multi-model prototype into a full-scale industrial agentic workbench, the following subsystems are actively planned:
+The following capabilities are in active development:
 
-### 1. 🤖 Multi-Step Agentic Planning & Real Deliverables Generation
-- **Iterative Task Execution**: Transition beyond single-turn prompt-response into autonomous, multi-step goal execution where the agent breaks down complex objectives, calls local tools, inspects outputs, and self-corrects until deliverables meet quality checks.
-- **Production Office Deliverable Exporters**:
-  - **Formal Approval Notes & Reports (`.docx`)**: Automated templating for engineering sign-offs, executive briefs, and regulatory audit notes.
-  - **Engineering Calculations & Tabular Worksheets (`.xlsx`)**: Generation of spreadsheet calculation workbooks with formulas, unit validations, and visible step-by-step arithmetic proofs.
-  - **Board & Plant Presentations (`.pptx`)**: Direct conversion of multi-page inspection summaries into structured presentation decks.
-
-### 2. 📚 Sovereign On-Premise Knowledge Base (Air-Gapped RAG Connector)
-- **Local Document Grounding**: A zero-cloud RAG pipeline linking local engineering manuals, Standard Operating Procedures (SOPs), plant maintenance logs, and historical internal correspondence.
-- **Embedded Offline Vector Database**: Integration with local vector engines (ChromaDB / SQLite-vec) powered by on-device embedding models (e.g., `bge-m3` or `nomic-embed` via `llama.cpp`) ensuring 100% air-gapped retrieval.
-
-### 3. 🧪 Isolated Sandboxed Code Execution
-- **Kernel-Level Sandboxing**: Containerized local runtime environments (via rootless Podman, Docker, or Linux `firejail`) to safely execute and benchmark model-generated Python scripts, shell utilities, and data processing jobs without exposing the host OS.
-- **Automated Verification Loops**: Self-evaluating execution cycles where test suites automatically grade and refine code outputs before presentation to the user.
-
-### 4. 📝 On-Device Handwritten OCR & Field Document Parsing
-- **Handwritten Notes & Inspection Checklists**: Specialized fine-tuned local vision-language adapters capable of parsing rough handwriting, physical field logs, and degraded thermal printouts.
-- **High-Resolution Vector Blueprint Zooming**: Intelligent tiled windowing for 4K+ resolution engineering schematics and complex electrical line diagrams.
-
-### 5. 🎨 Local Generative Media Pipeline (Image & Audio Generation via ComfyUI)
-- **ComfyUI Local Bridge**: Headless IPC/REST bridge connecting `nivm` to a local [ComfyUI](https://github.com/comfyanonymous/ComfyUI) instance for fully offline visual generation (Stable Diffusion / Flux) to render technical concept diagrams, 3D component renders, and visual asset variations without external cloud APIs.
-- **Local Audio & Speech Suite**:
-  - **Offline Speech-to-Text (STT)**: Integration with `whisper.cpp` for local transcription of equipment acoustic inspections and voice prompts.
-  - **Local Text-to-Speech (TTS)**: Low-latency neural speech synthesis (Piper / Kokoro / AudioGen) for voice readbacks of critical alerts and approval summaries.
-
-### 6. 🌐 Distributed LAN Clustering
-- **Workstation Tensor Parallelism**: Pooling compute and VRAM across multiple local workstations on the same air-gapped internal LAN via `llama.cpp` RPC, enabling fluid execution of 70B+ reasoning models across existing company hardware.
+- **Local Generative Media (ComfyUI Bridge)**: Fully offline image generation and iterative editing via a local [ComfyUI](https://github.com/comfyanonymous/ComfyUI) bridge (Stable Diffusion / Flux), allowing direct visual diagramming and asset editing without external cloud APIs.
+- **On-Premise Document RAG**: Zero-cloud retrieval-augmented generation using an embedded local vector database (ChromaDB / SQLite-vec) with on-device embedding models (`bge-m3` / `nomic-embed`).
+- **Sandboxed Code Execution**: Containerized / isolated runtime (via rootless Podman or Linux namespaces) for safely executing and validating model-generated code.
+- **Distributed LAN Clustering**: Workstation pooling across machines on the same local network via `llama.cpp` RPC for running large parameter models without single-machine VRAM constraints.
 
 ---
 
-## 🛠️ Technology Stack
+## Technology Stack
 
 - **Backend**: Python 3.10+, FastAPI, Uvicorn, Pydantic v2
-- **Inference Engine**: `llama.cpp`, `llama-cpp-python` (with CUDA/Metal/CPU backend)
-- **Document & Media Ingestion**: `PyMuPDF` (fitz), `Pillow`, `OpenCV`, `pydub`, `ffmpeg`
-- **Download Acceleration**: `aria2c` (4-stream falloc) + POSIX page cache eviction
-- **Forensic Telemetry**: `psutil`, Canvas HTML5 60FPS dual-channel oscilloscope
-- **Frontend**: Vanilla HTML5, Modern CSS (Glassmorphism design system), ES6 Modules, FontAwesome
+- **Local Inference Engine**: `llama.cpp`, `llama-cpp-python` (with CUDA/Metal/CPU backend)
+- **Neural Speech Synthesis**: Kokoro v1.0 (ONNX Runtime CPU/GPU)
+- **Neural Speech-to-Text**: Faster-Whisper (INT8 quantized on CPU via CTranslate2)
+- **Document & Vision Ingestion**: `PyMuPDF` (fitz), `Pillow`, `OpenCV`, `soundfile`, `ffmpeg`
+- **Network Telemetry**: `psutil`, HTML5 Canvas 60FPS dual-channel oscilloscope
+- **Frontend**: Vanilla ES6 Modules, CSS Glassmorphism design tokens, FontAwesome, WebGL Fluid
 
 ---
 
-## 📄 License
+## License
 
-This project is licensed under the **MIT License** — free for personal, academic, and enterprise evaluation.
+This project is licensed under the **PolyForm Noncommercial License 1.0.0**.
+
+You are free to view, download, modify, and run this project for **personal, research, educational, and community use**. Commercial use, monetization, selling, or commercial hosting is strictly prohibited without prior explicit permission from the author.

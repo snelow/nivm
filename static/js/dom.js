@@ -1,4 +1,4 @@
-export const dom = {
+const rawDom = {
     historyToggleBtn: document.getElementById('historyToggleBtn'),
     closeHistoryBtn: document.getElementById('closeHistoryBtn'),
     historyDrawer: document.getElementById('historyDrawer'),
@@ -29,6 +29,51 @@ export const dom = {
     closeToolsBtn: document.getElementById('closeToolsBtn'),
     testConnBtn: document.getElementById('testConnBtn'),
     diagnosticResult: document.getElementById('diagnosticResult'),
+
+    // Personality Modal Elements
+    personalityBtn: document.getElementById('personalityBtn'),
+    personalityModal: document.getElementById('personalityModal'),
+    personalityWindow: document.getElementById('personalityWindow'),
+    personalityWindowHeader: document.getElementById('personalityWindowHeader'),
+    closePersonalityBtn: document.getElementById('closePersonalityBtn'),
+    cancelPersonalityBtn: document.getElementById('cancelPersonalityBtn'),
+    savePersonalityBtn: document.getElementById('savePersonalityBtn'),
+    resetPersonalityBtn: document.getElementById('resetPersonalityBtn'),
+    personalityPresetSelect: document.getElementById('personalityPresetSelect'),
+    newPersonaBtn: document.getElementById('newPersonaBtn'),
+    saveAsPersonaBtn: document.getElementById('saveAsPersonaBtn'),
+    deletePersonaBtn: document.getElementById('deletePersonaBtn'),
+    savePersonaCard: document.getElementById('savePersonaCard'),
+    customPersonaNameInput: document.getElementById('customPersonaNameInput'),
+    confirmSavePersonaBtn: document.getElementById('confirmSavePersonaBtn'),
+    cancelSavePersonaBtn: document.getElementById('cancelSavePersonaBtn'),
+    personalityTextarea: document.getElementById('personalityTextarea'),
+    personalityCharCount: document.getElementById('personalityCharCount'),
+    openPersonalityFromSettingsBtn: document.getElementById('openPersonalityFromSettingsBtn'),
+    promptPersonalityBtn: document.getElementById('promptPersonalityBtn'),
+    nsfwToggle: document.getElementById('nsfwToggle'),
+    nsfwFireIcon: document.getElementById('nsfwFireIcon'),
+    
+    // Voice Modal Elements
+    voiceBtn: document.getElementById('voiceBtn'),
+    voiceModal: document.getElementById('voiceModal'),
+    voiceWindow: document.getElementById('voiceWindow'),
+    voiceWindowHeader: document.getElementById('voiceWindowHeader'),
+    closeVoiceBtn: document.getElementById('closeVoiceBtn'),
+    saveVoiceBtn: document.getElementById('saveVoiceBtn'),
+    resetVoiceBtn: document.getElementById('resetVoiceBtn'),
+    voicePresetSelect: document.getElementById('voicePresetSelect'),
+    voiceSelect: document.getElementById('voiceSelect'),
+    voicePitchSlider: document.getElementById('voicePitchSlider'),
+    voicePitchVal: document.getElementById('voicePitchVal'),
+    voiceRateSlider: document.getElementById('voiceRateSlider'),
+    voiceRateVal: document.getElementById('voiceRateVal'),
+    voiceWarmthSlider: document.getElementById('voiceWarmthSlider'),
+    voiceWarmthVal: document.getElementById('voiceWarmthVal'),
+    voiceVolumeSlider: document.getElementById('voiceVolumeSlider'),
+    voiceVolumeVal: document.getElementById('voiceVolumeVal'),
+    autoSpeakToggle: document.getElementById('autoSpeakToggle'),
+    previewVoiceBtn: document.getElementById('previewVoiceBtn'),
     
     // Stats Modal Elements
     statsBtn: document.getElementById('statsBtn'),
@@ -88,6 +133,7 @@ export const dom = {
     jellyfishBgLayer: document.getElementById('jellyfishBgLayer'),
 
     fluidBgCanvas: document.getElementById('fluidBgCanvas'),
+    flowFieldBgCanvas: document.getElementById('flowFieldBgCanvas'),
     
     bgTonePicker: document.getElementById('bgTonePicker'),
     sidebarTonePicker: document.getElementById('sidebarTonePicker'),
@@ -104,20 +150,68 @@ export const dom = {
     // ── Inference Mode Selector ──
     routingModeBtn: document.getElementById('routingModeBtn'),
     singleModeBtn: document.getElementById('singleModeBtn'),
+    apiModeBtn: document.getElementById('apiModeBtn'),
     routingModePanel: document.getElementById('routingModePanel'),
     singleModePanel: document.getElementById('singleModePanel'),
+    apiModePanel: document.getElementById('apiModePanel'),
+    downloadModelSection: document.getElementById('downloadModelSection'),
+    downloadDivider: document.getElementById('downloadDivider'),
+    smartEngineSection: document.getElementById('smartEngineSection'),
+    apiBaseUrl: document.getElementById('apiBaseUrl'),
+    copyApiBaseUrlBtn: document.getElementById('copyApiBaseUrlBtn'),
+    apiChatUrl: document.getElementById('apiChatUrl'),
+    copyApiChatUrlBtn: document.getElementById('copyApiChatUrlBtn'),
+    apiKeyInput: document.getElementById('apiKeyInput'),
+    toggleApiKeyVisibilityBtn: document.getElementById('toggleApiKeyVisibilityBtn'),
+    copyApiKeyBtn: document.getElementById('copyApiKeyBtn'),
+    apiModelInput: document.getElementById('apiModelInput'),
+    apiModelSelect: document.getElementById('apiModelSelect'),
+    apiMultimodalCheck: document.getElementById('apiMultimodalCheck'),
+    remoteApiModelsList: document.getElementById('remoteApiModelsList'),
+    fetchRemoteModelsBtn: document.getElementById('fetchRemoteModelsBtn'),
+    fetchModelsStatus: document.getElementById('fetchModelsStatus'),
+    apiDefaultModelSelect: document.getElementById('apiDefaultModelSelect'),
+    copyApiCurlBtn: document.getElementById('copyApiCurlBtn'),
+    apiCurlSnippet: document.getElementById('apiCurlSnippet'),
     singleModelRoleSelect: document.getElementById('singleModelRoleSelect'),
     customModelCard: document.getElementById('customModelCard'),
     customModelPathStatus: document.getElementById('customModelPathStatus'),
     scannedGgufSelect: document.getElementById('scannedGgufSelect'),
     customModelPathInput: document.getElementById('customModelPathInput'),
+    browseCustomPathBtn: document.getElementById('browseCustomPathBtn'),
+    exploreCustomPathBtn: document.getElementById('exploreCustomPathBtn'),
+    clearCustomPathBtn: document.getElementById('clearCustomPathBtn'),
     verifyCustomPathBtn: document.getElementById('verifyCustomPathBtn'),
     rememberedPathsContainer: document.getElementById('rememberedPathsContainer'),
     rememberedPathsChips: document.getElementById('rememberedPathsChips'),
     customMmprojStatus: document.getElementById('customMmprojStatus'),
     scannedMmprojSelect: document.getElementById('scannedMmprojSelect'),
     customMmprojInput: document.getElementById('customMmprojInput'),
+    browseMmprojBtn: document.getElementById('browseMmprojBtn'),
+    exploreMmprojBtn: document.getElementById('exploreMmprojBtn'),
+    clearMmprojBtn: document.getElementById('clearMmprojBtn'),
     verifyMmprojBtn: document.getElementById('verifyMmprojBtn'),
+    customMmprojCpu: document.getElementById('customMmprojCpu'),
+    visionMmprojCpu: document.getElementById('visionMmprojCpu'),
+    pdfDpiSelect: document.getElementById('pdfDpiSelect'),
+
+    // ── File Explorer Modal ──
+    fileBrowserModal: document.getElementById('fileBrowserModal'),
+    fileBrowserWindow: document.getElementById('fileBrowserWindow'),
+    fileBrowserHeader: document.getElementById('fileBrowserHeader'),
+    fileBrowserModalTitle: document.getElementById('fileBrowserModalTitle'),
+    closeFileBrowserBtn: document.getElementById('closeFileBrowserBtn'),
+    fileBrowserShortcuts: document.getElementById('fileBrowserShortcuts'),
+    fileBrowserUpBtn: document.getElementById('fileBrowserUpBtn'),
+    fileBrowserCurrentPathInput: document.getElementById('fileBrowserCurrentPathInput'),
+    fileBrowserGoBtn: document.getElementById('fileBrowserGoBtn'),
+    fileBrowserNativeBtn: document.getElementById('fileBrowserNativeBtn'),
+    fileBrowserSearchInput: document.getElementById('fileBrowserSearchInput'),
+    fileBrowserOnlyGguf: document.getElementById('fileBrowserOnlyGguf'),
+    fileBrowserList: document.getElementById('fileBrowserList'),
+    fileBrowserSelectionInfo: document.getElementById('fileBrowserSelectionInfo'),
+    fileBrowserCancelBtn: document.getElementById('fileBrowserCancelBtn'),
+    fileBrowserSelectBtn: document.getElementById('fileBrowserSelectBtn'),
 
     // ── Model Downloader (Accelerated) ──
     downloadEngineBadge: document.getElementById('downloadEngineBadge'),
@@ -212,6 +306,14 @@ export const dom = {
     clearTextToggle: document.getElementById('clearTextToggle'),
 
     animationSettingsPanel: document.getElementById('animationSettingsPanel'),
+    flowFieldSettings: document.getElementById('flowFieldSettings'),
+    flowSpeedSlider: document.getElementById('flowSpeedSlider'),
+    flowSpeedVal: document.getElementById('flowSpeedVal'),
+    flowTrailSlider: document.getElementById('flowTrailSlider'),
+    flowTrailVal: document.getElementById('flowTrailVal'),
+    flowDensitySlider: document.getElementById('flowDensitySlider'),
+    flowDensityVal: document.getElementById('flowDensityVal'),
+
     fluidSettings: document.getElementById('fluidSettings'),
     fluidRadiusSlider: document.getElementById('fluidRadiusSlider'),
     fluidRadiusVal: document.getElementById('fluidRadiusVal'),
@@ -247,8 +349,10 @@ export const dom = {
     imagePreviewContainer: document.getElementById('imagePreviewContainer'),
     imagePreview: document.getElementById('imagePreview'),
     removeImageBtn: document.getElementById('removeImageBtn'),
+    micRecordBtn: document.getElementById('micRecordBtn'),
 
-    // No Model Loaded UI Elements
+    // Dropdown Notifications & Model Loaded UI Elements
+    notificationContainer: document.getElementById('notificationContainer'),
     noModelChatOverlay: document.getElementById('noModelChatOverlay'),
     chatBoxLoadModelBtn: document.getElementById('chatBoxLoadModelBtn'),
     chatBoxDraftHint: document.getElementById('chatBoxDraftHint'),
@@ -275,3 +379,14 @@ export const dom = {
     videoFullscreenBtn: document.getElementById('videoFullscreenBtn'),
     closeVideoPreviewBtn: document.getElementById('closeVideoPreviewBtn')
 };
+
+export const dom = new Proxy(rawDom, {
+    get(target, prop) {
+        if (typeof prop !== 'string') return undefined;
+        if (typeof document !== 'undefined') {
+            const el = document.getElementById(prop);
+            if (el) return el;
+        }
+        return target[prop];
+    }
+});

@@ -28,6 +28,9 @@
     --accent-emerald: #10b981;
     --accent-rose: #f43f5e;
     --accent-amber: #f59e0b;
+    --accent-purple: #a855f7;
+    --accent-cyan: #06b6d4;
+    --accent-blue: #3b82f6;
 
     --font-main: 'Monocraft', monospace;
     --font-chat: 'Monocraft', monospace;
@@ -52,3 +55,10 @@
     --glass-bg: rgba(var(--bg-surface-rgb), 0.65);
     --glass-border: rgba(255, 255, 255, 0.06);
 }
+
+/* Optimization: disable style transitions during real-time color cycling to eliminate lag and maintain 60+ FPS */
+body.theme-cycling,
+body.theme-cycling * {
+    transition: none !important;
+}
+

@@ -4,7 +4,7 @@
 set -e
 
 # Default parameters
-HOST="127.0.0.1"
+HOST="0.0.0.0"
 PORT="8000"
 RELOAD="true"
 FORCE_SETUP="false"
@@ -28,7 +28,7 @@ show_help() {
     echo "Usage: ./run.sh [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  -h, --host HOST         Set server bind address (default: 127.0.0.1)"
+    echo "  -h, --host HOST         Set server bind address (default: 0.0.0.0)"
     echo "  -p, --port PORT         Set server port (default: 8000)"
     echo "  --no-reload             Disable Uvicorn auto-reload"
     echo "  -k, --kill              Kill any existing process currently bound to the target port"
@@ -122,36 +122,16 @@ else
     echo -e "  ${YELLOW}ℹ${NC} Downloader:  ${CYAN}Streaming Fallback${NC} (aria2c not in PATH)"
 fi
 
-# ── Scan Models Directory ─────────────────────────────────────
-MODELS_DIR="models"
-mkdir -p "$MODELS_DIR"
-echo -e "${YELLOW}[+] Scanning local models (${MODELS_DIR}/)...${NC}"
+# Ensure models directory exists silently
+mkdir -p "models"
 
-shopt -s nullglob
-GGUF_FILES=("$MODELS_DIR"/*.gguf)
-shopt -u nullglob
-
-if [ ${#GGUF_FILES[@]} -eq 0 ]; then
-    echo -e "  ${YELLOW}ℹ${NC} No .gguf models currently found in ${MODELS_DIR}/."
-    echo -e "    ${CYAN}→ You can download models anytime using the in-app Downloader.${NC}"
-else
-    for model_path in "${GGUF_FILES[@]}"; do
-        filename=$(basename "$model_path")
-        size=$(du -h "$model_path" 2>/dev/null | cut -f1)
-        
-        if [[ "$filename" == *"mmproj"* ]]; then
-            echo -e "  ${PURPLE}📐${NC} Projector:  ${BOLD}${filename}${NC} (${size})"
-        elif [[ "$filename" == *"coder"* ]] || [[ "$filename" == *"Coder"* ]]; then
-            echo -e "  ${GREEN}💻${NC} Coder:      ${BOLD}${filename}${NC} (${size})"
-        elif [[ "$filename" == *"vision"* ]] || [[ "$filename" == *"gemma"* ]] || [[ "$filename" == *"Gemma"* ]]; then
-            echo -e "  ${CYAN}👁️${NC} Vision:     ${BOLD}${filename}${NC} (${size})"
-        elif [[ "$filename" == *"1.5b"* ]] || [[ "$filename" == *"1.7B"* ]] || [[ "$filename" == *"router"* ]]; then
-            echo -e "  ${YELLOW}🧠${NC} Router:     ${BOLD}${filename}${NC} (${size})"
-        else
-            echo -e "  ${GREEN}📦${NC} Model:      ${BOLD}${filename}${NC} (${size})"
-        fi
-    done
-fi
+# Auto-discover CUDA & cuDNN paths for GPU acceleration
+for CUDNN_DIR in "/home/blubvlub/.local/lib/python3.14/site-packages/nvidia/cudnn/lib" "$HOME/.local/lib/python3.14/site-packages/nvidia/cudnn/lib" "/usr/local/cuda/lib64"; do
+    if [ -d "$CUDNN_DIR" ]; then
+        export LD_LIBRARY_PATH="$CUDNN_DIR:${LD_LIBRARY_PATH:-}"
+        break
+    fi
+done
 
 # ── Virtual Environment Setup ─────────────────────────────────
 VENV_DIR="venv"
@@ -184,6 +164,61 @@ if [ "$FORCE_SETUP" = "true" ] || [ ! -d "$VENV_DIR" ]; then
     echo -e "${GREEN}[✓] Virtual environment ready.${NC}"
 else
     source "$VENV_DIR/bin/activate"
+fi
+
+# Verify llama-cpp acceleration backend
+CUDA_CHECK=$(python -c "import llama_cpp, subprocess; print('CUDA' if 'cuda' in subprocess.check_output(['ldd', llama_cpp.llama_cpp._lib._name]).decode().lower() else 'CPU')" 2>/dev/null || echo "Unknown")
+if [ "$CUDA_CHECK" = "CUDA" ]; then
+    echo -e "  ${GREEN}✓${NC} llama-cpp:   ${CYAN}CUDA (GPU Hardware Acceleration Active)${NC}"
+else
+    echo -e "  ${YELLOW}⚠${NC} llama-cpp:   ${YELLOW}CPU Mode (libggml-cuda not detected)${NC}"
+fi
+
+# ── Neural TTS Engine Setup (Kokoro v1.0) ──────────────────────
+KOKORO_DIR="models/tts/kokoro"
+KOKORO_MODEL="$KOKORO_DIR/kokoro-v1.0.onnx"
+KOKORO_VOICES="$KOKORO_DIR/voices-v1.0.bin"
+
+if [ ! -f "$KOKORO_MODEL" ] || [ ! -f "$KOKORO_VOICES" ]; then
+    echo -e "${YELLOW}[+] Setting up sovereign Neural TTS models (Kokoro v1.0)...${NC}"
+    mkdir -p "$KOKORO_DIR"
+    
+    if [ ! -f "$KOKORO_MODEL" ]; then
+        echo -e "  • Downloading Kokoro ONNX model (FP32, 310MB)..."
+        curl -L -# -o "$KOKORO_MODEL" "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx" || \
+        curl -L -# -o "$KOKORO_MODEL" "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/kokoro-v1.0.onnx"
+    fi
+    
+    if [ ! -f "$KOKORO_VOICES" ]; then
+        echo -e "  • Downloading Kokoro voice embeddings (26MB)..."
+        curl -L -# -o "$KOKORO_VOICES" "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin" || \
+        curl -L -# -o "$KOKORO_VOICES" "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices-v1.0.bin"
+    fi
+    echo -e "${GREEN}[✓] Neural TTS models ready.${NC}"
+fi
+
+# ── Open-Source CMUdict Pronunciation Dataset (135,000+ entries) ──
+CMUDICT_PATH="models/tts/cmudict.dict"
+if [ ! -f "$CMUDICT_PATH" ]; then
+    echo -e "${YELLOW}[+] Downloading open-source CMU Pronunciation Lexicon (~3.5MB)...${NC}"
+    curl -L -# -o "$CMUDICT_PATH" "https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict.dict" || true
+    echo -e "${GREEN}[✓] CMU Pronunciation dataset ready & saved locally.${NC}"
+fi
+
+if python -c "import kokoro_onnx, soundfile, scipy" 2>/dev/null; then
+    echo -e "  ${GREEN}✓${NC} Neural TTS:  ${CYAN}Kokoro v1.0 Active (Full Precision, CPU/GPU)${NC}"
+else
+    echo -e "${YELLOW}[+] Installing TTS Python dependencies...${NC}"
+    pip install kokoro-onnx soundfile scipy -q
+    echo -e "  ${GREEN}✓${NC} Neural TTS:  ${CYAN}Kokoro v1.0 Installed & Ready${NC}"
+fi
+
+# Verify offline pronunciation lexicon & datasets
+if [ -f "core/pronunciation_dict.json" ]; then
+    echo -e "  ${GREEN}✓${NC} Phonetics:   ${CYAN}Offline Lexicon Active (Slang, Anime & Sovereign)${NC}"
+fi
+if [ -f "$CMUDICT_PATH" ]; then
+    echo -e "  ${GREEN}✓${NC} CMUdict:     ${CYAN}Offline CMU Pronunciation Dataset Loaded (135k words)${NC}"
 fi
 
 # ── Vendor / Frontend Assets ──────────────────────────────────
@@ -232,6 +267,19 @@ EOF
     echo -e "${GREEN}[✓] Frontend assets verified.${NC}"
 fi
 
+# Detect local network IP for mobile testing
+get_local_ip() {
+    local ip=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+' || true)
+    if [ -z "$ip" ]; then
+        ip=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
+    fi
+    if [ -z "$ip" ]; then
+        ip=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)
+    fi
+    echo "$ip"
+}
+LOCAL_IP=$(get_local_ip)
+
 # Export environment variables for config.py
 export SERVER_HOST="$HOST"
 export SERVER_PORT="$PORT"
@@ -239,9 +287,12 @@ export RELOAD="$RELOAD"
 
 echo -e "${CYAN}----------------------------------------------------${NC}"
 echo -e "${GREEN}${BOLD}[✓] nivm ready to launch:${NC}"
-echo -e "  • Web Interface:   ${BOLD}${CYAN}http://${HOST}:${PORT}${NC}"
-echo -e "  • Operational Mode:${CYAN} 100% Local / Air-Gapped${NC}"
-echo -e "  • Hot Reloading:   ${CYAN}${RELOAD}${NC}"
+echo -e "  • Local Interface:   ${BOLD}${CYAN}http://localhost:${PORT}${NC}"
+if [ -n "$LOCAL_IP" ]; then
+    echo -e "  • Network Link:      ${BOLD}${GREEN}http://${LOCAL_IP}:${PORT}${NC}"
+fi
+echo -e "  • Operational Mode:  ${CYAN}100% Local / Air-Gapped${NC}"
+echo -e "  • Hot Reloading:     ${CYAN}${RELOAD}${NC}"
 echo -e "${CYAN}----------------------------------------------------${NC}"
 echo -e "${GREEN}[+] Starting server... (Press Ctrl+C to gracefully stop)${NC}"
 

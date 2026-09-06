@@ -1,4 +1,4 @@
-import { state } from './state.js';
+import { state, saveConversations } from './state.js';
 import { dom } from './dom.js';
 
 // Helper: set slider + val span for a role prefix
@@ -55,23 +55,25 @@ export async function fetchApiSettings() {
             state.engineMode = 'native';
             
             // Inference mode
-            const inferenceMode = data.inference_mode || 'routing';
+            const inferenceMode = data.inference_mode || 'single';
             state.inferenceMode = inferenceMode;
             
             // Update mode selector buttons
             if (dom.routingModeBtn && dom.singleModeBtn) {
-                if (inferenceMode === 'single') {
-                    dom.routingModeBtn.classList.remove('active');
-                    dom.singleModeBtn.classList.add('active');
-                    if (dom.routingModePanel) dom.routingModePanel.classList.add('hidden');
-                    if (dom.singleModePanel) dom.singleModePanel.classList.remove('hidden');
-                } else {
-                    dom.routingModeBtn.classList.add('active');
-                    dom.singleModeBtn.classList.remove('active');
-                    if (dom.routingModePanel) dom.routingModePanel.classList.remove('hidden');
-                    if (dom.singleModePanel) dom.singleModePanel.classList.add('hidden');
-                }
+                dom.routingModeBtn.classList.toggle('active', inferenceMode === 'routing');
+                dom.singleModeBtn.classList.toggle('active', inferenceMode === 'single');
+                if (dom.apiModeBtn) dom.apiModeBtn.classList.toggle('active', inferenceMode === 'api');
+
+                if (dom.routingModePanel) dom.routingModePanel.classList.toggle('hidden', inferenceMode !== 'routing');
+                if (dom.singleModePanel) dom.singleModePanel.classList.toggle('hidden', inferenceMode !== 'single');
+                if (dom.apiModePanel) dom.apiModePanel.classList.toggle('hidden', inferenceMode !== 'api');
+
+                const isApi = inferenceMode === 'api';
+                if (dom.downloadModelSection) dom.downloadModelSection.classList.toggle('hidden', isApi);
+                if (dom.downloadDivider) dom.downloadDivider.classList.toggle('hidden', isApi);
+                if (dom.smartEngineSection) dom.smartEngineSection.classList.toggle('hidden', isApi);
             }
+            if (window.updateVisionAvailabilityUI) window.updateVisionAvailabilityUI();
             
             // Single model role
             if (dom.singleModelRoleSelect) dom.singleModelRoleSelect.value = data.single_model_role || 'coder';
@@ -82,6 +84,30 @@ export async function fetchApiSettings() {
             state.rememberedPaths = data.remembered_model_paths || [];
             if (dom.customModelPathInput) dom.customModelPathInput.value = state.customModelPath;
             if (dom.customMmprojInput) dom.customMmprojInput.value = state.customMmprojPath;
+            if (dom.customMmprojCpu) dom.customMmprojCpu.checked = data.custom_mmproj_use_gpu === false;
+            if (dom.visionMmprojCpu) dom.visionMmprojCpu.checked = data.vision_mmproj_use_gpu === false;
+            if (dom.pdfDpiSelect) dom.pdfDpiSelect.value = String(data.pdf_render_dpi || 150);
+
+            // API Mode custom endpoints
+            if (dom.apiBaseUrl && data.api_base_url) dom.apiBaseUrl.value = data.api_base_url;
+            if (dom.apiChatUrl && data.api_chat_url) dom.apiChatUrl.value = data.api_chat_url;
+            if (dom.apiKeyInput && data.api_key !== undefined) dom.apiKeyInput.value = data.api_key;
+            if (dom.apiModelInput && data.api_model) dom.apiModelInput.value = data.api_model;
+
+            const isMm = (data.api_multimodal !== undefined && data.api_multimodal !== null)
+                ? Boolean(data.api_multimodal)
+                : (window.isMultimodalModel ? window.isMultimodalModel(data.api_model || '', data.api_base_url || '') : false);
+            state.apiMultimodal = isMm;
+            if (dom.apiMultimodalCheck) dom.apiMultimodalCheck.checked = isMm;
+
+            // Vision default toggle: if mmproj is configured or API model supports vision, enable vision by default
+            const supported = window.isVisionSupported ? window.isVisionSupported() : false;
+            if (window.setVisionEnabled) {
+                window.setVisionEnabled(supported);
+            } else if (window.updateVisionAvailabilityUI) {
+                window.updateVisionAvailabilityUI();
+            }
+
             if (dom.customModelCard) {
                 if (data.single_model_role === 'custom') {
                     dom.customModelCard.classList.remove('hidden');
@@ -106,7 +132,7 @@ export async function fetchApiSettings() {
 
 export async function saveApiSettings() {
     // Base payload
-    const inferenceMode = state.inferenceMode || 'routing';
+    const inferenceMode = state.inferenceMode || 'single';
     const singleRole = dom.singleModelRoleSelect ? dom.singleModelRoleSelect.value : 'coder';
     
     const payload = { 
@@ -115,6 +141,14 @@ export async function saveApiSettings() {
         single_model_role: singleRole,
         custom_model_path: dom.customModelPathInput ? dom.customModelPathInput.value.trim() : (state.customModelPath || ''),
         custom_mmproj_path: dom.customMmprojInput ? dom.customMmprojInput.value.trim() : (state.customMmprojPath || ''),
+        custom_mmproj_use_gpu: dom.customMmprojCpu ? !dom.customMmprojCpu.checked : true,
+        vision_mmproj_use_gpu: dom.visionMmprojCpu ? !dom.visionMmprojCpu.checked : true,
+        pdf_render_dpi: dom.pdfDpiSelect ? parseInt(dom.pdfDpiSelect.value) : 150,
+        api_base_url: dom.apiBaseUrl ? dom.apiBaseUrl.value.trim() : '',
+        api_chat_url: dom.apiChatUrl ? dom.apiChatUrl.value.trim() : '',
+        api_key: dom.apiKeyInput ? dom.apiKeyInput.value.trim() : '',
+        api_model: dom.apiModelInput ? dom.apiModelInput.value.trim() : '',
+        api_multimodal: dom.apiMultimodalCheck ? dom.apiMultimodalCheck.checked : (state.apiMultimodal !== null && state.apiMultimodal !== undefined ? state.apiMultimodal : false),
         remembered_model_paths: state.rememberedPaths || [],
     };
     
@@ -139,6 +173,12 @@ export async function saveApiSettings() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
+        state.customModelPath = payload.custom_model_path;
+        state.customMmprojPath = payload.custom_mmproj_path;
+        const hasMmproj = Boolean(state.customMmprojPath && state.customMmprojPath.trim()) || (singleRole === 'vision');
+        if (window.setVisionEnabled) {
+            window.setVisionEnabled(hasMmproj);
+        }
     } catch (err) {
         console.warn('Backend settings save failed:', err);
     }
@@ -154,6 +194,65 @@ export async function scanLocalGgufs() {
         console.warn('Failed to scan local GGUFs:', err);
     }
     return { models: [], remembered_paths: [] };
+}
+
+export async function openNativeFileDialog(initialDir = null, title = "Select GGUF Model File") {
+    try {
+        const res = await fetch('/api/files/browse-dialog', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initial_dir: initialDir, title: title })
+        });
+        if (res.ok) {
+            return await res.json();
+        }
+    } catch (err) {
+        console.warn('Failed to open native file dialog:', err);
+    }
+    return { success: false, error: 'Request failed' };
+}
+
+export async function listDirectory(path = null) {
+    try {
+        const url = path ? `/api/files/list-dir?path=${encodeURIComponent(path)}` : '/api/files/list-dir';
+        const res = await fetch(url, { cache: 'no-store' });
+        if (res.ok) {
+            return await res.json();
+        }
+    } catch (err) {
+        console.warn('Failed to list directory:', err);
+    }
+    return { current_path: '', parent_path: null, folders: [], files: [], shortcuts: [] };
+}
+
+export async function verifyFile(path) {
+    try {
+        const res = await fetch('/api/files/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path })
+        });
+        if (res.ok) {
+            return await res.json();
+        }
+    } catch (err) {
+        console.warn('Failed to verify file:', err);
+    }
+    return { exists: false, error: 'Verification failed' };
+}
+
+export async function locateFile(filename, size = null) {
+    try {
+        let url = `/api/files/locate?filename=${encodeURIComponent(filename)}`;
+        if (size) url += `&size=${size}`;
+        const res = await fetch(url, { cache: 'no-store' });
+        if (res.ok) {
+            return await res.json();
+        }
+    } catch (err) {
+        console.warn('Failed to locate file:', err);
+    }
+    return { found: false };
 }
 
 export async function startModelDownload(url, filename) {
@@ -251,7 +350,11 @@ export async function fetchEngineStatus() {
         if (res.ok) {
             const data = await res.json();
             const isLoaded = !!(data.active && data.active.loaded);
-            state.isModelLoaded = isLoaded;
+            if (state.inferenceMode !== 'api') {
+                state.isModelLoaded = isLoaded;
+            } else {
+                state.isModelLoaded = true;
+            }
 
             if (dom.engineStatusText) {
                 if (isLoaded) {
@@ -287,37 +390,47 @@ export async function loadAvailableModels() {
             const data = await res.json();
             state.models = data.data || [];
             
-            dom.modelSelect.innerHTML = '';
-            if (state.models.length === 0) {
-                state.models.push({ id: state.selectedModel });
-            }
-
-            let found = false;
-            state.models.forEach(m => {
-                const opt = document.createElement('option');
-                opt.value = m.id;
-                let text = m.id;
-                if (m.context_window) {
-                    const ctxK = Math.round(m.context_window / 1000);
-                    text += ` (${ctxK}k context)`;
-                } else if (m.context_length) {
-                    const ctxK = Math.round(m.context_length / 1000);
-                    text += ` (${ctxK}k context)`;
+            if (dom.modelSelect) {
+                dom.modelSelect.innerHTML = '';
+                if (state.models.length === 0) {
+                    state.models.push({ id: state.selectedModel });
                 }
-                opt.textContent = text;
-                if (m.id === state.selectedModel) {
-                    opt.selected = true;
-                    found = true;
-                }
-                dom.modelSelect.appendChild(opt);
-            });
 
-            if (!found && state.models.length > 0) {
-                state.selectedModel = state.models[0].id;
-                dom.modelSelect.value = state.selectedModel;
-                localStorage.setItem('nivm_lastModel', state.selectedModel);
-            } else if (found) {
-                localStorage.setItem('nivm_lastModel', state.selectedModel);
+                let found = false;
+                state.models.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    let text = m.id;
+                    if (m.context_window) {
+                        const ctxK = Math.round(m.context_window / 1000);
+                        text += ` (${ctxK}k context)`;
+                    } else if (m.context_length) {
+                        const ctxK = Math.round(m.context_length / 1000);
+                        text += ` (${ctxK}k context)`;
+                    }
+                    opt.textContent = text;
+                    if (m.id === state.selectedModel) {
+                        opt.selected = true;
+                        found = true;
+                    }
+                    dom.modelSelect.appendChild(opt);
+                });
+
+                if (!found && state.models.length > 0) {
+                    state.selectedModel = state.models[0].id;
+                    dom.modelSelect.value = state.selectedModel;
+                    localStorage.setItem('nivm_lastModel', state.selectedModel);
+                } else if (found) {
+                    localStorage.setItem('nivm_lastModel', state.selectedModel);
+                }
+            } else {
+                if (state.models.length > 0) {
+                    const found = state.models.some(m => m.id === state.selectedModel);
+                    if (!found) {
+                        state.selectedModel = state.models[0].id;
+                    }
+                    localStorage.setItem('nivm_lastModel', state.selectedModel);
+                }
             }
         }
     } catch (err) {
@@ -329,22 +442,52 @@ export async function fetchChats() {
     try {
         const res = await fetch('/api/chats', { cache: 'no-store' });
         if (res.ok) {
-            return await res.json();
+            const serverChats = await res.json();
+            if (Array.isArray(serverChats) && serverChats.length > 0) {
+                try {
+                    localStorage.setItem('nivm_saved_chats', JSON.stringify(serverChats));
+                } catch (e) {}
+                return serverChats;
+            }
         }
     } catch (err) {
         console.warn('Failed to fetch chats from server:', err);
     }
+    // Fallback: restore from localStorage if server has no chats or is unavailable
+    try {
+        const localChats = localStorage.getItem('nivm_saved_chats');
+        if (localChats) {
+            const parsed = JSON.parse(localChats);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                // Sync back to server in background
+                fetch('/api/chats', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(parsed)
+                }).catch(() => {});
+                return parsed;
+            }
+        }
+    } catch (e) {}
     return [];
 }
 
 export async function saveChats(conversations) {
-    const response = await fetch('/api/chats', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(conversations)
-    });
-    if (!response.ok) {
-        console.error("Failed to save chats to server");
+    if (!conversations || !Array.isArray(conversations)) return;
+    try {
+        localStorage.setItem('nivm_saved_chats', JSON.stringify(conversations));
+    } catch (e) {}
+    try {
+        const response = await fetch('/api/chats', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(conversations)
+        });
+        if (!response.ok) {
+            console.error("Failed to save chats to server, status:", response.status);
+        }
+    } catch (err) {
+        console.error("Error connecting to server for chat save:", err);
     }
 }
 
@@ -417,7 +560,6 @@ export async function generateChatTitle(activeChat) {
     if (!activeChat || activeChat.messages.length < 2) return;
     
     // Create a payload similar to what sendMessage sends, but for title generation
-    const { state } = await import('./state.js');
     const { renderChatHistory } = await import('./ui.js');
     
     let userPrompt = activeChat.messages.find(m => m.role === 'user')?.content;
@@ -425,16 +567,40 @@ export async function generateChatTitle(activeChat) {
         const textItem = userPrompt.find(i => i.type === 'text');
         userPrompt = textItem ? textItem.text : '';
     }
-    if (!userPrompt) return;
+
+    let titleContext = (typeof userPrompt === 'string' ? userPrompt.trim() : '');
+
+    // If user's first prompt had no text (e.g. voice note / audio or media only),
+    // derive context from the assistant's response to understand what was asked/discussed!
+    if (!titleContext) {
+        const assistantMsg = [...activeChat.messages].reverse().find(m => m.role === 'assistant');
+        if (assistantMsg && assistantMsg.content) {
+            let content = typeof assistantMsg.content === 'string' ? assistantMsg.content : '';
+            // Strip thinking blocks
+            content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+            if (content.includes('</think>')) {
+                content = content.split('</think>').pop().trim();
+            }
+            if (content) {
+                // Take an excerpt of the assistant's answer or audio transcription
+                titleContext = content.slice(0, 350).trim();
+            }
+        }
+    }
+
+    if (!titleContext) return;
 
     const payload = {
         messages: [
-            { role: 'system', content: 'Generate a short 3 to 5 word title for the following message. Respond ONLY with the title. Do not use quotes or punctuation.' },
-            { role: 'user', content: userPrompt }
+            { 
+                role: 'system', 
+                content: 'You generate short, accurate conversation titles. Based on the provided message or response topic, generate a concise 3 to 5 word title. Respond ONLY with the title text. Do NOT use quotes, punctuation, or prefixes like "Title:".' 
+            },
+            { role: 'user', content: titleContext }
         ],
         model: state.selectedModel,
         temperature: 0.3,
-        max_tokens: 15,
+        max_tokens: 20,
         stream: false,
         engine_mode: state.engineMode
     };
@@ -455,13 +621,20 @@ export async function generateChatTitle(activeChat) {
                 title = data.message.content.trim();
             }
             
-            // Cleanup any trailing/leading quotes
-            title = title.replace(/^["']|["']$/g, '').trim();
+            // Cleanup thinking tags, prefixes, and quotes
+            title = title.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+            if (title.includes('</think>')) {
+                title = title.split('</think>').pop().trim();
+            }
+            title = title.replace(/^(Title|Topic):\s*/i, '').trim();
+            title = title.replace(/^["'`*#\-_.\s]+|["'`*#\-_.\s]+$/g, '').trim();
             
             if (title) {
+                if (title.length > 45) {
+                    title = title.slice(0, 45).trim() + '...';
+                }
                 activeChat.title = title;
                 activeChat.titleGenerated = true;
-                const { saveConversations } = await import('./state.js');
                 saveConversations();
                 renderChatHistory();
             }
@@ -488,6 +661,20 @@ export async function uploadImage(file) {
     }
     return null;
 }
+
+export async function deleteUploadedFilesAPI(urls) {
+    if (!urls || urls.length === 0) return;
+    try {
+        await fetch('/api/upload/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ urls })
+        });
+    } catch (e) {
+        console.warn("Failed to delete uploaded files on server", e);
+    }
+}
+window.deleteUploadedFilesAPI = deleteUploadedFilesAPI;
 
 export async function executeTerminalAPI(command) {
     try {

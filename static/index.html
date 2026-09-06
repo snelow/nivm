@@ -16,7 +16,7 @@
     <script src="/static/vendor/marked.min.js"></script>
     <!-- WebGL Fluid Simulation -->
     <script src="/static/vendor/webgl-fluid.js" defer></script>
-    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="/static/css/main.css?v=3.6">
 </head>
 
 <body>
@@ -137,6 +137,9 @@
     <!-- Fluid Simulation Canvas Layer -->
     <canvas class="bg-layer fluid-layer" id="fluidBgCanvas"></canvas>
 
+    <!-- Perlin Noise Flow Field Canvas Layer -->
+    <canvas class="bg-layer flowfield-layer" id="flowFieldBgCanvas"></canvas>
+
     <div class="app-container">
         <!-- Thin Icon-Only Sidebar -->
         <aside class="icon-sidebar">
@@ -161,6 +164,12 @@
             </div>
 
             <div class="sidebar-bottom">
+                <button class="nav-icon-btn" id="personalityBtn" title="Personality & Custom Instructions">
+                    <i class="fa-solid fa-user-pen"></i>
+                </button>
+                <button class="nav-icon-btn" id="voiceBtn" title="Voice & Speech Profile">
+                    <i class="fa-solid fa-microphone-lines"></i>
+                </button>
                 <button class="nav-icon-btn" id="toolsBtn" title="Tools Configuration">
                     <i class="fa-solid fa-toolbox"></i>
                 </button>
@@ -215,8 +224,8 @@
                 <!-- Dynamic Time-Based Gemini Hero -->
                 <div class="gemini-hero" id="welcomeHero">
                     <div class="hero-greeting">
-                        <h1 id="heroGreeting">Hello</h1>
-                        <p class="hero-subtitle" id="heroSubtitle">What would you like to explore right now?</p>
+                        <h1 id="heroGreeting"><span class="gradient-text">Ready to build</span></h1>
+                        <p class="hero-subtitle" id="heroSubtitle">Local hardware, zero telemetry, pure inference.</p>
                     </div>
                 </div>
 
@@ -226,34 +235,91 @@
                 </div>
             </div>
 
-            <!-- Offline Notification (Minimal) -->
-            <div class="offline-banner hidden" id="offlineBanner">
-                <i class="fa-solid fa-circle-exclamation"></i>
-                <span>Local engine unavailable</span>
-                <button class="retry-btn" id="retryConnBtn">Retry</button>
+            <!-- Pure Voice Conversation Stage (Replaces typing bar in Voice Mode) -->
+            <div class="voice-conversation-stage hidden" id="voiceConversationStage">
+                <div class="voice-stage-top-bar">
+                    <div class="voice-mode-badge" id="voiceModeBadge">
+                        <i class="fa-solid fa-microphone-lines"></i>
+                        <span id="voiceModeName">Voice Mode</span>
+                    </div>
+                    <div class="voice-stage-actions">
+                        <button class="voice-mode-dock-btn" id="toggleVoiceDockBtn" title="Switch between full-screen and collapsed dock">
+                            <i class="fa-solid fa-down-left-and-up-right-to-center" id="voiceDockBtnIcon"></i> <span id="voiceDockBtnLabel">Collapse</span>
+                        </button>
+                        <button class="voice-mode-exit-btn" id="exitVoiceModeBtn" title="Exit Voice Mode">
+                            <i class="fa-solid fa-xmark"></i> <span>Exit</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="voice-stage-center">
+                    <div class="voice-stage-large-orb" id="voiceConversationOrb" title="Tap orb to talk / stop">
+                        <div class="voice-orb-glow"></div>
+                        <div class="voice-orb-rings"></div>
+                        <div class="voice-orb-core"></div>
+                    </div>
+
+                    <div class="voice-conversation-waveform" id="voiceConversationWave">
+                        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                    </div>
+
+                    <div class="voice-stage-status" id="voiceStageStatus">Tap orb to speak</div>
+                </div>
             </div>
 
-            <!-- Floating Side Notification for Unloaded Model -->
-            <div id="sideModelNotif" class="side-model-notif">
-                <div class="side-model-notif-body">
-                    <div class="side-model-notif-icon">
-                        <i class="fa-solid fa-bolt"></i>
+            <!-- Floating Dropdown Notifications Container -->
+            <div id="notificationContainer" class="notification-container">
+                <!-- Offline Notification -->
+                <div class="app-notification notif-error hidden" id="offlineBanner">
+                    <div class="app-notification-body">
+                        <div class="app-notification-icon">
+                            <i class="fa-solid fa-circle-exclamation"></i>
+                        </div>
+                        <div class="app-notification-text">
+                            <span class="app-notification-title">Engine Offline</span>
+                            <span class="app-notification-sub">Local engine unavailable</span>
+                        </div>
+                        <button class="app-notif-action-btn retry-btn" id="retryConnBtn" type="button">Retry</button>
                     </div>
-                    <div class="side-model-notif-text">
-                        <span class="side-model-notif-title">No Model Active</span>
-                        <span class="side-model-notif-sub">Load a model to start generating responses.</span>
+                </div>
+
+                <!-- Floating Dropdown Notification for Unloaded Model -->
+                <div id="sideModelNotif" class="app-notification side-model-notif notif-info">
+                    <div class="app-notification-body">
+                        <div class="app-notification-icon">
+                            <i class="fa-solid fa-bolt"></i>
+                        </div>
+                        <div class="app-notification-text">
+                            <span class="app-notification-title">No Model Active</span>
+                            <span class="app-notification-sub">Load a model to start generating responses.</span>
+                        </div>
+                        <button id="sideNotifLoadBtn" class="app-notif-action-btn side-notif-btn" type="button">
+                            Load
+                        </button>
+                        <button id="sideNotifCloseBtn" class="app-notif-close-btn side-notif-close" type="button" title="Dismiss">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
                     </div>
-                    <button id="sideNotifLoadBtn" class="side-notif-btn" type="button">
-                        Load
-                    </button>
-                    <button id="sideNotifCloseBtn" class="side-notif-close" type="button" title="Dismiss">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
                 </div>
             </div>
 
             <!-- Floating Gemini-Style Input Container -->
             <div class="input-wrapper">
+                <!-- Docked Ambient Floating Speech Orb (Appears docked right above input bar when reading a message) -->
+                <div id="dockedSpeechOrb" class="docked-speech-orb hidden">
+                    <div class="docked-orb-visual" id="dockedOrbVisual">
+                        <div class="voice-orb-glow"></div>
+                        <div class="voice-orb-rings"></div>
+                        <div class="voice-orb-core"></div>
+                    </div>
+                    <div class="docked-wave-bars">
+                        <span></span><span></span><span></span><span></span><span></span>
+                    </div>
+                    <button class="docked-orb-stop-btn" id="dockedOrbStopBtn" title="Stop reading aloud">
+                        <span class="docked-stop-icon"></span>
+                    </button>
+                </div>
+
                 <div class="input-box">
                     <div id="imagePreviewContainer" class="image-preview-container hidden">
                         <!-- Thumbnails populated by JS -->
@@ -261,7 +327,7 @@
                     <textarea id="userPrompt" placeholder="Ask nivm anything..." rows="1"></textarea>
 
                     <div class="input-controls">
-                        <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;">
                             <span class="shortcut-hint"><kbd>Shift</kbd> + <kbd>Enter</kbd> newline</span>
 
                             <button id="forceThinkingToggle" class="thinking-toggle-btn active"
@@ -272,13 +338,20 @@
                             <button id="visionToggleBtn" class="thinking-toggle-btn" title="Enable Vision (Multimodal)" style="margin: 0;">
                                 <i class="fa-solid fa-eye"></i> Vision
                             </button>
+
+                            <button id="voiceModeToggleBtn" class="thinking-toggle-btn" title="Pure Voice Mode (Hide text & converse via voice)" style="margin: 0;">
+                                <i class="fa-solid fa-microphone-lines"></i> Voice Mode
+                            </button>
                         </div>
 
                         <div style="display: flex; align-items: center; gap: 12px;">
-                            <button id="attachImgBtn" class="icon-btn-sm hidden" title="Attach Image, PDF, or Video" style="width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.05);">
+                            <button id="micRecordBtn" class="icon-btn-sm hidden" title="Record Audio" style="width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.05);">
+                                <i class="fa-solid fa-microphone"></i>
+                            </button>
+                            <button id="attachImgBtn" class="icon-btn-sm hidden" title="Attach Image, PDF, Video, or Audio" style="width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.05);">
                                 <i class="fa-solid fa-paperclip"></i>
                             </button>
-                            <input type="file" id="imageUploadInput" accept="image/*,application/pdf,video/*" multiple class="hidden">
+                            <input type="file" id="imageUploadInput" accept="image/*,application/pdf,video/*,audio/*,.wav,.mp3,.m4a,.ogg,.flac,.aac,.webm" multiple class="hidden">
 
                             <button id="sendBtn" class="send-action-btn" title="Send Message">
                                 <i class="fa-solid fa-arrow-up"></i>
@@ -332,6 +405,9 @@
                     <div class="field-group">
                         <label for="userNameInput">What should nivm call you?</label>
                         <input type="text" id="userNameInput" placeholder="Enter your name (optional)">
+                        <button type="button" class="btn-secondary" id="openPersonalityFromSettingsBtn" style="margin-top: 8px; width: 100%; justify-content: center; gap: 8px; display: flex; align-items: center;">
+                            <i class="fa-solid fa-user-gear"></i> Customize Personality & System Instructions
+                        </button>
                     </div>
                 </div>
 
@@ -341,29 +417,165 @@
                 <div class="settings-section">
                     <div class="section-title">Inference Mode</div>
                     <div class="mode-selector">
-                        <button class="mode-btn active" id="routingModeBtn" data-mode="routing">
-                            <i class="fa-solid fa-route"></i>
-                            <div class="mode-btn-content">
-                                <span class="mode-btn-label">Routing</span>
-                                <span class="mode-btn-desc">Auto-route between specialist models</span>
-                            </div>
-                        </button>
-                        <button class="mode-btn" id="singleModeBtn" data-mode="single">
+                        <button class="mode-btn active" id="singleModeBtn" data-mode="single" title="One model handles everything">
                             <i class="fa-solid fa-microchip"></i>
-                            <div class="mode-btn-content">
-                                <span class="mode-btn-label">Single Model</span>
-                                <span class="mode-btn-desc">One model handles everything</span>
-                            </div>
+                            <span class="mode-btn-label">Single Model</span>
+                        </button>
+                        <button class="mode-btn" id="routingModeBtn" data-mode="routing" title="Auto-route specialists">
+                            <i class="fa-solid fa-route"></i>
+                            <span class="mode-btn-label">Routing</span>
+                        </button>
+                        <button class="mode-btn" id="apiModeBtn" data-mode="api" title="External OpenAI-compatible API">
+                            <i class="fa-solid fa-network-wired"></i>
+                            <span class="mode-btn-label">API <span class="badge-experimental">BETA</span></span>
                         </button>
                     </div>
                 </div>
 
                 <div class="divider"></div>
 
-                <!-- Routing Mode: Per-Role Config Cards -->
-                <div id="routingModePanel">
+                <!-- Single Model Mode Panel -->
+                <div id="singleModePanel">
                     <div class="settings-section">
-                        <div class="section-title">Model Configuration <span style="font-size: 0.75em; color: var(--text-tertiary); font-weight: 400;">(per role)</span></div>
+                        <div class="section-title">Single Model Configuration</div>
+                        <div class="field-group" style="margin-bottom: 16px;">
+                            <label style="font-size: 0.8rem;">Model to Use</label>
+                            <select id="singleModelRoleSelect" class="modal-select">
+                                <option value="coder">Coder</option>
+                                <option value="vision">Vision</option>
+                                <option value="router">Router</option>
+                                <option value="custom">Custom GGUF Model...</option>
+                            </select>
+                        </div>
+
+                        <!-- Custom Model Selection Card (Visible only when 'custom' selected) -->
+                        <div id="customModelCard" class="custom-model-card hidden">
+                            <!-- Model (GGUF) Selector -->
+                            <div class="field-group" style="margin-bottom: 12px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                    <label style="font-size: 0.8rem; margin: 0; font-weight: 600;">
+                                        <i class="fa-solid fa-cube" style="color: var(--accent-blue, #60a5fa); margin-right: 4px;"></i>
+                                        Model File (GGUF)
+                                    </label>
+                                    <span id="customModelPathStatus" class="file-status-pill status-unknown">No file selected</span>
+                                </div>
+                                <div class="custom-input-with-btn">
+                                    <select id="scannedGgufSelect" class="modal-select" style="flex: 1 1 0; min-width: 0; font-size: 0.8rem;">
+                                        <option value="">-- Select detected model --</option>
+                                    </select>
+                                    <button id="browseCustomPathBtn" class="btn-primary" type="button" title="Browse Model (Native Dialog)">
+                                        <i class="fa-solid fa-folder-open"></i> Browse
+                                    </button>
+                                    <button id="exploreCustomPathBtn" class="btn-secondary" type="button" title="In-Browser File Explorer">
+                                        <i class="fa-solid fa-compass"></i>
+                                    </button>
+                                    <button id="clearCustomPathBtn" class="btn-secondary" type="button" title="Clear model selection" style="padding: 7px 10px; color: var(--text-tertiary);">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+                                <div class="model-path-row" style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
+                                    <span style="font-size: 0.72rem; color: var(--text-tertiary); white-space: nowrap;">Path:</span>
+                                    <input type="text" id="customModelPathInput" placeholder="/path/to/my-model.gguf" style="flex: 1 1 0; min-width: 0; font-size: 0.75rem; padding: 4px 8px; font-family: var(--font-code); background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; color: var(--text-secondary);" title="Active model path (in sync with dropdown)">
+                                </div>
+                            </div>
+
+                            <!-- Remembered Paths Chips -->
+                            <div id="rememberedPathsContainer" class="remembered-paths-container hidden">
+                                <label style="font-size: 0.72rem; color: var(--text-tertiary); display: block; margin-bottom: 4px;">Recent Paths</label>
+                                <div id="rememberedPathsChips" class="remembered-paths-chips"></div>
+                            </div>
+
+                            <div class="divider" style="margin: 12px 0 10px 0; border-color: rgba(255,255,255,0.06);"></div>
+
+                            <!-- Vision Projector (mmproj) Selector -->
+                            <div class="field-group" style="margin-bottom: 4px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                    <label style="font-size: 0.8rem; margin: 0; font-weight: 600;">
+                                        <i class="fa-solid fa-eye" style="color: var(--accent-purple, #a855f7); margin-right: 4px;"></i>
+                                        Vision Projector (mmproj) <span style="opacity: 0.6; font-size: 0.72rem; font-weight: normal;">(Optional)</span>
+                                    </label>
+                                    <span id="customMmprojStatus" class="file-status-pill status-unknown">None</span>
+                                </div>
+                                <div class="custom-input-with-btn">
+                                    <select id="scannedMmprojSelect" class="modal-select" style="flex: 1 1 0; min-width: 0; font-size: 0.8rem;">
+                                        <option value="">-- None (Disabled) --</option>
+                                    </select>
+                                    <button id="browseMmprojBtn" class="btn-primary" type="button" title="Browse Projector (Native Dialog)">
+                                        <i class="fa-solid fa-folder-open"></i> Browse
+                                    </button>
+                                    <button id="exploreMmprojBtn" class="btn-secondary" type="button" title="In-Browser File Explorer">
+                                        <i class="fa-solid fa-compass"></i>
+                                    </button>
+                                    <button id="clearMmprojBtn" class="btn-secondary" type="button" title="Disable Vision Projector" style="padding: 7px 10px; color: var(--text-tertiary);">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+                                <div class="model-path-row" style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
+                                    <span style="font-size: 0.72rem; color: var(--text-tertiary); white-space: nowrap;">Path:</span>
+                                    <input type="text" id="customMmprojInput" placeholder="No projector active (text-only)" style="flex: 1 1 0; min-width: 0; font-size: 0.75rem; padding: 4px 8px; font-family: var(--font-code); background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; color: var(--text-secondary);" title="Active projector path (leave empty for none)">
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; flex-wrap: wrap; gap: 8px;">
+                                    <label class="flag-chip" title="Offload Vision Projector to CPU: Runs image/vision encoding in system RAM instead of GPU VRAM (saves 1–2 GB of GPU VRAM)">
+                                        <input type="checkbox" id="customMmprojCpu"> mmproj on CPU
+                                    </label>
+                                    <div style="display: flex; align-items: center; gap: 6px;" title="Rendering DPI for PDF page analysis: 150 DPI is optimal for Vision LLMs (fast and sharp without excessive tokens)">
+                                        <label style="font-size: 0.76rem; color: var(--text-secondary);">PDF Quality:</label>
+                                        <select id="pdfDpiSelect" class="modal-select" style="width: auto; padding: 3px 8px; font-size: 0.76rem;">
+                                            <option value="150" selected>150 DPI (Optimal)</option>
+                                            <option value="200">200 DPI (High Detail)</option>
+                                            <option value="300">300 DPI (Maximum)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Single model engine config (mirrors whichever role is selected) -->
+                        <div class="role-config-grid">
+                            <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <label style="font-size: 0.8rem;">GPU Layers</label>
+                                    <span id="singleGpuVal" style="font-size: 0.8rem; color: var(--text-muted);">-1 (Max)</span>
+                                </div>
+                                <input type="range" id="singleGpuSlider" class="custom-slider" min="-1" max="128" value="-1">
+                            </div>
+                            <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <label style="font-size: 0.8rem;">Context (KV Cache)</label>
+                                    <span id="singleCtxVal" style="font-size: 0.8rem; color: var(--text-muted);">8192</span>
+                                </div>
+                                <input type="range" id="singleCtxSlider" class="custom-slider" min="512" max="131072" step="512" value="8192">
+                            </div>
+                            <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <label style="font-size: 0.8rem;">Batch Size</label>
+                                    <span id="singleBatchVal" style="font-size: 0.8rem; color: var(--text-muted);">512</span>
+                                </div>
+                                <input type="range" id="singleBatchSlider" class="custom-slider" min="128" max="4096" step="128" value="512">
+                            </div>
+                            <div class="field-group" style="margin-top: 4px;">
+                                <label style="font-size: 0.8rem;">KV Quantization</label>
+                                <select id="singleKvSelect" class="modal-select" style="font-size: 0.8rem;">
+                                    <option value="f16">FP16</option>
+                                    <option value="q8_0">Q8_0</option>
+                                    <option value="q4_0">Q4_0</option>
+                                    <option value="q4_1">Q4_1</option>
+                                </select>
+                            </div>
+                            <div class="role-flags-row">
+                                <label class="flag-chip" title="Flash Attention: Accelerates generation speed and reduces VRAM usage"><input type="checkbox" id="singleFlashAttn" checked> Flash Attn</label>
+                                <label class="flag-chip" title="KV Cache to GPU: Keeps chat context in fast GPU VRAM. Uncheck to keep context in system RAM if VRAM is tight"><input type="checkbox" id="singleOffloadKqv" checked> KV → GPU</label>
+                                <label class="flag-chip" title="Memory Lock (mlock): Locks model in physical RAM to prevent OS swapping to disk (avoids lag spikes, needs plenty of RAM)"><input type="checkbox" id="singleMlock"> mlock</label>
+                                <label class="flag-chip" title="Memory Mapping (mmap): Streams model weights directly from disk as needed for instant startup and lower initial RAM"><input type="checkbox" id="singleMmap" checked> mmap</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Routing Mode: Per-Role Config Cards -->
+                <div id="routingModePanel" class="hidden">
+                    <div class="settings-section">
+                        <div class="section-title">Model Configuration</div>
 
                         <!-- Router Role Card -->
                         <div class="role-config-card" id="routerCard">
@@ -408,10 +620,10 @@
                                         </select>
                                     </div>
                                     <div class="role-flags-row">
-                                        <label class="flag-chip"><input type="checkbox" id="routerFlashAttn" checked> Flash Attn</label>
-                                        <label class="flag-chip"><input type="checkbox" id="routerOffloadKqv" checked> KV → GPU</label>
-                                        <label class="flag-chip"><input type="checkbox" id="routerMlock"> mlock</label>
-                                        <label class="flag-chip"><input type="checkbox" id="routerMmap" checked> mmap</label>
+                                        <label class="flag-chip" title="Flash Attention: Accelerates generation speed and reduces VRAM usage"><input type="checkbox" id="routerFlashAttn" checked> Flash Attn</label>
+                                        <label class="flag-chip" title="KV Cache to GPU: Keeps chat context in fast GPU VRAM. Uncheck to keep context in system RAM if VRAM is tight"><input type="checkbox" id="routerOffloadKqv" checked> KV → GPU</label>
+                                        <label class="flag-chip" title="Memory Lock (mlock): Locks model in physical RAM to prevent OS swapping to disk (avoids lag spikes, needs plenty of RAM)"><input type="checkbox" id="routerMlock"> mlock</label>
+                                        <label class="flag-chip" title="Memory Mapping (mmap): Streams model weights directly from disk as needed for instant startup and lower initial RAM"><input type="checkbox" id="routerMmap" checked> mmap</label>
                                     </div>
                                 </div>
                             </div>
@@ -460,10 +672,10 @@
                                         </select>
                                     </div>
                                     <div class="role-flags-row">
-                                        <label class="flag-chip"><input type="checkbox" id="coderFlashAttn" checked> Flash Attn</label>
-                                        <label class="flag-chip"><input type="checkbox" id="coderOffloadKqv" checked> KV → GPU</label>
-                                        <label class="flag-chip"><input type="checkbox" id="coderMlock"> mlock</label>
-                                        <label class="flag-chip"><input type="checkbox" id="coderMmap" checked> mmap</label>
+                                        <label class="flag-chip" title="Flash Attention: Accelerates generation speed and reduces VRAM usage"><input type="checkbox" id="coderFlashAttn" checked> Flash Attn</label>
+                                        <label class="flag-chip" title="KV Cache to GPU: Keeps chat context in fast GPU VRAM. Uncheck to keep context in system RAM if VRAM is tight"><input type="checkbox" id="coderOffloadKqv" checked> KV → GPU</label>
+                                        <label class="flag-chip" title="Memory Lock (mlock): Locks model in physical RAM to prevent OS swapping to disk (avoids lag spikes, needs plenty of RAM)"><input type="checkbox" id="coderMlock"> mlock</label>
+                                        <label class="flag-chip" title="Memory Mapping (mmap): Streams model weights directly from storage on-demand (enables instant startup and lower initial RAM)"><input type="checkbox" id="coderMmap" checked> mmap</label>
                                     </div>
                                 </div>
                             </div>
@@ -491,16 +703,16 @@
                                     <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
                                         <div style="display: flex; justify-content: space-between;">
                                             <label style="font-size: 0.8rem;">Context (KV Cache)</label>
-                                            <span id="visionCtxVal" style="font-size: 0.8rem; color: var(--text-muted);">32768</span>
+                                            <span id="visionCtxVal" style="font-size: 0.8rem; color: var(--text-muted);">27136</span>
                                         </div>
-                                        <input type="range" id="visionCtxSlider" class="custom-slider" min="512" max="131072" step="512" value="32768">
+                                        <input type="range" id="visionCtxSlider" class="custom-slider" min="512" max="131072" step="512" value="27136">
                                     </div>
                                     <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
                                         <div style="display: flex; justify-content: space-between;">
                                             <label style="font-size: 0.8rem;">Batch Size</label>
-                                            <span id="visionBatchVal" style="font-size: 0.8rem; color: var(--text-muted);">1024</span>
+                                            <span id="visionBatchVal" style="font-size: 0.8rem; color: var(--text-muted);">1280</span>
                                         </div>
-                                        <input type="range" id="visionBatchSlider" class="custom-slider" min="128" max="4096" step="128" value="1024">
+                                        <input type="range" id="visionBatchSlider" class="custom-slider" min="128" max="4096" step="128" value="1280">
                                     </div>
                                     <div class="field-group" style="margin-top: 4px;">
                                         <label style="font-size: 0.8rem;">KV Quantization</label>
@@ -512,10 +724,11 @@
                                         </select>
                                     </div>
                                     <div class="role-flags-row">
-                                        <label class="flag-chip"><input type="checkbox" id="visionFlashAttn" checked> Flash Attn</label>
-                                        <label class="flag-chip"><input type="checkbox" id="visionOffloadKqv" checked> KV → GPU</label>
-                                        <label class="flag-chip"><input type="checkbox" id="visionMlock"> mlock</label>
-                                        <label class="flag-chip"><input type="checkbox" id="visionMmap" checked> mmap</label>
+                                        <label class="flag-chip" title="Flash Attention: Accelerates generation speed and reduces VRAM usage"><input type="checkbox" id="visionFlashAttn" checked> Flash Attn</label>
+                                        <label class="flag-chip" title="KV Cache to GPU: Keeps chat context in fast GPU VRAM. Uncheck to keep context in system RAM if VRAM is tight"><input type="checkbox" id="visionOffloadKqv" checked> KV → GPU</label>
+                                        <label class="flag-chip" title="Memory Lock (mlock): Locks model in physical RAM to prevent OS swapping to disk (avoids lag spikes, needs plenty of RAM)"><input type="checkbox" id="visionMlock"> mlock</label>
+                                        <label class="flag-chip" title="Memory Mapping (mmap): Streams model weights directly from storage on-demand (enables instant startup and lower initial RAM)"><input type="checkbox" id="visionMmap" checked> mmap</label>
+                                        <label class="flag-chip" title="Offload Vision Projector to CPU: Runs image/vision encoding in system RAM/CPU instead of GPU VRAM (saves 1–2 GB of VRAM)"><input type="checkbox" id="visionMmprojCpu"> mmproj on CPU</label>
                                     </div>
                                 </div>
                             </div>
@@ -523,128 +736,21 @@
                     </div>
                 </div>
 
-                <!-- Single Model Mode Panel -->
-                <div id="singleModePanel" class="hidden">
-                    <div class="settings-section">
-                        <div class="section-title">Single Model Configuration</div>
-                        <div class="field-group" style="margin-bottom: 16px;">
-                            <label style="font-size: 0.8rem;">Model to Use</label>
-                            <select id="singleModelRoleSelect" class="modal-select">
-                                <option value="coder">Coder (Fast Specialist)</option>
-                                <option value="vision">Vision (Multimodal Specialist)</option>
-                                <option value="router">Router (Classification)</option>
-                                <option value="custom">Custom GGUF Model...</option>
-                            </select>
-                        </div>
-
-                        <!-- Custom Model Selection Card (Visible only when 'custom' selected) -->
-                        <div id="customModelCard" class="custom-model-card hidden">
-                            <div class="field-group" style="margin-bottom: 12px;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                    <label style="font-size: 0.8rem; margin: 0;">Discovered GGUF Models</label>
-                                    <span id="customModelPathStatus" class="file-status-pill status-unknown">No file selected</span>
-                                </div>
-                                <select id="scannedGgufSelect" class="modal-select" style="font-size: 0.8rem;">
-                                    <option value="">-- Choose detected file or enter path below --</option>
-                                </select>
-                            </div>
-
-                            <div class="field-group" style="margin-bottom: 10px;">
-                                <label style="font-size: 0.8rem;">Or Enter File Path</label>
-                                <div class="custom-input-with-btn">
-                                    <input type="text" id="customModelPathInput" placeholder="/path/to/my-model.gguf">
-                                    <button id="verifyCustomPathBtn" class="btn-secondary" type="button">Check</button>
-                                </div>
-                            </div>
-
-                            <!-- Remembered Paths Chips -->
-                            <div id="rememberedPathsContainer" class="remembered-paths-container hidden">
-                                <label style="font-size: 0.72rem; color: var(--text-tertiary); display: block; margin-bottom: 4px;">Recent Paths</label>
-                                <div id="rememberedPathsChips" class="remembered-paths-chips"></div>
-                            </div>
-
-                            <div class="divider" style="margin: 12px 0 10px 0; border-color: rgba(255,255,255,0.06);"></div>
-
-                            <!-- Optional Multimodal Projector (mmproj) -->
-                            <div class="field-group" style="margin-bottom: 4px;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                    <label style="font-size: 0.8rem; margin: 0;">
-                                        <i class="fa-solid fa-eye" style="color: var(--accent-purple); margin-right: 4px;"></i>
-                                        Vision Projector (mmproj) <span style="opacity: 0.6; font-size: 0.72rem;">(Optional)</span>
-                                    </label>
-                                    <span id="customMmprojStatus" class="file-status-pill status-unknown">None</span>
-                                </div>
-                                <select id="scannedMmprojSelect" class="modal-select" style="font-size: 0.8rem; margin-bottom: 6px;">
-                                    <option value="">-- None (Text Only) --</option>
-                                </select>
-                                <div class="custom-input-with-btn">
-                                    <input type="text" id="customMmprojInput" placeholder="/path/to/mmproj-model.gguf">
-                                    <button id="verifyMmprojBtn" class="btn-secondary" type="button">Check</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Single model engine config (mirrors whichever role is selected) -->
-                        <div class="role-config-grid">
-                            <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
-                                <div style="display: flex; justify-content: space-between;">
-                                    <label style="font-size: 0.8rem;">GPU Layers</label>
-                                    <span id="singleGpuVal" style="font-size: 0.8rem; color: var(--text-muted);">-1 (Max)</span>
-                                </div>
-                                <input type="range" id="singleGpuSlider" class="custom-slider" min="-1" max="128" value="-1">
-                            </div>
-                            <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
-                                <div style="display: flex; justify-content: space-between;">
-                                    <label style="font-size: 0.8rem;">Context (KV Cache)</label>
-                                    <span id="singleCtxVal" style="font-size: 0.8rem; color: var(--text-muted);">8192</span>
-                                </div>
-                                <input type="range" id="singleCtxSlider" class="custom-slider" min="512" max="131072" step="512" value="8192">
-                            </div>
-                            <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
-                                <div style="display: flex; justify-content: space-between;">
-                                    <label style="font-size: 0.8rem;">Batch Size</label>
-                                    <span id="singleBatchVal" style="font-size: 0.8rem; color: var(--text-muted);">512</span>
-                                </div>
-                                <input type="range" id="singleBatchSlider" class="custom-slider" min="128" max="4096" step="128" value="512">
-                            </div>
-                            <div class="field-group" style="margin-top: 4px;">
-                                <label style="font-size: 0.8rem;">KV Quantization</label>
-                                <select id="singleKvSelect" class="modal-select" style="font-size: 0.8rem;">
-                                    <option value="f16">FP16</option>
-                                    <option value="q8_0">Q8_0</option>
-                                    <option value="q4_0">Q4_0</option>
-                                    <option value="q4_1">Q4_1</option>
-                                </select>
-                            </div>
-                            <div class="role-flags-row">
-                                <label class="flag-chip"><input type="checkbox" id="singleFlashAttn" checked> Flash Attn</label>
-                                <label class="flag-chip"><input type="checkbox" id="singleOffloadKqv" checked> KV → GPU</label>
-                                <label class="flag-chip"><input type="checkbox" id="singleMlock"> mlock</label>
-                                <label class="flag-chip"><input type="checkbox" id="singleMmap" checked> mmap</label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="divider"></div>
+                <div class="divider" id="downloadDivider"></div>
 
                 <!-- Download Model Section -->
-                <div class="settings-section">
-                    <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="settings-section" id="downloadModelSection">
+                    <div class="section-title">
                         <span>Download Model</span>
-                        <span id="downloadEngineBadge" class="engine-badge-pill"><i class="fa-solid fa-shield-halved"></i> Isolated Process</span>
                     </div>
                     <div class="field-group">
-                        <label style="font-size: 0.8rem;">Hugging Face or Direct GGUF URL</label>
+                        <label style="font-size: 0.8rem;">Model Download URL</label>
                         <div class="custom-input-with-btn">
                             <input type="text" id="modelDownloadUrlInput" placeholder="https://huggingface.co/.../model.gguf">
                             <button id="startDownloadBtn" class="btn-primary" type="button" style="white-space: nowrap;">
                                 <i class="fa-solid fa-cloud-arrow-down"></i> Download
                             </button>
                         </div>
-                        <span style="font-size: 0.72rem; color: var(--text-tertiary); margin-top: 4px; display: block;">
-                            Paste any Hugging Face file link (we automatically normalize blob to direct resolve URLs).
-                        </span>
                     </div>
 
                     <!-- Live Download Progress Card -->
@@ -667,15 +773,122 @@
                         <div class="download-progress-track">
                             <div id="downloadProgressBar" class="download-progress-bar" style="width: 0%;"></div>
                         </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">
-                            <span id="downloadEngineLabel">Engine: aria2</span>
+                        <div style="display: flex; justify-content: flex-end; font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">
+                            <span id="downloadEngineLabel" class="hidden"></span>
                             <span id="downloadPercentLabel">0%</span>
                         </div>
                     </div>
                 </div>
 
+                <!-- API Server Mode Panel -->
+                <div id="apiModePanel" class="hidden">
+                    <div class="settings-section">
+                        <div class="section-title">API Configuration</div>
+
+                        <div class="api-notice-box" id="apiNoticeBox">
+                            <i class="fa-solid fa-circle-info"></i>
+                            <span id="apiNoticeText">External OpenAI-compatible API. Multimodal vision attachments are supported for Gemini, GPT-4o, and Vision models.</span>
+                        </div>
+
+                        <!-- Quick Presets -->
+                        <div class="field-group" style="margin-bottom: 14px;">
+                            <label style="font-size: 0.78rem; margin-bottom: 6px; display: block; color: var(--text-secondary);">Provider Quick Presets</label>
+                            <div class="api-presets-row">
+                                <button type="button" class="api-preset-chip" data-preset="gemini" title="Google AI Studio (Gemini 2.5 Flash / Pro)">
+                                    <i class="fa-brands fa-google" style="color: #4285f4;"></i> Gemini
+                                </button>
+                                <button type="button" class="api-preset-chip" data-preset="groq" title="Groq LPUs (Fast Cloud Inference)">
+                                    <i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> Groq
+                                </button>
+                                <button type="button" class="api-preset-chip" data-preset="openai" title="OpenAI API">
+                                    <i class="fa-solid fa-cloud" style="color: #10b981;"></i> OpenAI
+                                </button>
+                                <button type="button" class="api-preset-chip" data-preset="ollama" title="Local Ollama instance">
+                                    <i class="fa-solid fa-server" style="color: #60a5fa;"></i> Ollama
+                                </button>
+                                <button type="button" class="api-preset-chip" data-preset="local" title="nivm Localhost Port">
+                                    <i class="fa-solid fa-laptop-code" style="color: #c084fc;"></i> nivm Local
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Base URL -->
+                        <div class="field-group" style="margin-bottom: 12px;">
+                            <label style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Base URL (Host Endpoint)</label>
+                            <div class="api-endpoint-box">
+                                <input type="text" id="apiBaseUrl" class="api-endpoint-input" placeholder="https://api.groq.com/openai/v1" value="https://api.groq.com/openai/v1">
+                                <button type="button" class="api-copy-btn" id="copyApiBaseUrlBtn" title="Copy Base URL">
+                                    <i class="fa-regular fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Chat Completions URL -->
+                        <div class="field-group" style="margin-bottom: 12px;">
+                            <label style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Chat Completions URL</label>
+                            <div class="api-endpoint-box">
+                                <input type="text" id="apiChatUrl" class="api-endpoint-input" placeholder="https://api.groq.com/openai/v1/chat/completions" value="https://api.groq.com/openai/v1/chat/completions">
+                                <button type="button" class="api-copy-btn" id="copyApiChatUrlBtn" title="Copy Chat URL">
+                                    <i class="fa-regular fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- API Key (Optional) -->
+                        <div class="field-group" style="margin-bottom: 12px;">
+                            <label style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <span>API Key</span>
+                                <span style="font-size: 0.72rem; color: var(--text-muted);">(Optional — provider dependent)</span>
+                            </label>
+                            <div class="api-endpoint-box">
+                                <input type="password" id="apiKeyInput" class="api-endpoint-input" placeholder="gsk_... or sk-... (leave empty for Ollama)" autocomplete="off">
+                                <button type="button" class="api-copy-btn" id="toggleApiKeyVisibilityBtn" title="Toggle Visibility">
+                                    <i class="fa-regular fa-eye"></i>
+                                </button>
+                                <button type="button" class="api-copy-btn" id="copyApiKeyBtn" title="Copy API Key">
+                                    <i class="fa-regular fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Model Identifier (Dynamically queried from provider) -->
+                        <div class="field-group" style="margin-bottom: 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <label style="font-size: 0.8rem; margin: 0;">Model Identifier</label>
+                                <button type="button" id="fetchRemoteModelsBtn" class="api-fetch-models-btn" title="Query provider endpoint for available models">
+                                    <i class="fa-solid fa-arrows-rotate"></i> Fetch Models
+                                </button>
+                            </div>
+                            <select id="apiModelSelect" class="modal-select">
+                                <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+                                <option value="__custom__">+ Enter Custom Model...</option>
+                            </select>
+                            <input type="text" id="apiModelInput" class="api-endpoint-input hidden" style="margin-top: 6px;" placeholder="Type custom model name (e.g. meta-llama/...)" value="llama-3.3-70b-versatile" autocomplete="off">
+                            <div id="fetchModelsStatus" style="font-size: 0.72rem; margin-top: 4px; display: none;"></div>
+                            <div class="role-flags-row" style="margin-top: 8px;">
+                                <label class="flag-chip" title="Enable multimodal support (image and document attachments) if the external model or provider supports vision">
+                                    <input type="checkbox" id="apiMultimodalCheck"> Multimodal / Vision
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Quick Test Snippet -->
+                        <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-light, rgba(255,255,255,0.08)); border-radius: 8px; padding: 10px 12px; margin-top: 10px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);"><i class="fa-solid fa-terminal"></i> Live Test Snippet (cURL)</span>
+                                <button type="button" class="api-copy-btn" id="copyApiCurlBtn" style="padding: 2px 8px; font-size: 0.7rem;">
+                                    <i class="fa-regular fa-copy"></i> Copy
+                                </button>
+                            </div>
+                            <pre id="apiCurlSnippet" style="margin: 0; font-size: 0.72rem; font-family: monospace; color: var(--text-muted); overflow-x: auto; white-space: pre-wrap;">curl -X POST https://api.groq.com/openai/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": "Hello!"}]}'</pre>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Smart Engine Toggle -->
-                <div class="settings-section" style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
+                <div class="settings-section" id="smartEngineSection" style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
                     <button class="smart-toggle-btn" id="smartToggleBtn">
                         <i class="fa-solid fa-bolt"></i>
                         <span id="smartToggleLabel">Load Engine</span>
@@ -683,13 +896,6 @@
                     <div id="engineStatusText" style="font-size: 0.8rem; text-align: center; color: var(--text-muted);">
                         Status: Not Loaded
                     </div>
-                </div>
-
-                <div class="divider"></div>
-
-                <div style="display: flex; justify-content: flex-end;">
-                    <button class="btn-secondary" id="openApiSetupBtn" style="font-size: 0.8rem; padding: 6px 12px;"><i
-                            class="fa-solid fa-cloud"></i> Experimental API Setup</button>
                 </div>
             </div>
             <div class="window-footer">
@@ -710,10 +916,7 @@
             </div>
             <div class="window-body">
                 <div class="settings-section">
-                    <div class="section-title" style="margin-bottom: 4px;">Available Tools</div>
-                    <div style="font-size: 0.85em; color: var(--text-tertiary); margin-bottom: 16px;">
-                        Enable or disable the tools that nivm has access to.
-                    </div>
+                    <div class="section-title" style="margin-bottom: 12px;">Available Tools</div>
                     <div id="toolsConfigContainer">
                         <!-- Checkboxes injected dynamically via JS -->
                     </div>
@@ -721,6 +924,91 @@
             </div>
             <div class="window-footer">
                 <button class="btn-primary" id="saveToolsBtn" style="margin-left: auto;">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Draggable Personality & Custom Instructions Window -->
+    <div class="window-wrapper hidden" id="personalityModal">
+        <div class="draggable-window" id="personalityWindow" style="width: 520px; max-width: min(520px, 94vw);">
+            <div class="window-header" id="personalityWindowHeader">
+                <div class="window-title">
+                    <i class="fa-solid fa-user-gear drag-handle-icon"></i>
+                    <span>Personality & Instructions</span>
+                </div>
+                <button class="icon-btn-sm" id="closePersonalityBtn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="window-body">
+                <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45; margin: 0;">
+                    Shape nivm's demeanor, tone, and specific behavioral guidelines. 
+                    The core engine instructions (local execution, memory, and tools) remain active underneath.
+                </p>
+
+                <div class="field-group" style="margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <label for="personalityPresetSelect" style="margin: 0; font-size: 0.82rem; font-weight: 600;">Active Persona</label>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <button type="button" class="btn-secondary" id="newPersonaBtn" title="Create New Persona" style="padding: 3px 8px; font-size: 0.72rem; height: 26px; border-radius: 6px; display: flex; align-items: center; gap: 4px;">
+                                <i class="fa-solid fa-plus"></i> New
+                            </button>
+                            <button type="button" class="btn-secondary" id="saveAsPersonaBtn" title="Save current instructions as a new persona" style="padding: 3px 8px; font-size: 0.72rem; height: 26px; border-radius: 6px; display: flex; align-items: center; gap: 4px;">
+                                <i class="fa-solid fa-floppy-disk"></i> Save As
+                            </button>
+                            <button type="button" class="btn-secondary hidden" id="deletePersonaBtn" title="Delete active custom persona" style="padding: 3px 8px; font-size: 0.72rem; height: 26px; border-radius: 6px; display: flex; align-items: center; gap: 4px; color: #f43f5e; border-color: rgba(244, 63, 94, 0.3);">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <select id="personalityPresetSelect" class="modal-select" style="font-size: 0.82rem; width: 100%;">
+                        <!-- Populated dynamically via JS: Built-in & Custom Saved Personas -->
+                    </select>
+                </div>
+
+                <!-- Inline Save As New Persona Card -->
+                <div id="savePersonaCard" class="hidden" style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--glass-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; box-sizing: border-box; width: 100%;">
+                    <label style="font-size: 0.76rem; color: var(--text-muted); display: block; margin-bottom: 6px;">Persona Name / Title:</label>
+                    <div style="display: flex; gap: 8px; align-items: center; width: 100%; box-sizing: border-box;">
+                        <input type="text" id="customPersonaNameInput" placeholder="e.g. Python Architect, Creative Lead..." style="flex: 1 1 0; min-width: 0; box-sizing: border-box; font-size: 0.82rem; padding: 6px 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: var(--text-primary); outline: none;">
+                        <button type="button" class="btn-primary" id="confirmSavePersonaBtn" style="padding: 6px 12px; font-size: 0.78rem; flex-shrink: 0; white-space: nowrap;">Save</button>
+                        <button type="button" class="btn-secondary" id="cancelSavePersonaBtn" style="padding: 6px 10px; font-size: 0.78rem; flex-shrink: 0; white-space: nowrap;">Cancel</button>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label for="personalityTextarea" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Custom Instructions / Persona</span>
+                        <span style="font-size: 0.75rem; color: var(--text-muted);" id="personalityCharCount">0 chars</span>
+                    </label>
+                    <textarea id="personalityTextarea" class="settings-textarea" rows="8"
+                        placeholder="e.g. You are a senior engineer who favors Rust and Python. Be direct and avoid boilerplate..."
+                        style="width: 100%; border-radius: 8px; font-family: var(--font-mono, monospace); font-size: 0.82rem; padding: 10px; background: rgba(0,0,0,0.25); color: var(--text-primary); border: 1px solid var(--glass-border); resize: vertical; box-sizing: border-box;"></textarea>
+                </div>
+
+                <!-- Discreet Unfiltered / Mature Toggle -->
+                <div style="margin-top: 10px; padding: 10px 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 8px; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="padding-right: 12px;">
+                        <div style="display: flex; align-items: center; gap: 7px; font-size: 0.82rem; font-weight: 500; color: var(--text-primary);">
+                            <i class="fa-solid fa-fire-flame-curved" style="color: var(--text-muted); font-size: 0.85rem; transition: color 0.2s;" id="nsfwFireIcon"></i>
+                            <span>Unfiltered / Mature Mode</span>
+                        </div>
+                        <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 3px; line-height: 1.35;">
+                            Permits raw creative dialogue, explicit anatomical vocabulary without euphemisms, and removes moralizing refusals.
+                        </div>
+                    </div>
+                    <input type="checkbox" id="nsfwToggle" class="custom-toggle" style="flex-shrink: 0;" title="Toggle Unfiltered / NSFW Mode">
+                </div>
+
+                <div style="font-size: 0.76rem; color: var(--text-muted); background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 6px; border-left: 3px solid var(--accent-primary); margin-top: 10px;">
+                    <i class="fa-solid fa-circle-info" style="margin-right: 4px;"></i>
+                    These custom instructions are appended as your active persona and will take effect in every chat turn.
+                </div>
+            </div>
+            <div class="window-footer">
+                <button class="btn-secondary" id="resetPersonalityBtn">Reset</button>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-secondary" id="cancelPersonalityBtn">Cancel</button>
+                    <button class="btn-primary" id="savePersonalityBtn">Save Persona</button>
+                </div>
             </div>
         </div>
     </div>
@@ -782,12 +1070,47 @@
 
                         <button class="bg-motion-card" data-motion="fluid"><span class="motion-label">Fluid
                                 Sim</span></button>
+                        <button class="bg-motion-card" data-motion="flowfield"><span class="motion-label">Flow
+                                Field</span></button>
                     </div>
                 </div>
 
                 <!-- Animation Settings Panel (Dynamic based on selected animation) -->
                 <div class="settings-section" id="animationSettingsPanel" style="display: none;">
                     <div class="section-title">Animation Settings</div>
+
+                    <!-- Flow Field Settings -->
+                    <div id="flowFieldSettings" style="display: none;">
+                        <div class="color-picker-item"
+                            style="flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <label style="font-size: 0.8rem;">Flow Speed</label>
+                                <span id="flowSpeedVal"
+                                    style="font-family: var(--font-code); font-size: 0.8rem; color: var(--text-secondary);">1.2x</span>
+                            </div>
+                            <input type="range" id="flowSpeedSlider" min="0.3" max="3.0" step="0.1" value="1.2"
+                                class="custom-slider">
+                        </div>
+                        <div class="color-picker-item"
+                            style="flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <label style="font-size: 0.8rem;">Silk Trail Decay</label>
+                                <span id="flowTrailVal"
+                                    style="font-family: var(--font-code); font-size: 0.8rem; color: var(--text-secondary);">0.09</span>
+                            </div>
+                            <input type="range" id="flowTrailSlider" min="0.05" max="0.25" step="0.01" value="0.09"
+                                class="custom-slider">
+                        </div>
+                        <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <label style="font-size: 0.8rem;">Particle Density</label>
+                                <span id="flowDensityVal"
+                                    style="font-family: var(--font-code); font-size: 0.8rem; color: var(--text-secondary);">450</span>
+                            </div>
+                            <input type="range" id="flowDensitySlider" min="150" max="1000" step="25" value="450"
+                                class="custom-slider">
+                        </div>
+                    </div>
 
                     <!-- Fluid Sim Settings -->
                     <div id="fluidSettings" style="display: none;">
@@ -916,6 +1239,120 @@
             <div class="window-footer">
                 <button class="btn-secondary" id="resetThemeBtn">Reset Defaults</button>
                 <button class="btn-primary" id="saveThemeBtn">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Voice Customizer Window -->
+    <div class="window-wrapper hidden" id="voiceModal">
+        <div class="draggable-window" id="voiceWindow">
+            <div class="window-header" id="voiceWindowHeader" style="border-bottom: none; padding-bottom: 6px;">
+                <div class="window-title">
+                    <i class="fa-solid fa-grip-vertical drag-handle-icon"></i>
+                    <span>Voice Profile</span>
+                </div>
+                <button class="icon-btn-sm" id="closeVoiceBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="window-body" style="padding-top: 10px;">
+                <!-- Voice Info Card (Above Orb) -->
+                <div class="voice-info-card" style="margin: 0 0 6px 0;">
+                    <div class="voice-info-title">Customize Your Voice</div>
+                    <div class="voice-info-desc">You'll hear this voice across chat responses and spoken answers.</div>
+                </div>
+
+                <!-- Animated Glowing Orb -->
+                <div class="voice-stage" id="voiceStage">
+                    <div class="voice-orb-glow"></div>
+                    <div class="voice-orb-rings"></div>
+                    <div class="voice-orb-core"></div>
+                </div>
+
+                <!-- Voice Color Buttons -->
+                <div style="margin-top: 2px;">
+                    <div class="voice-circles" id="voiceCircles">
+                        <button class="voice-color-btn voice-color-1 active" data-voice="af_heart" data-color="#22c55e" data-num="1" title="Voice 1 (Natural & Balanced)"></button>
+                        <button class="voice-color-btn voice-color-2" data-voice="af_bella" data-color="#f59e0b" data-num="2" title="Voice 2 (Warm Companion)"></button>
+                        <button class="voice-color-btn voice-color-3" data-voice="af_sarah" data-color="#f97316" data-num="3" title="Voice 3 (Modern & Focused)"></button>
+                        <button class="voice-color-btn voice-color-4" data-voice="af_nicole" data-color="#f43f5e" data-num="4" title="Voice 4 (Gentle & Calm)"></button>
+                        <button class="voice-color-btn voice-color-5" data-voice="bf_emma" data-color="#a855f7" data-num="5" title="Voice 5 (FRIDAY • Intelligent Assistant)"></button>
+                    </div>
+                </div>
+
+                <!-- Sliders: Pace & Expressivity -->
+                <div style="display: flex; flex-direction: column; gap: 8px; margin: 4px 0 14px 0;">
+                    <div class="voice-slider-row">
+                        <span class="voice-slider-label">Pace</span>
+                        <div class="voice-slider-wrapper">
+                            <input type="range" id="voiceRateSlider" class="voice-range-slider" min="0.7" max="1.4" step="0.05" value="1.00">
+                        </div>
+                        <span id="voiceRateVal" class="voice-slider-val">1.00x</span>
+                    </div>
+
+                    <div class="voice-slider-row">
+                        <span class="voice-slider-label">Expressivity</span>
+                        <div class="voice-slider-wrapper">
+                            <input type="range" id="voiceWarmthSlider" class="voice-range-slider" min="0" max="100" step="5" value="0">
+                        </div>
+                        <span id="voiceWarmthVal" class="voice-slider-val">0%</span>
+                    </div>
+                </div>
+
+                <!-- Preview Voice Button & Auto-Speak Switch -->
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <button id="previewVoiceBtn" class="voice-primary-btn">
+                        <i class="fa-solid fa-play"></i>
+                        <span>Preview Voice</span>
+                    </button>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 2px 4px;">
+                        <label for="autoSpeakToggle" style="font-size: 0.8rem; color: var(--text-muted); cursor: pointer;">Auto-Speak Responses</label>
+                        <input type="checkbox" id="autoSpeakToggle" class="custom-toggle">
+                    </div>
+                </div>
+
+                <!-- Custom Pronunciation Accordion -->
+                <div class="voice-pronunciation-accordion" style="margin-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 12px;">
+                    <div class="voice-pronunciation-header" id="togglePronunciationHeader" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-spell-check" style="color: var(--voice-accent, var(--accent-emerald, #22c55e)); font-size: 0.85rem;"></i>
+                            <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);">Custom Pronunciations</span>
+                            <span id="pronunciationCountBadge" class="badge" style="font-size: 0.68rem; padding: 1px 7px; border-radius: 10px; background: rgba(255,255,255,0.08); color: var(--text-secondary);">0</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-down" id="pronunciationChevron" style="font-size: 0.75rem; color: var(--text-muted); transition: transform 0.2s;"></i>
+                    </div>
+
+                    <div id="pronunciationBody" class="hidden" style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                        <div style="font-size: 0.72rem; color: var(--text-muted); line-height: 1.35;">
+                            Teach nivm how to pronounce specific words, acronyms, or names.
+                        </div>
+
+                        <!-- Add / Tweak Form -->
+                        <div class="pronounce-form-box">
+                            <div class="pronounce-input-row">
+                                <input type="text" id="pronounceWordInput" class="pronounce-input" placeholder="Word" autocomplete="off">
+                                <span class="pronounce-arrow">→</span>
+                                <input type="text" id="pronouncePhoneticInput" class="pronounce-input" placeholder="Sounds like" autocomplete="off">
+                            </div>
+                            <div class="pronounce-actions-row">
+                                <button type="button" id="testPronounceDraftBtn" class="pronounce-preview-btn" title="Preview this pronunciation before saving">
+                                    <i class="fa-solid fa-volume-high"></i>
+                                    <span>Preview</span>
+                                </button>
+                                <button type="button" id="addPronounceBtn" class="pronounce-save-btn">
+                                    <i class="fa-solid fa-plus"></i> Save
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- List of Saved Custom Pronunciations -->
+                        <div id="pronounceList" style="max-height: 140px; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 5px; margin-top: 4px;">
+                            <!-- Dynamically generated rows with preview and delete buttons -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="window-footer" style="padding: 12px 20px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+                <button class="btn-secondary" id="resetVoiceBtn">Reset Defaults</button>
+                <button class="btn-primary" id="saveVoiceBtn">Done</button>
             </div>
         </div>
     </div>
@@ -1079,48 +1516,62 @@
         </div>
     </div>
 
-    <!-- Prototype Controls Modal -->
-    <div class="window-wrapper hidden" id="apiSetupModal">
-        <div class="draggable-window" id="apiSetupWindow" style="max-width: 450px;">
-            <div class="window-header" id="apiSetupHeader">
+    <!-- In-Browser File Explorer Modal -->
+    <div class="window-wrapper hidden" id="fileBrowserModal" style="z-index: 500;">
+        <div class="draggable-window" id="fileBrowserWindow">
+            <div class="window-header" id="fileBrowserHeader">
                 <div class="window-title">
                     <i class="fa-solid fa-grip-vertical drag-handle-icon"></i>
-                    <span style="color: var(--accent-emerald);">Prototype Controls</span>
+                    <i class="fa-solid fa-folder-tree" style="color: var(--accent-purple);"></i>
+                    <span id="fileBrowserModalTitle">Browse & Select GGUF Model</span>
                 </div>
-                <button class="icon-btn-sm" id="closeApiSetupBtn"><i class="fa-solid fa-xmark"></i></button>
+                <button class="icon-btn-sm" id="closeFileBrowserBtn" type="button"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <div class="window-body">
-                <div class="settings-section">
-                    <div class="section-title"
-                        style="color: var(--text-secondary); margin-bottom: 12px; font-size: 0.9rem;">
-                        This prototype runs locally on your machine. External API mode is disabled for the demo build.
-                    </div>
-                    <div class="field-group">
-                        <label for="lmStudioUrlInput_API">Base URL</label>
-                        <input type="text" id="lmStudioUrlInput" value="http://127.0.0.1:1234/v1">
-                    </div>
-                    <div class="field-group">
-                        <label for="apiKeyInput_API">API Key (Optional)</label>
-                        <input type="password" id="apiKeyInput" placeholder="sk-...">
-                    </div>
-                    <div class="field-group">
-                        <label for="modelSelect_API">Selected Model</label>
-                        <select id="modelSelect" class="modal-select">
-                            <option value="phi-4-mini-instruct">phi-4-mini-instruct</option>
-                        </select>
-                    </div>
-                    <div class="conn-test-row" style="margin-top: 16px;">
-                        <button class="btn-secondary" id="testConnBtn">
-                            <i class="fa-solid fa-plug"></i> Test Connection
-                        </button>
-                        <div class="diagnostic-result" id="diagnosticResult"></div>
-                    </div>
+            <div class="window-body file-browser-body">
+                <!-- Shortcuts Bar -->
+                <div class="file-browser-shortcuts" id="fileBrowserShortcuts">
+                    <!-- Populated dynamically -->
+                </div>
 
-                    <div class="settings-section" style="margin-top: 24px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                            <label style="font-weight: 600;">Native Prototype Mode</label>
-                            <input type="checkbox" id="apiModeToggle" class="custom-toggle" checked disabled>
-                        </div>
+                <!-- Navigation & Address Bar -->
+                <div class="file-browser-nav">
+                    <button class="file-browser-btn-icon" id="fileBrowserUpBtn" title="Go Up Directory" type="button">
+                        <i class="fa-solid fa-arrow-up"></i>
+                    </button>
+                    <div class="file-browser-path-wrap">
+                        <input type="text" id="fileBrowserCurrentPathInput" placeholder="/path/to/folder">
+                        <button class="btn-secondary" id="fileBrowserGoBtn" type="button">Go</button>
+                    </div>
+                </div>
+
+                <!-- Filter / Search & Toggle -->
+                <div class="file-browser-filter-bar">
+                    <div class="file-browser-search-wrap">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="fileBrowserSearchInput" placeholder="Filter files in current folder...">
+                    </div>
+                    <label class="file-browser-toggle-label">
+                        <input type="checkbox" id="fileBrowserOnlyGguf" checked>
+                        <span>Only .gguf</span>
+                    </label>
+                </div>
+
+                <!-- File List Area -->
+                <div class="file-browser-list" id="fileBrowserList">
+                    <div class="file-browser-empty">Loading directory contents...</div>
+                </div>
+
+                <!-- Selected Item Preview & Actions -->
+                <div class="file-browser-footer">
+                    <div class="file-browser-selection-info" id="fileBrowserSelectionInfo">
+                        <span class="file-browser-none-selected">No file selected</span>
+                    </div>
+                    <div class="file-browser-actions">
+                        <button class="btn-secondary file-browser-native-btn" id="fileBrowserNativeBtn" title="Open Native System File Dialog" type="button">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i> OS Picker
+                        </button>
+                        <button class="btn-secondary" id="fileBrowserCancelBtn" type="button">Cancel</button>
+                        <button class="btn-primary" id="fileBrowserSelectBtn" type="button" disabled>Select Model</button>
                     </div>
                 </div>
             </div>
@@ -1173,7 +1624,7 @@
     </div>
 
     <!-- Application Logic -->
-    <script type="module" src="/static/js/app.js"></script>
+    <script type="module" src="/static/js/app.js?v=4.4"></script>
 </body>
 
 </html>

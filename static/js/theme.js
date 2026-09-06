@@ -1,5 +1,7 @@
 import { themeState, saveThemeConfig as baseSaveThemeConfig } from './state.js';
 import { dom } from './dom.js';
+import { setupFlowFieldCanvas } from './flowfield.js';
+export { setupFlowFieldCanvas };
 
 let nodesAnimationId = null;
 let nodesArray = [];
@@ -203,37 +205,87 @@ function hslToHex(h, s, l) {
     return `#${f(0)}${f(8)}${f(4)}`;
 }
 
+function hexToHue(hex) {
+    if (!hex || typeof hex !== 'string') return 275;
+    const { r, g, b } = hexToRgb(hex);
+    const rn = r / 255, gn = g / 255, bn = b / 255;
+    const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+    const d = max - min;
+    if (d < 0.05) return 275; // for neutral/grey colors like #f4f4f5, start with vivid purple
+    let h = 0;
+    if (max === rn) h = ((gn - bn) / d) % 6;
+    else if (max === gn) h = (bn - rn) / d + 2;
+    else h = (rn - gn) / d + 4;
+    h = Math.round(h * 60);
+    if (h < 0) h += 360;
+    return h;
+}
+
+let lastPickerUpdate = 0;
+let lastCycleTime = 0;
+
+export function stopColorCycleLoop() {
+    if (cyclingAnimationFrame) {
+        cancelAnimationFrame(cyclingAnimationFrame);
+        cyclingAnimationFrame = null;
+    }
+    lastCycleTime = 0;
+    document.body.classList.remove('theme-cycling');
+}
+
 export function colorCycleLoop() {
     if (!themeState.cycleAccent && !themeState.cycleBg) {
-        if (cyclingAnimationFrame) cancelAnimationFrame(cyclingAnimationFrame);
-        cyclingAnimationFrame = null;
+        stopColorCycleLoop();
         return;
     }
 
-    const speed = (themeState.cycleSpeed / 100) * 1.5 + 0.05;
-    let needsUpdate = false;
+    if (cyclingAnimationFrame) {
+        cancelAnimationFrame(cyclingAnimationFrame);
+        cyclingAnimationFrame = null;
+    }
+
+    document.body.classList.add('theme-cycling');
+
+    if (!currentAccentHue && themeState.accentColor) {
+        currentAccentHue = hexToHue(themeState.accentColor);
+    }
+    if (!currentBgHue && themeState.bgTone) {
+        currentBgHue = hexToHue(themeState.bgTone);
+    }
+
+    if (themeState.bgMotion === 'flowfield' && window.clearFlowFieldCanvas) {
+        window.clearFlowFieldCanvas();
+    }
+
+    lastCycleTime = performance.now();
+    cyclingAnimationFrame = requestAnimationFrame(colorCycleStep);
+}
+
+function colorCycleStep(timestamp) {
+    if (!themeState.cycleAccent && !themeState.cycleBg) {
+        stopColorCycleLoop();
+        return;
+    }
+
+    if (!lastCycleTime) lastCycleTime = timestamp;
+    const dt = Math.min((timestamp - lastCycleTime) / 1000, 0.1);
+    lastCycleTime = timestamp;
+
+    const speed = ((themeState.cycleSpeed || 50) / 100) * 80 + 15; // deg per sec
 
     if (themeState.cycleAccent) {
-        currentAccentHue = (currentAccentHue + speed) % 360;
+        currentAccentHue = (currentAccentHue + speed * dt) % 360;
         themeState.accentColor = hslToHex(currentAccentHue, 80, 65);
-        if (dom.accentColorPicker) dom.accentColorPicker.value = themeState.accentColor;
-        needsUpdate = true;
+        document.documentElement.style.setProperty('--text-primary', themeState.accentColor);
     }
 
     if (themeState.cycleBg) {
-        currentBgHue = (currentBgHue + (speed * 0.5)) % 360;
+        currentBgHue = (currentBgHue + (speed * 0.4) * dt) % 360;
         themeState.bgTone = hslToHex(currentBgHue, 50, 10);
-        if (dom.bgTonePicker) dom.bgTonePicker.value = themeState.bgTone;
-        needsUpdate = true;
-    }
-
-    if (needsUpdate) {
         document.documentElement.style.setProperty('--bg-black', themeState.bgTone);
-        document.documentElement.style.setProperty('--text-primary', themeState.accentColor);
-        
+
         const bgRgb = hexToRgb(themeState.bgTone);
         const luminance = getLuminance(bgRgb.r, bgRgb.g, bgRgb.b);
-        
         if (luminance > 0.5) {
             document.documentElement.style.setProperty('--text-secondary', '#334155');
             document.documentElement.style.setProperty('--text-muted', '#64748b');
@@ -245,7 +297,16 @@ export function colorCycleLoop() {
         }
     }
 
-    cyclingAnimationFrame = requestAnimationFrame(colorCycleLoop);
+    // Throttle color picker DOM updates to at most 4x/sec and ONLY if theme window is visible
+    if (timestamp - lastPickerUpdate > 250) {
+        lastPickerUpdate = timestamp;
+        if (dom.themeWindow && dom.themeWindow.style.display !== 'none') {
+            if (themeState.cycleAccent && dom.accentColorPicker) dom.accentColorPicker.value = themeState.accentColor;
+            if (themeState.cycleBg && dom.bgTonePicker) dom.bgTonePicker.value = themeState.bgTone;
+        }
+    }
+
+    cyclingAnimationFrame = requestAnimationFrame(colorCycleStep);
 }
 
 export function applyThemeState() {
@@ -269,6 +330,9 @@ export function applyThemeState() {
     if (themeState.nodesDistance === undefined) themeState.nodesDistance = 130;
     if (themeState.matrixSpeed === undefined) themeState.matrixSpeed = 45;
     if (themeState.matrixFade === undefined) themeState.matrixFade = 0.05;
+    if (themeState.flowSpeed === undefined) themeState.flowSpeed = 1.2;
+    if (themeState.flowTrail === undefined || themeState.flowTrail === 0.04) themeState.flowTrail = 0.09;
+    if (themeState.flowDensity === undefined || themeState.flowDensity === 1500) themeState.flowDensity = 450;
 
     if (dom.nodesBgCanvas) {
         dom.nodesBgCanvas.classList.toggle('active', themeState.bgMotion === 'nodes');
@@ -286,52 +350,20 @@ export function applyThemeState() {
         dom.fluidBgCanvas.classList.toggle('active', themeState.bgMotion === 'fluid');
         if (themeState.bgMotion === 'fluid' && window.startFluidAnimation) window.startFluidAnimation();
     }
+    if (dom.flowFieldBgCanvas) {
+        dom.flowFieldBgCanvas.classList.toggle('active', themeState.bgMotion === 'flowfield');
+        if (themeState.bgMotion === 'flowfield' && window.startFlowFieldAnimation) window.startFlowFieldAnimation();
+    }
 
     if (dom.animationSettingsPanel) {
         const motion = themeState.bgMotion;
-        const hasSettings = ['fluid', 'nodes', 'matrix'].includes(motion);
+        const hasSettings = ['fluid', 'nodes', 'matrix', 'flowfield'].includes(motion);
         dom.animationSettingsPanel.style.display = hasSettings ? 'block' : 'none';
         
+        if (dom.flowFieldSettings) dom.flowFieldSettings.style.display = motion === 'flowfield' ? 'block' : 'none';
         if (dom.fluidSettings) dom.fluidSettings.style.display = motion === 'fluid' ? 'block' : 'none';
         if (dom.nodesSettings) dom.nodesSettings.style.display = motion === 'nodes' ? 'block' : 'none';
         if (dom.matrixSettings) dom.matrixSettings.style.display = motion === 'matrix' ? 'block' : 'none';
-    }
-
-    if (window.fluidConfig) {
-        window.fluidConfig.SPLAT_RADIUS = themeState.fluidRadius;
-        window.fluidConfig.CURL = themeState.fluidCurl;
-        window.fluidConfig.BLOOM_INTENSITY = themeState.fluidBloom;
-    }
-
-    if (dom.fluidRadiusSlider) {
-        dom.fluidRadiusSlider.value = themeState.fluidRadius;
-        if (dom.fluidRadiusVal) dom.fluidRadiusVal.textContent = themeState.fluidRadius;
-    }
-    if (dom.fluidCurlSlider) {
-        dom.fluidCurlSlider.value = themeState.fluidCurl;
-        if (dom.fluidCurlVal) dom.fluidCurlVal.textContent = themeState.fluidCurl;
-    }
-    if (dom.fluidBloomSlider) {
-        dom.fluidBloomSlider.value = themeState.fluidBloom;
-        if (dom.fluidBloomVal) dom.fluidBloomVal.textContent = themeState.fluidBloom;
-    }
-    
-    if (dom.nodesDensitySlider) {
-        dom.nodesDensitySlider.value = themeState.nodesDensity;
-        if (dom.nodesDensityVal) dom.nodesDensityVal.textContent = themeState.nodesDensity;
-    }
-    if (dom.nodesDistanceSlider) {
-        dom.nodesDistanceSlider.value = themeState.nodesDistance;
-        if (dom.nodesDistanceVal) dom.nodesDistanceVal.textContent = themeState.nodesDistance;
-    }
-    
-    if (dom.matrixSpeedSlider) {
-        dom.matrixSpeedSlider.value = themeState.matrixSpeed;
-        if (dom.matrixSpeedVal) dom.matrixSpeedVal.textContent = themeState.matrixSpeed + 'ms';
-    }
-    if (dom.matrixFadeSlider) {
-        dom.matrixFadeSlider.value = themeState.matrixFade;
-        if (dom.matrixFadeVal) dom.matrixFadeVal.textContent = themeState.matrixFade;
     }
 
     document.querySelectorAll('.bg-motion-card').forEach(card => {
@@ -386,8 +418,25 @@ export function applyThemeState() {
         if (dom.cycleSpeedVal) dom.cycleSpeedVal.textContent = dom.cycleSpeedSlider.value + '%';
     }
 
-    if ((themeState.cycleAccent || themeState.cycleBg) && !cyclingAnimationFrame) {
-        colorCycleLoop();
+    if (dom.flowSpeedSlider) {
+        dom.flowSpeedSlider.value = themeState.flowSpeed || 1.2;
+        if (dom.flowSpeedVal) dom.flowSpeedVal.textContent = (themeState.flowSpeed || 1.2) + 'x';
+    }
+    if (dom.flowTrailSlider) {
+        dom.flowTrailSlider.value = themeState.flowTrail || 0.09;
+        if (dom.flowTrailVal) dom.flowTrailVal.textContent = themeState.flowTrail || 0.09;
+    }
+    if (dom.flowDensitySlider) {
+        dom.flowDensitySlider.value = themeState.flowDensity || 450;
+        if (dom.flowDensityVal) dom.flowDensityVal.textContent = themeState.flowDensity || 450;
+    }
+
+    if (themeState.cycleAccent || themeState.cycleBg) {
+        if (!cyclingAnimationFrame) {
+            colorCycleLoop();
+        }
+    } else if (cyclingAnimationFrame) {
+        stopColorCycleLoop();
     }
 }
 

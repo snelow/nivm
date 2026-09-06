@@ -1,9 +1,11 @@
 import { state, saveConversations, saveEnabledTools } from './state.js';
 import { dom } from './dom.js';
-import { tools } from './tools.js';
+import { tools, parseToolCall, stripToolCallFromText } from './tools.js';
 
 export function makeDraggable(windowEl, headerEl) {
     if (!windowEl || !headerEl) return;
+    if (windowEl._isDraggableInitialized) return;
+    windowEl._isDraggableInitialized = true;
     let isDragging = false;
     let startX, startY, initialLeft, initialTop;
 
@@ -51,38 +53,54 @@ export function setupDynamicGreeting() {
     let timeGreetings = [];
 
     if (hour >= 5 && hour < 12) {
-        timeGreetings = ['Good morning', 'Bright early start', 'Hello', 'Rise and shine', 'Let\'s start the day', 'Morning brainstorm?', 'Fresh coffee, fresh code', 'Early bird gets the bug'];
+        timeGreetings = [
+            'Good morning',
+            'Morning focus',
+            'Ready to build',
+            'Early start',
+            'System online',
+            'New day, clean slate'
+        ];
     } else if (hour >= 12 && hour < 17) {
-        timeGreetings = ['Good afternoon', 'Hello there', 'Good day', 'Welcome back', 'Hope your day is going well', 'Ready to build?', 'Afternoon grind', 'Keep the momentum going'];
+        timeGreetings = [
+            'Good afternoon',
+            'In the zone',
+            'System active',
+            'Ready when you are',
+            'Full steam ahead',
+            'Back to building'
+        ];
     } else if (hour >= 17 && hour < 22) {
-        timeGreetings = ['Good evening', 'Unwinding tonight?', 'Welcome back', 'Hello', 'Evening coding session?', 'Time to reflect and build', 'Sunset coding', 'Let\'s wrap up the day'];
+        timeGreetings = [
+            'Good evening',
+            'Evening session',
+            'Deep work hours',
+            'Locked in',
+            'Night compute',
+            'Focused session'
+        ];
     } else {
-        timeGreetings = ['Working late?', 'Quiet night ahead', 'Late night session', 'Hello night owl', 'Burning the midnight oil?', 'The best ideas happen at night', 'Midnight inspiration', 'Dark mode activated'];
+        timeGreetings = [
+            'Midnight session',
+            'Quiet hours',
+            'Late night build',
+            'Deep in the code',
+            'Into the night',
+            'System awake'
+        ];
     }
 
     const subtitles = [
-        'What would you like to explore right now?',
-        'How can I help you today?',
-        'Ready when you are.',
-        'What\'s on your mind?',
-        'Let\'s turn your ideas into reality.',
-        'Ask a question, brainstorm, or draft something new.',
-        'Where shall we begin?',
-        'Ready to tackle some code?',
-        'Let\'s dive deep into your ideas.',
-        'I\'m here to help you build.',
-        'What are we creating today?',
-        'Got a tricky bug? Let\'s squash it.',
-        'Your AI co-pilot is standing by.',
-        'Throw a problem my way.',
-        'Let\'s engineer something amazing.',
-        'Time to write some beautiful code.',
-        'Need a rubber duck? I\'m here.',
-        'Let\'s optimize your workflow.',
-        'Type a prompt to kick things off.',
-        'What puzzle are we solving next?',
-        'Ready to break things and fix them?',
-        'Let\'s push the boundaries.'
+        'What are we engineering today?',
+        'Local hardware, zero telemetry, pure inference.',
+        'Drop a problem, paste a log, or architect from scratch.',
+        'Ready to reason through whatever you are building.',
+        'Draft architecture, refactor code, or unpack an idea.',
+        'Give me a goal, a file, or a tough problem.',
+        'Your local intelligence engine is standing by.',
+        'Ask a question, trace an edge case, or write something new.',
+        'Where are we directing compute today?',
+        'Fast local execution. What shall we tackle?'
     ];
 
     const chosenGreeting = timeGreetings[Math.floor(Math.random() * timeGreetings.length)];
@@ -134,8 +152,38 @@ export function switchChat(id) {
     renderActiveChat();
 }
 
+export function extractMediaUrlsFromChat(chat) {
+    const urls = [];
+    if (!chat || !chat.messages) return urls;
+    for (const msg of chat.messages) {
+        if (Array.isArray(msg.content)) {
+            for (const part of msg.content) {
+                if (part && typeof part === 'object') {
+                    const u = part.image_url?.url || part.video_url?.url || part.audio_url?.url || part.document_url?.url;
+                    if (u && typeof u === 'string' && u.includes('/uploads/')) {
+                        urls.push(u);
+                    }
+                }
+            }
+        }
+    }
+    return urls;
+}
+
 export function deleteChat(id, e) {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
+    const chatToDelete = state.conversations.find(c => c.id === id);
+    if (chatToDelete) {
+        const urls = extractMediaUrlsFromChat(chatToDelete);
+        const remainingUrls = new Set();
+        state.conversations.filter(c => c.id !== id).forEach(c => {
+            extractMediaUrlsFromChat(c).forEach(u => remainingUrls.add(u));
+        });
+        const urlsToDelete = urls.filter(u => !remainingUrls.has(u));
+        if (urlsToDelete.length > 0 && window.deleteUploadedFilesAPI) {
+            window.deleteUploadedFilesAPI(urlsToDelete);
+        }
+    }
     state.conversations = state.conversations.filter(c => c.id !== id);
     if (state.activeChatId === id) {
         state.activeChatId = state.conversations.length > 0 ? state.conversations[0].id : null;
@@ -213,9 +261,9 @@ export function renderActiveChat() {
         dom.messagesContainer.classList.remove('hidden');
         dom.messagesContainer.innerHTML = '';
 
-        activeChat.messages.forEach(msg => {
+        activeChat.messages.forEach((msg, idx) => {
             if (msg.isHidden) return;
-            appendMessageToDOM(msg, false);
+            appendMessageToDOM(msg, false, idx, activeChat.messages);
         });
     }
     scrollToBottom();
@@ -231,7 +279,253 @@ export function toggleSendStopButtons(isGenerating) {
     }
 }
 
-export function appendMessageToDOM(msg, isStreaming = false) {
+export function buildToolTraceHtml(command, argsStr, resultStr = null) {
+    const cmdLower = (command || '').toLowerCase();
+    const isTerminal = cmdLower.includes('terminal');
+    const isMemory = cmdLower.includes('memory');
+    
+    let badgeClass = 'generic';
+    let toolIcon = 'fa-cube';
+    let toolLabel = command || 'tool';
+    
+    if (isTerminal) {
+        badgeClass = 'terminal';
+        toolIcon = 'fa-terminal';
+        toolLabel = 'terminal';
+    } else if (isMemory) {
+        badgeClass = 'memory';
+        toolIcon = cmdLower.includes('read') ? 'fa-book-bookmark' : 'fa-floppy-disk';
+        toolLabel = command;
+    }
+
+    let cleanArgs = (argsStr || '').trim();
+    if ((cleanArgs.startsWith('"') && cleanArgs.endsWith('"')) || (cleanArgs.startsWith("'") && cleanArgs.endsWith("'"))) {
+        cleanArgs = cleanArgs.substring(1, cleanArgs.length - 1);
+    }
+    const previewArgs = cleanArgs.length > 55 ? cleanArgs.substring(0, 52) + '…' : cleanArgs;
+
+    const isError = resultStr && (resultStr.toLowerCase().includes('error') || resultStr.toLowerCase().includes('failed'));
+    const statusClass = isError ? 'error' : 'success';
+    const statusText = isError ? 'Failed' : 'Executed';
+    const statusIcon = isError ? 'fa-triangle-exclamation' : 'fa-check';
+
+    const fullInvocation = `${command}(${cleanArgs})`;
+    const escapedInvocation = escapeHtml(fullInvocation).replace(/'/g, "\\'");
+    const escapedResult = resultStr !== null && resultStr !== undefined ? escapeHtml(resultStr).replace(/'/g, "\\'") : '';
+
+    return `
+    <details class="tool-trace-block">
+        <summary class="tool-trace-summary">
+            <div class="tool-trace-summary-left">
+                <span class="tool-badge ${badgeClass}">
+                    <i class="fa-solid ${toolIcon}"></i>
+                    <span>${escapeHtml(toolLabel)}</span>
+                </span>
+                <span class="tool-cmd-preview" title="${escapeHtml(cleanArgs)}">${escapeHtml(previewArgs)}</span>
+            </div>
+            <div class="tool-trace-summary-right">
+                <span class="tool-status-pill ${statusClass}">
+                    <i class="fa-solid ${statusIcon}"></i> ${statusText}
+                </span>
+                <i class="fa-solid fa-chevron-right tool-toggle-icon"></i>
+            </div>
+        </summary>
+        <div class="tool-trace-body">
+            <div class="tool-section">
+                <div class="tool-section-head">
+                    <span><i class="fa-solid fa-code"></i> Tool Call</span>
+                    <button class="tool-copy-btn" onclick="navigator.clipboard.writeText('${escapedInvocation}'); this.innerHTML='<i class=\\'fa-solid fa-check\\'></i> Copied'; setTimeout(() => this.innerHTML='<i class=\\'fa-regular fa-copy\\'></i> Copy', 1500);" title="Copy invocation">
+                        <i class="fa-regular fa-copy"></i> Copy
+                    </button>
+                </div>
+                <pre class="tool-code-display"><code>${escapeHtml(fullInvocation)}</code></pre>
+            </div>
+            ${resultStr !== null && resultStr !== undefined ? `
+            <div class="tool-section">
+                <div class="tool-section-head">
+                    <span><i class="fa-solid fa-square-poll-horizontal"></i> Output</span>
+                    <button class="tool-copy-btn" onclick="navigator.clipboard.writeText('${escapedResult}'); this.innerHTML='<i class=\\'fa-solid fa-check\\'></i> Copied'; setTimeout(() => this.innerHTML='<i class=\\'fa-regular fa-copy\\'></i> Copy', 1500);" title="Copy output">
+                        <i class="fa-regular fa-copy"></i> Copy
+                    </button>
+                </div>
+                <pre class="tool-output-display ${isError ? 'error' : ''}"><code>${escapeHtml(resultStr)}</code></pre>
+            </div>
+            ` : ''}
+        </div>
+    </details>`.trim();
+}
+
+// ---------- Waveform Audio Player ----------
+function buildWaveformPlayer(audioUrl) {
+    const container = document.createElement('div');
+    container.className = 'waveform-player';
+    
+    const playBtn = document.createElement('button');
+    playBtn.className = 'waveform-play-btn';
+    playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+    
+    const waveWrap = document.createElement('div');
+    waveWrap.className = 'waveform-canvas-wrap';
+    
+    const canvas = document.createElement('canvas');
+    canvas.className = 'waveform-canvas';
+    canvas.width = 220;
+    canvas.height = 40;
+    waveWrap.appendChild(canvas);
+    
+    const timeLabel = document.createElement('span');
+    timeLabel.className = 'waveform-time';
+    timeLabel.textContent = '0:00';
+    
+    container.appendChild(playBtn);
+    container.appendChild(waveWrap);
+    container.appendChild(timeLabel);
+    
+    const audio = new Audio(audioUrl);
+    audio.preload = 'metadata';
+    let bars = [];
+    let animFrame = null;
+    let trueDuration = 0;
+    
+    const formatTime = (s) => {
+        if (isNaN(s) || !isFinite(s) || s < 0) return '0:00';
+        const m = Math.floor(s / 60);
+        const sec = Math.floor(s % 60);
+        return `${m}:${sec < 10 ? '0' : ''}${sec}`;
+    };
+
+    const getDuration = () => {
+        if (isFinite(audio.duration) && audio.duration > 0) return audio.duration;
+        if (isFinite(trueDuration) && trueDuration > 0) return trueDuration;
+        return 0;
+    };
+    
+    // Generate pseudo-waveform bars (from audio data or random if unavailable)
+    const generateBars = async () => {
+        const numBars = 44;
+        try {
+            const response = await fetch(audioUrl);
+            const arrayBuffer = await response.arrayBuffer();
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+            if (decoded && isFinite(decoded.duration) && decoded.duration > 0) {
+                trueDuration = decoded.duration;
+                if (!audio.currentTime || audio.currentTime === 0) {
+                    timeLabel.textContent = formatTime(trueDuration);
+                }
+            }
+            const rawData = decoded.getChannelData(0);
+            const blockSize = Math.floor(rawData.length / numBars);
+            bars = [];
+            for (let i = 0; i < numBars; i++) {
+                let sum = 0;
+                for (let j = 0; j < blockSize; j++) {
+                    sum += Math.abs(rawData[i * blockSize + j]);
+                }
+                bars.push(sum / blockSize);
+            }
+            // Normalize
+            const maxVal = Math.max(...bars) || 1;
+            bars = bars.map(b => Math.max(0.08, b / maxVal));
+            audioCtx.close();
+        } catch (e) {
+            // Fallback: generate pleasing random bars
+            bars = Array.from({ length: numBars }, () => 0.15 + Math.random() * 0.85);
+        }
+        drawWaveform();
+    };
+    
+    const drawWaveform = () => {
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = canvas.clientWidth * dpr;
+        canvas.height = canvas.clientHeight * dpr;
+        ctx.scale(dpr, dpr);
+        
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        ctx.clearRect(0, 0, w, h);
+        
+        if (bars.length === 0) return;
+        
+        const barW = Math.max(2, (w / bars.length) * 0.6);
+        const gap = w / bars.length;
+        const dur = getDuration();
+        const progress = dur > 0 ? audio.currentTime / dur : 0;
+        
+        const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent-color').trim() || '#f4f4f5';
+        
+        bars.forEach((val, i) => {
+            const barH = Math.max(3, val * (h - 4));
+            const x = i * gap + (gap - barW) / 2;
+            const y = (h - barH) / 2;
+            const barProgress = (i + 0.5) / bars.length;
+            
+            ctx.beginPath();
+            if (ctx.roundRect) {
+                ctx.roundRect(x, y, barW, barH, 1);
+            } else {
+                ctx.rect(x, y, barW, barH);
+            }
+            if (barProgress <= progress) {
+                ctx.fillStyle = accentColor;
+            } else {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            }
+            ctx.fill();
+        });
+    };
+    
+    const animLoop = () => {
+        drawWaveform();
+        timeLabel.textContent = formatTime(audio.currentTime);
+        if (!audio.paused) {
+            animFrame = requestAnimationFrame(animLoop);
+        }
+    };
+    
+    playBtn.onclick = () => {
+        if (audio.paused) {
+            audio.play();
+            playBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+            animLoop();
+        } else {
+            audio.pause();
+            playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+            if (animFrame) cancelAnimationFrame(animFrame);
+        }
+    };
+    
+    audio.onended = () => {
+        playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+        if (animFrame) cancelAnimationFrame(animFrame);
+        drawWaveform();
+        const dur = getDuration();
+        timeLabel.textContent = formatTime(dur);
+    };
+    
+    audio.onloadedmetadata = () => {
+        const dur = getDuration();
+        if (dur > 0) timeLabel.textContent = formatTime(dur);
+    };
+    
+    // Click-to-seek on canvas
+    waveWrap.onclick = (e) => {
+        const dur = getDuration();
+        if (dur <= 0) return;
+        const rect = waveWrap.getBoundingClientRect();
+        const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        audio.currentTime = frac * dur;
+        drawWaveform();
+        timeLabel.textContent = formatTime(audio.currentTime);
+    };
+    
+    generateBars();
+    
+    return container;
+}
+
+export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, allMessages = null) {
     // Hide internal system notifications from the UI
     if (msg.role === 'user' && typeof msg.content === 'string' && msg.content.startsWith('[SYSTEM NOTIFICATION]')) {
         return { bubble: null, actions: null };
@@ -254,71 +548,57 @@ export function appendMessageToDOM(msg, isStreaming = false) {
             bubble.innerHTML = '';
             // Extract text and media
             const texts = content.filter(item => item.type === 'text');
-            const images = content.filter(item => item.type === 'image_url' || item.type === 'video_url' || item.type === 'audio_url' || item.type === 'document_url');
+            const mediaItems = content.filter(item => item.type === 'image_url' || item.type === 'video_url' || item.type === 'audio_url' || item.type === 'document_url');
             
-            if (images.length > 0) {
+            if (mediaItems.length > 0) {
                 const gallery = document.createElement('div');
-                gallery.style.display = 'flex';
-                gallery.style.flexWrap = 'nowrap';
-                gallery.style.gap = '8px';
-                gallery.style.marginBottom = texts.length > 0 ? '8px' : '0';
-                gallery.style.overflowX = 'auto';
-                gallery.style.paddingBottom = '4px'; // Space for scrollbar
+                gallery.className = 'chat-media-gallery';
+                if (texts.length === 0) gallery.style.marginBottom = '0';
                 
-                images.forEach(item => {
+                mediaItems.forEach(item => {
                     const isVideo = item.type === 'video_url';
                     const isAudio = item.type === 'audio_url';
                     const isDocument = item.type === 'document_url';
                     const url = isVideo ? item.video_url.url : (isAudio ? item.audio_url.url : (isDocument ? item.document_url.url : item.image_url.url));
                     
-                    let media;
                     if (isAudio) {
-                        media = document.createElement('audio');
-                        media.controls = true;
-                        media.src = url;
-                        media.style.width = '250px';
-                        media.style.height = '40px';
-                        media.style.flexShrink = '0';
-                        media.style.outline = 'none';
+                        const player = buildWaveformPlayer(url);
+                        gallery.appendChild(player);
                     } else if (isDocument) {
-                        media = document.createElement('div');
-                        media.textContent = 'PDF document';
-                        media.style.padding = '42px 16px';
-                        media.style.width = '120px';
-                        media.style.height = '120px';
-                        media.style.boxSizing = 'border-box';
-                        media.style.display = 'flex';
-                        media.style.alignItems = 'center';
-                        media.style.justifyContent = 'center';
-                        media.style.textAlign = 'center';
-                        media.style.borderRadius = '8px';
-                        media.style.background = 'var(--bg-surface)';
-                        media.style.color = 'var(--text-primary)';
-                        media.style.flexShrink = '0';
+                        const docCard = document.createElement('div');
+                        docCard.className = 'chat-doc-card';
+                        docCard.innerHTML = `<i class="fa-solid fa-file-pdf"></i><span>PDF Document</span>`;
+                        gallery.appendChild(docCard);
+                    } else if (isVideo) {
+                        const videoThumb = document.createElement('div');
+                        videoThumb.className = 'chat-video-thumb';
+                        const vid = document.createElement('video');
+                        vid.src = url;
+                        vid.muted = true;
+                        vid.preload = 'metadata';
+                        vid.playsInline = true;
+                        videoThumb.appendChild(vid);
+                        const playOverlay = document.createElement('div');
+                        playOverlay.className = 'chat-video-play-overlay';
+                        playOverlay.innerHTML = '<i class="fa-solid fa-play"></i>';
+                        videoThumb.appendChild(playOverlay);
+                        videoThumb.onclick = () => openVideoPreview(url);
+                        // Load first frame
+                        vid.addEventListener('loadeddata', () => { vid.currentTime = 0.1; }, { once: true });
+                        gallery.appendChild(videoThumb);
                     } else {
-                        media = document.createElement(isVideo ? 'video' : 'img');
-                        media.src = url;
-                        media.className = 'message-image';
-                        media.style.height = '120px';
-                        media.style.width = '120px';
-                        media.style.objectFit = 'cover';
-                        media.style.borderRadius = '8px';
-                        media.style.cursor = 'pointer';
-                        media.style.flexShrink = '0'; // Prevent squishing
-                        
-                        if (isVideo) {
-                            media.muted = true;
-                            media.loop = true;
-                            media.autoplay = true;
-                            media.playsInline = true;
-                            media.onmouseenter = () => media.style.opacity = '0.8';
-                            media.onmouseleave = () => media.style.opacity = '1';
-                            media.onclick = () => openVideoPreview(url);
-                        } else {
-                            media.onclick = () => openLightbox(url);
-                        }
+                        const img = document.createElement('img');
+                        img.src = url;
+                        img.className = 'message-image';
+                        img.style.height = '120px';
+                        img.style.width = '120px';
+                        img.style.objectFit = 'cover';
+                        img.style.borderRadius = '8px';
+                        img.style.cursor = 'pointer';
+                        img.style.flexShrink = '0';
+                        img.onclick = () => openLightbox(url);
+                        gallery.appendChild(img);
                     }
-                    gallery.appendChild(media);
                 });
                 bubble.appendChild(gallery);
             }
@@ -334,10 +614,23 @@ export function appendMessageToDOM(msg, isStreaming = false) {
     } else if (role === 'system') {
         bubble.style.cssText = 'background: transparent; border: none; padding: 0; width: 100%;';
         const innerHtml = window.marked && content ? marked.parse(content) : escapeHtml(content);
-        bubble.innerHTML = `<details class="thinking-block" open><summary><i class="fa-solid fa-server"></i> <span class="think-status">System Notice</span></summary><div class="thinking-content">${innerHtml}</div></details>`;
+        bubble.innerHTML = `
+        <details class="thinking-block" open>
+            <summary class="thinking-summary">
+                <div class="thinking-summary-left">
+                    <span class="think-icon-badge" style="background:rgba(59, 130, 246, 0.15); color:var(--accent-blue, #3b82f6);"><i class="fa-solid fa-server"></i></span>
+                    <span class="think-status">System Notice</span>
+                </div>
+                <div class="thinking-summary-right">
+                    <i class="fa-solid fa-chevron-right think-toggle-icon"></i>
+                </div>
+            </summary>
+            <div class="thinking-content">${innerHtml}</div>
+        </details>`;
         attachCodeCopyButtons(bubble);
     } else {
-        updateAssistantBubble(bubble, content, false);
+        const thinkTime = msg.thinkTime || msg.meta?.thinkTime || null;
+        updateAssistantBubble(bubble, content, false, thinkTime);
     }
 
     const actions = document.createElement('div');
@@ -349,25 +642,60 @@ export function appendMessageToDOM(msg, isStreaming = false) {
     wrapper.appendChild(actions); // Render actions for all roles (including user/system) for the delete button
     row.appendChild(wrapper);
 
-    if (role === 'assistant' && content.includes('TOOL_CALL:')) {
-        const textWithoutTool = content.replace(/TOOL_CALL:.*$/gm, '').trim();
-        const textWithoutThinkAndTool = textWithoutTool.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    const detectedTool = (role === 'assistant' && typeof content === 'string') ? parseToolCall(content, tools) : null;
+    const hasToolCall = Boolean(detectedTool) || Boolean(msg.toolExecution);
+    const isFollowedByNotification = allMessages && typeof msgIndex === 'number' && allMessages[msgIndex + 1]?.content?.startsWith?.('[SYSTEM NOTIFICATION]');
+
+    if (role === 'assistant' && (hasToolCall || isFollowedByNotification)) {
+        const textWithoutTool = stripToolCallFromText(content, tools).trim();
         
-        const match = content.match(/TOOL_CALL:\s*([a-zA-Z0-9_]+)\((.*?)\)/);
-        if (match) {
-            const toolCommand = match[1];
-            const firstArg = match[2].split(',')[0].trim();
-            const sysBubbleHtml = `<details class="tool-trace-block"><summary><i class="fa-solid fa-microchip"></i> Tool executed: <b>${toolCommand}(${firstArg})</b></summary><div class="tool-trace-content">${match[0]}</div></details>`;
+        let toolCommand = msg.toolExecution?.command || detectedTool?.command || null;
+        let argsStr = msg.toolExecution?.argsStr || detectedTool?.argsStr || null;
+        let resultStr = msg.toolExecution?.resultStr || null;
+
+        if (!toolCommand && typeof content === 'string') {
+            const match = content.match(/TOOL_CALL:\s*([a-zA-Z0-9_]+)\(([\s\S]*?)\)/);
+            if (match) {
+                toolCommand = match[1];
+                argsStr = match[2];
+            }
+        }
+
+        // Backward-compatibility: if tool info is not explicitly on message, extract result from following system notification
+        if (allMessages && typeof msgIndex === 'number' && allMessages[msgIndex + 1]) {
+            const nextMsg = allMessages[msgIndex + 1];
+            if (typeof nextMsg.content === 'string' && nextMsg.content.startsWith('[SYSTEM NOTIFICATION]')) {
+                const resMatch = nextMsg.content.match(/Result:\s*([\s\S]*?)(?=\n\nIMPORTANT:|$)/);
+                if (resMatch && !resultStr) {
+                    resultStr = resMatch[1].trim();
+                }
+                if (!toolCommand && resultStr) {
+                    if (resultStr.includes("updated memory category '")) {
+                        const m = resultStr.match(/updated memory category '([^']+)'/);
+                        toolCommand = 'write_memory';
+                        argsStr = m ? m[1] : 'user_profile';
+                    } else if (resultStr.includes("category '") || resultStr.includes("Value for '")) {
+                        const m = resultStr.match(/(?:category|Value for) '([^']+)'/);
+                        toolCommand = 'read_memory';
+                        argsStr = m ? m[1] : 'user_profile';
+                    } else if (resultStr.includes("terminal") || resultStr.includes("Linux") || resultStr.includes("Directory")) {
+                        toolCommand = 'execute_terminal';
+                        argsStr = 'terminal';
+                    }
+                }
+            }
+        }
+
+        if (toolCommand) {
+            const sysBubbleHtml = buildToolTraceHtml(toolCommand, argsStr, resultStr);
             
             if (textWithoutTool === '') {
                 // No thinking block, just a tool call. Remove wrapper and add trace to row.
                 wrapper.remove();
                 row.insertAdjacentHTML('beforeend', sysBubbleHtml);
-            } else if (textWithoutThinkAndTool === '') {
-                // Has thinking block but no other text. Keep wrapper, hide actions, append trace.
-                actions.style.display = 'none';
-                bubble.insertAdjacentHTML('afterend', sysBubbleHtml);
             } else {
+                // Intermediate tool call step: always hide message action footer
+                actions.style.display = 'none';
                 bubble.insertAdjacentHTML('afterend', sysBubbleHtml);
             }
         }
@@ -417,6 +745,19 @@ export function updateMessageActionIcons(actionsContainer, msg, row) {
     };
     actionsContainer.appendChild(copyBtn);
 
+    // Speak / Read Aloud Button
+    if (role === 'assistant' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        const speakBtn = document.createElement('button');
+        speakBtn.className = 'action-icon-btn speak-msg-btn';
+        speakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+        speakBtn.setAttribute('title', 'Read aloud');
+        speakBtn.onclick = async () => {
+            const { speakText } = await import('./voice.js');
+            speakText(copyText, speakBtn);
+        };
+        actionsContainer.appendChild(speakBtn);
+    }
+
     if (meta) {
         const infoBtn = document.createElement('button');
         infoBtn.className = 'action-icon-btn';
@@ -426,8 +767,28 @@ export function updateMessageActionIcons(actionsContainer, msg, row) {
         const popover = document.createElement('div');
         popover.className = 'floating-stats-popover hidden';
         const modelName = meta.modelInfo?.name || state.selectedModel || 'nivm';
-        const roleIcon = meta.modelInfo?.role === 'vision' ? 'fa-eye' : 'fa-code';
-        popover.innerHTML = `<i class="fa-solid ${roleIcon}" style="color:var(--accent-purple);"></i> ${modelName} &bull; <i class="fa-solid fa-bolt" style="color:var(--accent-emerald);"></i> ${meta.durationSec}s &bull; ${meta.tkPerSec} tk/s &bull; ~${meta.estTokens} tokens`;
+        const roleIcon = meta.modelInfo?.role === 'vision' ? 'fa-eye' : (meta.modelInfo?.role === 'api' ? 'fa-network-wired' : 'fa-code');
+        const tokenLabel = meta.isExact ? `${meta.estTokens} tokens${meta.promptTokens ? ` (${meta.promptTokens} prompt)` : ''}` : `~${meta.estTokens} tokens`;
+        popover.innerHTML = `<i class="fa-solid ${roleIcon}" style="color:var(--accent-purple);"></i> ${modelName} &bull; <i class="fa-solid fa-bolt" style="color:var(--accent-emerald);"></i> ${meta.durationSec}s &bull; ${meta.tkPerSec} tk/s &bull; ${tokenLabel}`;
+
+        if (meta.rawTokens && meta.rawTokens.length > 0) {
+            const rawSpan = document.createElement('span');
+            rawSpan.style.marginLeft = '8px';
+            rawSpan.style.cursor = 'pointer';
+            rawSpan.style.opacity = '0.9';
+            rawSpan.style.color = 'var(--accent-cyan)';
+            rawSpan.title = 'Click to copy raw token IDs';
+            rawSpan.innerHTML = `&bull; <i class="fa-solid fa-microchip"></i> [${meta.rawTokens.length} raw IDs]`;
+            rawSpan.onclick = (e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(JSON.stringify(meta.rawTokens));
+                rawSpan.innerHTML = `&bull; <i class="fa-solid fa-check"></i> Copied IDs!`;
+                setTimeout(() => {
+                    rawSpan.innerHTML = `&bull; <i class="fa-solid fa-microchip"></i> [${meta.rawTokens.length} raw IDs]`;
+                }, 2000);
+            };
+            popover.appendChild(rawSpan);
+        }
 
         infoBtn.onmouseenter = () => popover.classList.remove('hidden');
         infoBtn.onmouseleave = () => popover.classList.add('hidden');
@@ -454,9 +815,29 @@ export function updateMessageActionIcons(actionsContainer, msg, row) {
         deleteBtn.onclick = async () => {
             const activeChat = state.conversations.find(c => c.id === state.activeChatId);
             if (activeChat) {
+                const msgUrls = [];
+                if (Array.isArray(msg.content)) {
+                    for (const part of msg.content) {
+                        if (part && typeof part === 'object') {
+                            const u = part.image_url?.url || part.video_url?.url || part.audio_url?.url || part.document_url?.url;
+                            if (u && typeof u === 'string' && u.includes('/uploads/')) {
+                                msgUrls.push(u);
+                            }
+                        }
+                    }
+                }
                 activeChat.messages = activeChat.messages.filter(m => m !== msg);
                 row.remove();
-                const { saveConversations } = await import('./state.js');
+                if (msgUrls.length > 0) {
+                    const remainingUrls = new Set();
+                    state.conversations.forEach(c => {
+                        extractMediaUrlsFromChat(c).forEach(u => remainingUrls.add(u));
+                    });
+                    const urlsToDelete = msgUrls.filter(u => !remainingUrls.has(u));
+                    if (urlsToDelete.length > 0 && window.deleteUploadedFilesAPI) {
+                        window.deleteUploadedFilesAPI(urlsToDelete);
+                    }
+                }
                 saveConversations();
             }
         };
@@ -465,32 +846,21 @@ export function updateMessageActionIcons(actionsContainer, msg, row) {
 }
 
 const thinkingPhrases = [
-    'Honing a thought…',
-    'Musing…',
-    'Brewing something…',
-    'Connecting dots…',
-    'Untangling neurons…',
-    'Simmering ideas…',
-    'Churning the gears…',
-    'Deep in thought…',
-    'Contemplating…',
-    'Weaving logic…',
-    'Channeling insight…',
-    'Parsing the cosmos…',
+    'Thinking…',
+    'Analyzing…',
+    'Processing…',
+    'Reasoning…',
 ];
 let thinkPhraseIndex = 0;
 let thinkPhraseInterval = null;
 
 function getCreativeDuration(seconds) {
-    if (seconds < 1) return 'Blinked and done';
-    if (seconds < 3) return `Quick thought · ${seconds.toFixed(1)}s`;
-    if (seconds < 10) return `Pondered for ${seconds.toFixed(1)}s`;
-    if (seconds < 30) return `Brewed for ${seconds.toFixed(0)}s`;
-    if (seconds < 60) return `Deep-dived for ${seconds.toFixed(0)}s`;
+    if (seconds < 1) return 'Thought for a moment';
+    if (seconds < 3) return `Thought briefly · ${seconds.toFixed(1)}s`;
+    if (seconds < 60) return `Thought for ${seconds.toFixed(1)}s`;
     const mins = Math.floor(seconds / 60);
     const secs = Math.round(seconds % 60);
-    if (mins < 5) return `Meditated for ${mins}m ${secs}s`;
-    return `Was in the zone for ${mins}m ${secs}s`;
+    return `Thought for ${mins}m ${secs}s`;
 }
 
 function startThinkingPhraseRotation() {
@@ -510,56 +880,187 @@ function stopThinkingPhraseRotation() {
     }
 }
 
-export function updateAssistantBubble(bubbleElement, rawText, isGenerating = false, thinkStartTime = null) {
-    let html = '';
-    let processedText = rawText;
+export function updateAssistantBubble(bubbleElement, rawText, isGenerating = false, thinkStartTimeOrDuration = null) {
+    let processedText = rawText || '';
 
-    // Strip local model self-identification prefixes (e.g. "nivm:")
-    processedText = processedText.replace(/^nivm:\s*/i, '');
-    processedText = processedText.replace(/^nivm\n/i, '');
-    processedText = processedText.replace(/(<\/think>\s*)nivm:\s*/i, '$1');
-    processedText = processedText.replace(/(<\/think>\s*)nivm\n/i, '$1');
-    
-    if (processedText.trim() === '') {
-        if (isGenerating) {
-            processedText = '<div style="opacity: 0.6; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-circle-notch fa-spin"></i> <span>Processing...</span></div>';
-        } else {
-            processedText = '*(Empty response)*';
-        }
+    if (processedText.trim() !== '' && bubbleElement.dataset.initialStatus) {
+        delete bubbleElement.dataset.initialStatus;
+        delete bubbleElement.dataset.initialIcon;
     }
 
-    const hasThinkTag = processedText.includes('<think>') || processedText.includes('</think>');
-    if (hasThinkTag) {
+    // Strip local model self-identification prefixes (e.g. "nivm:", "nivm.", "**nivm:**", "Assistant:")
+    // Handle at start of text
+    processedText = processedText.replace(/^\*{0,2}nivm\*{0,2}[\s]*[:.!;\-–—]\s*/i, '');
+    processedText = processedText.replace(/^nivm\s*\n/i, '');
+    processedText = processedText.replace(/^\*{0,2}assistant\*{0,2}[\s]*[:.]\s*/i, '');
+    // Handle after </think> tag
+    processedText = processedText.replace(/(<\/think>\s*)\*{0,2}nivm\*{0,2}[\s]*[:.!;\-–—]\s*/i, '$1');
+    processedText = processedText.replace(/(<\/think>\s*)nivm\s*\n/i, '$1');
+    processedText = processedText.replace(/(<\/think>\s*)\*{0,2}assistant\*{0,2}[\s]*[:.]\s*/i, '$1');
+
+    // Normalize alternative thinking tags to <think>
+    processedText = processedText.replace(/<thought>/gi, '<think>').replace(/<\/thought>/gi, '</think>');
+    processedText = processedText.replace(/<reasoning>/gi, '<think>').replace(/<\/reasoning>/gi, '</think>');
+
+    // If model closed </think> without an explicit opening <think> tag (common with prefilled prompt templates like Qwen), prepend <think>
+    if (processedText.includes('</think>') && !processedText.includes('<think>')) {
+        processedText = '<think>' + processedText;
+    }
+
+    // Hide and strip tool calls from the user UI
+    processedText = stripToolCallFromText(processedText, tools);
+
+    let thinkingHtml = '';
+    let answerText = processedText;
+
+function deduplicateConsecutiveParagraphs(text) {
+    if (!text || typeof text !== 'string') return text;
+    const paragraphs = text.split(/\n\s*\n/);
+    if (paragraphs.length <= 1) return text;
+    const cleanParagraphs = [];
+    for (let i = 0; i < paragraphs.length; i++) {
+        const p = paragraphs[i].trim();
+        if (!p) continue;
+        if (cleanParagraphs.length > 0) {
+            const prev = cleanParagraphs[cleanParagraphs.length - 1];
+            const getWords = (s) => new Set(s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 3));
+            const w1 = getWords(prev);
+            const w2 = getWords(p);
+            if (w1.size >= 6 && w2.size >= 6) {
+                const intersection = new Set([...w1].filter(x => w2.has(x)));
+                const similarity = intersection.size / Math.min(w1.size, w2.size);
+                if (similarity >= 0.70) {
+                    continue;
+                }
+            }
+        }
+        cleanParagraphs.push(p);
+    }
+    return cleanParagraphs.join('\n\n');
+}
+
+    // Keep thoughts collapsed by default unless user has manually opened it during streaming
+    const wasOpen = bubbleElement.querySelector('.thinking-block')?.open || false;
+    const openAttr = wasOpen ? ' open' : '';
+
+    const thinkRegex = /<think>([\s\S]*?)<\/think>/gi;
+    const thinkMatches = [];
+    let tMatch;
+    while ((tMatch = thinkRegex.exec(processedText)) !== null) {
+        if (tMatch[1].trim()) thinkMatches.push(tMatch[1].trim());
+    }
+
+    if (thinkMatches.length > 0) {
         stopThinkingPhraseRotation();
-        processedText = processedText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-        processedText = processedText.replace(/<think>[\s\S]*$/g, '').trim();
+        const thinkContent = thinkMatches.join('\n\n');
+        answerText = processedText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        answerText = answerText.replace(/<think>[\s\S]*$/gi, '').replace(/<\/think>/gi, '').trim();
+        answerText = deduplicateConsecutiveParagraphs(answerText);
+        
+        if (thinkContent) {
+            let thinkDuration = null;
+            if (typeof thinkStartTimeOrDuration === 'number') {
+                if (isGenerating && thinkStartTimeOrDuration > 100000) {
+                    thinkDuration = Math.max(0.1, (performance.now() - thinkStartTimeOrDuration) / 1000);
+                } else {
+                    thinkDuration = thinkStartTimeOrDuration;
+                }
+            } else if (typeof thinkStartTimeOrDuration === 'string') {
+                const parsed = parseFloat(thinkStartTimeOrDuration);
+                if (!isNaN(parsed)) thinkDuration = parsed;
+            }
+            const durationLabel = thinkDuration !== null ? getCreativeDuration(thinkDuration) : 'Thought for a moment';
+            const parsedThink = window.marked ? marked.parse(thinkContent) : escapeHtml(thinkContent);
+            thinkingHtml = `
+            <details class="thinking-block"${openAttr}>
+                <summary class="thinking-summary">
+                    <div class="thinking-summary-left">
+                        <span class="think-icon-badge"><i class="fa-solid fa-brain"></i></span>
+                        <span class="think-status">${durationLabel}</span>
+                    </div>
+                    <div class="thinking-summary-right">
+                        <i class="fa-solid fa-chevron-right think-toggle-icon"></i>
+                    </div>
+                </summary>
+                <div class="thinking-content">${parsedThink}</div>
+            </details>`;
+        }
+    } else if (processedText.includes('<think>')) {
+        stopThinkingPhraseRotation();
+        const parts = processedText.split('<think>');
+        answerText = deduplicateConsecutiveParagraphs(parts[0].trim());
+        const streamingThinkContent = (parts[1] || '').trim();
+        const currentPhrase = thinkingPhrases[thinkPhraseIndex] || 'Thinking…';
+        const parsedStreaming = window.marked && streamingThinkContent ? marked.parse(streamingThinkContent) : escapeHtml(streamingThinkContent);
+        thinkingHtml = `
+        <details class="thinking-block is-streaming"${openAttr}>
+            <summary class="thinking-summary">
+                <div class="thinking-summary-left">
+                    <span class="think-icon-badge streaming"><i class="fa-solid fa-brain"></i></span>
+                    <span class="think-status">${currentPhrase}</span>
+                    <span class="think-stream-indicator">
+                        <span class="think-dot"></span>
+                        <span class="think-dot"></span>
+                        <span class="think-dot"></span>
+                    </span>
+                </div>
+                <div class="thinking-summary-right">
+                    <i class="fa-solid fa-chevron-right think-toggle-icon"></i>
+                </div>
+            </summary>
+            <div class="thinking-content">${parsedStreaming}</div>
+        </details>`;
     } else if (isGenerating && processedText.trim() === '') {
-        startThinkingPhraseRotation();
-        const currentPhrase = thinkingPhrases[thinkPhraseIndex];
-        processedText = `<div class="thinking-block is-streaming" open><div class="thinking-content" style="opacity:0.75;"><i class="fa-solid fa-brain"></i> <span class="think-status">${currentPhrase}</span> <i class="fa-solid fa-spinner fa-spin" style="font-size:0.8em; opacity:0.6;"></i></div></div>`;
+        const pendingStatus = bubbleElement.dataset.initialStatus;
+        const pendingIcon = bubbleElement.dataset.initialIcon;
+        
+        let currentPhrase;
+        let iconHtml;
+        if (pendingStatus) {
+            currentPhrase = pendingStatus;
+            iconHtml = `<i class="fa-solid ${pendingIcon || 'fa-file-lines'}"></i>`;
+        } else {
+            startThinkingPhraseRotation();
+            currentPhrase = thinkingPhrases[thinkPhraseIndex] || 'Thinking…';
+            iconHtml = '<i class="fa-solid fa-brain"></i>';
+        }
+
+        thinkingHtml = `
+        <div class="thinking-block is-streaming">
+            <div class="thinking-summary">
+                <div class="thinking-summary-left">
+                    <span class="think-icon-badge streaming">${iconHtml}</span>
+                    <span class="think-status">${currentPhrase}</span>
+                    <span class="think-stream-indicator">
+                        <span class="think-dot"></span>
+                        <span class="think-dot"></span>
+                        <span class="think-dot"></span>
+                    </span>
+                </div>
+            </div>
+        </div>`;
+        answerText = '';
     } else {
         stopThinkingPhraseRotation();
+        answerText = deduplicateConsecutiveParagraphs(answerText);
     }
 
-    if (!processedText.trim() && !isGenerating) {
-        if (thinkStartTime) {
-            const thinkDuration = (performance.now() - thinkStartTime) / 1000;
-            processedText = `*Reasoned internally for ${getCreativeDuration(thinkDuration).toLowerCase()}*`;
-        } else {
-            processedText = '*(Empty response)*';
+    if (!answerText.trim()) {
+        if (isGenerating && !thinkingHtml) {
+            answerText = '<div style="opacity: 0.6; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-circle-notch fa-spin"></i> <span>Processing...</span></div>';
+        } else if (!isGenerating && !thinkingHtml) {
+            answerText = '*(Empty response)*';
         }
     }
 
-    // Hide TOOL_CALL instructions from the user UI
-    processedText = processedText.replace(/TOOL_CALL:.*$/gm, '').trim();
-
-    if (window.marked && processedText) {
-        html = marked.parse(processedText);
-    } else {
-        html = processedText;
+    let parsedAnswer = '';
+    if (window.marked && answerText) {
+        parsedAnswer = marked.parse(answerText);
+    } else if (answerText) {
+        parsedAnswer = escapeHtml(answerText);
     }
 
-    bubbleElement.innerHTML = html;
+    bubbleElement.innerHTML = thinkingHtml + parsedAnswer;
     attachCodeCopyButtons(bubbleElement);
 }
 
@@ -678,21 +1179,89 @@ export function renderMemoryDrawer() {
         return;
     }
 
+    function getCategoryMeta(key) {
+        const lower = key.toLowerCase();
+        const CATEGORY_META = {
+            user_profile: { label: 'User Profile', icon: 'fa-solid fa-user', color: '#6366f1' },
+            user_hardware: { label: 'User Hardware', icon: 'fa-solid fa-microchip', color: '#10b981' },
+            user_education: { label: 'User Education', icon: 'fa-solid fa-graduation-cap', color: '#3b82f6' },
+            user_university: { label: 'University & Academics', icon: 'fa-solid fa-graduation-cap', color: '#3b82f6' },
+            user_academics: { label: 'User Academics', icon: 'fa-solid fa-graduation-cap', color: '#3b82f6' },
+            user_projects: { label: 'User Projects', icon: 'fa-solid fa-diagram-project', color: '#8b5cf6' },
+            user_preferences: { label: 'User Preferences', icon: 'fa-solid fa-sliders', color: '#f59e0b' },
+            user_work: { label: 'User Career & Work', icon: 'fa-solid fa-briefcase', color: '#06b6d4' },
+            user_career: { label: 'User Career', icon: 'fa-solid fa-briefcase', color: '#06b6d4' },
+            user_relationships: { label: 'User Relationships', icon: 'fa-solid fa-user-group', color: '#f43f5e' },
+            user_friends: { label: 'Friends & Social', icon: 'fa-solid fa-user-group', color: '#f43f5e' },
+            user_family: { label: 'Family & Loved Ones', icon: 'fa-solid fa-heart', color: '#f43f5e' },
+            user_social: { label: 'Social Circle', icon: 'fa-solid fa-user-group', color: '#f43f5e' },
+            user_hobbies: { label: 'User Hobbies', icon: 'fa-solid fa-gamepad', color: '#ec4899' },
+            user_gaming: { label: 'User Gaming', icon: 'fa-solid fa-gamepad', color: '#ec4899' },
+            user_health: { label: 'User Health', icon: 'fa-solid fa-heart-pulse', color: '#ef4444' }
+        };
+
+        if (CATEGORY_META[key]) return CATEGORY_META[key];
+
+        let icon = 'fa-solid fa-bookmark';
+        let color = '#a855f7';
+        if (lower.includes('friend') || lower.includes('relat') || lower.includes('social') || lower.includes('fam') || lower.includes('people') || lower.includes('contact')) {
+            icon = 'fa-solid fa-user-group';
+            color = '#f43f5e';
+        } else if (lower.includes('edu') || lower.includes('uni') || lower.includes('school') || lower.includes('college') || lower.includes('acad')) {
+            icon = 'fa-solid fa-graduation-cap';
+            color = '#3b82f6';
+        } else if (lower.includes('work') || lower.includes('job') || lower.includes('career') || lower.includes('company')) {
+            icon = 'fa-solid fa-briefcase';
+            color = '#06b6d4';
+        } else if (lower.includes('code') || lower.includes('dev') || lower.includes('stack') || lower.includes('proj')) {
+            icon = 'fa-solid fa-diagram-project';
+            color = '#8b5cf6';
+        } else if (lower.includes('game') || lower.includes('hobby') || lower.includes('music') || lower.includes('art')) {
+            icon = 'fa-solid fa-gamepad';
+            color = '#ec4899';
+        } else if (lower.includes('health') || lower.includes('fit') || lower.includes('diet') || lower.includes('sport')) {
+            icon = 'fa-solid fa-heart-pulse';
+            color = '#ef4444';
+        } else if (lower.includes('pref') || lower.includes('set') || lower.includes('style')) {
+            icon = 'fa-solid fa-sliders';
+            color = '#f59e0b';
+        }
+
+        const cleanKey = key.replace(/^user_/i, '').replace(/_/g, ' ');
+        const label = cleanKey.charAt(0).toUpperCase() + cleanKey.slice(1);
+        const fullLabel = key.toLowerCase().startsWith('user_') ? `User ${label}` : label;
+
+        return { label: fullLabel, icon, color };
+    }
+
     keys.forEach(key => {
+        const meta = getCategoryMeta(key);
+
         const item = document.createElement('div');
         item.className = 'chat-history-item';
         item.style.flexDirection = 'column';
         item.style.alignItems = 'flex-start';
         item.style.padding = '12px';
+        item.style.marginBottom = '8px';
         
         const header = document.createElement('div');
         header.style.display = 'flex';
         header.style.alignItems = 'center';
         header.style.justifyContent = 'space-between';
-        header.style.marginBottom = '6px';
+        header.style.width = '100%';
+        header.style.marginBottom = '8px';
         
         const titleSpan = document.createElement('div');
-        titleSpan.innerHTML = `<i class="fa-solid fa-tag" style="margin-right:6px; color:var(--text-tertiary);"></i><strong style="color:var(--text-primary); font-size: 0.9em;">${key}</strong>`;
+        titleSpan.style.display = 'flex';
+        titleSpan.style.alignItems = 'center';
+        titleSpan.style.gap = '8px';
+        titleSpan.innerHTML = `
+            <span style="display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:5px; background:${meta.color}22; color:${meta.color}; font-size:0.8em;">
+                <i class="${meta.icon}"></i>
+            </span>
+            <strong style="color:var(--text-primary); font-size: 0.9em;">${meta.label}</strong>
+            <span style="font-size:0.75em; opacity:0.6; font-family:monospace;">(${key})</span>
+        `;
         
         const deleteBtn = document.createElement('button');
         deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
@@ -701,12 +1270,12 @@ export function renderMemoryDrawer() {
         deleteBtn.style.color = 'var(--text-tertiary)';
         deleteBtn.style.cursor = 'pointer';
         deleteBtn.style.padding = '2px 4px';
-        deleteBtn.title = 'Delete memory key';
+        deleteBtn.title = `Delete ${key} category`;
         deleteBtn.onmouseover = () => deleteBtn.style.color = 'var(--accent-rose)';
         deleteBtn.onmouseout = () => deleteBtn.style.color = 'var(--text-tertiary)';
         deleteBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (await showConfirm('Delete Memory', `Are you sure you want to delete the memory key '${key}'?`)) {
+            if (await showConfirm('Delete Memory Category', `Are you sure you want to delete the '${key}' category?`)) {
                 await import('./api.js').then(m => m.deleteMemoryAPI(key));
                 delete window.__nivm_state.memory[key];
                 renderMemoryDrawer();
@@ -719,14 +1288,21 @@ export function renderMemoryDrawer() {
         const contentPreview = document.createElement('div');
         contentPreview.style.fontSize = '0.85em';
         contentPreview.style.color = 'var(--text-secondary)';
+        contentPreview.style.lineHeight = '1.5';
+        contentPreview.style.padding = '8px 10px';
+        contentPreview.style.background = 'rgba(255, 255, 255, 0.03)';
+        contentPreview.style.borderRadius = '6px';
+        contentPreview.style.border = '1px solid rgba(255, 255, 255, 0.06)';
+        contentPreview.style.width = '100%';
+        contentPreview.style.boxSizing = 'border-box';
         contentPreview.style.whiteSpace = 'pre-wrap';
         contentPreview.textContent = window.__nivm_state.memory[key];
         
         const editBox = document.createElement('div');
-        editBox.style.marginTop = '12px';
+        editBox.style.marginTop = '10px';
         editBox.style.width = '100%';
         editBox.innerHTML = `
-            <input type="text" placeholder="Ask nivm to edit..." class="memory-edit-input" style="width: 100%; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 0.85em;">
+            <input type="text" placeholder="Ask nivm to update this category..." class="memory-edit-input" style="width: 100%; box-sizing: border-box; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 0.85em;">
         `;
         
         const inputEl = editBox.querySelector('input');
@@ -738,15 +1314,15 @@ export function renderMemoryDrawer() {
                     inputEl.value = 'Updating...';
                     
                     const currentValue = window.__nivm_state.memory[key];
-                    const editPrompt = `[SYSTEM INSTRUCTION] The user is using a UI shortcut to edit their memory.
-Target Memory Key: '${key}'
-Current Value: '${currentValue}'
-User's Edit Request: '${text}'
+                    const editPrompt = `[SYSTEM INSTRUCTION] The user is using a UI shortcut to update a long-term memory category.
+Target Category: '${key}'
+Current Category Data: '${currentValue}'
+User's Update Request: '${text}'
 
 INSTRUCTIONS:
-1. Analyze the user's request and determine how it modifies the current value.
-2. MERGE the new information with the current value if appropriate (e.g., if the user adds a nickname, keep the original name and append the nickname). Only replace the value entirely if the user explicitly asks to change or overwrite it.
-3. The user might use conversational filler or slang (e.g., 'you can call me', 'asw', 'also', 'instead'). IGNORE ALL FILLER. Extract ONLY the pure factual information.
+1. Analyze the user's request and update the category '${key}'.
+2. MERGE the new facts cleanly with the existing data (e.g. using ' | ' separators or clear key-value attributes). Prior facts must NOT be erased unless the user explicitly requests to change or delete them.
+3. Ignore all conversational filler (e.g. 'can you add', 'also', 'instead'). Extract ONLY the factual details.
 4. Output EXACTLY ONE tool call: TOOL_CALL: write_memory(${key}, <new_merged_value>)
 5. DO NOT output any other text before or after the tool call.`;
 
@@ -774,9 +1350,14 @@ INSTRUCTIONS:
                         
                         const match = resultText.match(/TOOL_CALL:\s*(read_memory|write_memory)\(([\s\S]*?)\)/);
                         if (match && match[1] === 'write_memory') {
-                            const args = match[2].split(',');
-                            const newKey = args[0].trim();
-                            const newVal = args.slice(1).join(',').trim();
+                            const rawArgs = match[2].trim();
+                            const firstComma = rawArgs.indexOf(',');
+                            let newKey = key;
+                            let newVal = rawArgs;
+                            if (firstComma !== -1) {
+                                newKey = rawArgs.substring(0, firstComma).trim().replace(/['"]/g, '');
+                                newVal = rawArgs.substring(firstComma + 1).trim().replace(/^['"]|['"]$/g, '');
+                            }
                             
                             await fetch('/api/memory', {
                                 method: 'POST',
@@ -866,27 +1447,220 @@ export function renderToolsSettings() {
     });
 }
 
-// --- Custom Dialog System ---
-export function showAlert(title, message) {
+// --- Dropdown Notification System ---
+export function showNotification(options = {}, type = 'info', title = null) {
+    if (typeof options === 'string') {
+        const text = options;
+        const resolvedType = (typeof type === 'string' && ['info', 'success', 'warning', 'error'].includes(type)) ? type : 'info';
+        const defaultTitle = resolvedType === 'success' ? 'Success' : (resolvedType === 'error' ? 'Error' : (resolvedType === 'warning' ? 'Warning' : 'Notice'));
+        options = {
+            message: text,
+            type: resolvedType,
+            title: title || defaultTitle
+        };
+    }
+    
+    let finalTitle = (options && options.title) ? options.title : null;
+    let finalMessage = (options && options.message) ? options.message : '';
+    let rawType = (options && options.type) ? options.type : 'info';
+    const icon = options ? options.icon : null;
+    const duration = (options && typeof options.duration === 'number') ? options.duration : 5000;
+    const actionText = options ? options.actionText : null;
+    const onAction = options ? options.onAction : null;
+    const dismissible = options && options.dismissible !== undefined ? options.dismissible : true;
+
+    const validTypes = ['info', 'success', 'warning', 'error'];
+    const finalType = validTypes.includes(rawType) ? rawType : 'info';
+
+    if (!finalTitle) {
+        finalTitle = finalType === 'success' ? 'Success' : (finalType === 'error' ? 'Error' : (finalType === 'warning' ? 'Warning' : 'Notice'));
+    }
+    // If message was omitted but a custom title was provided, move title to message
+    if (!finalMessage && finalTitle && !['Notice', 'Success', 'Error', 'Warning', 'Info'].includes(finalTitle)) {
+        finalMessage = finalTitle;
+        finalTitle = finalType === 'success' ? 'Success' : (finalType === 'error' ? 'Error' : (finalType === 'warning' ? 'Warning' : 'Notice'));
+    }
+
     return new Promise(resolve => {
-        dom.dialogTitle.textContent = title;
-        dom.dialogMessage.textContent = message;
-        
-        const okBtn = document.createElement('button');
-        okBtn.className = 'btn-primary';
-        okBtn.textContent = 'OK';
-        
-        dom.dialogActions.innerHTML = '';
-        dom.dialogActions.appendChild(okBtn);
-        
-        dom.dialogOverlay.classList.remove('hidden');
-        
-        okBtn.addEventListener('click', () => {
-            dom.dialogOverlay.classList.add('hidden');
-            resolve();
-        });
+        let container = dom.notificationContainer || document.getElementById('notificationContainer');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'notificationContainer';
+            container.className = 'notification-container';
+            document.body.appendChild(container);
+            if (dom) dom.notificationContainer = container;
+        }
+
+        let iconClass = icon;
+        if (!iconClass) {
+            switch (finalType) {
+                case 'success':
+                    iconClass = 'fa-solid fa-circle-check';
+                    break;
+                case 'warning':
+                    iconClass = 'fa-solid fa-triangle-exclamation';
+                    break;
+                case 'error':
+                    iconClass = 'fa-solid fa-circle-exclamation';
+                    break;
+                default:
+                    iconClass = 'fa-solid fa-circle-info';
+                    break;
+            }
+        } else if (!iconClass.startsWith('fa-') && !iconClass.includes(' ')) {
+            iconClass = 'fa-solid ' + iconClass;
+        }
+
+        const notif = document.createElement('div');
+        notif.className = `app-notification notif-${finalType}`;
+
+        const body = document.createElement('div');
+        body.className = 'app-notification-body';
+
+        const iconEl = document.createElement('div');
+        iconEl.className = 'app-notification-icon';
+        iconEl.innerHTML = `<i class="${iconClass}"></i>`;
+
+        const textEl = document.createElement('div');
+        textEl.className = 'app-notification-text';
+
+        const titleEl = document.createElement('span');
+        titleEl.className = 'app-notification-title';
+        titleEl.textContent = finalTitle;
+
+        const subEl = document.createElement('span');
+        subEl.className = 'app-notification-sub';
+        subEl.textContent = finalMessage;
+
+        textEl.appendChild(titleEl);
+        if (finalMessage) textEl.appendChild(subEl);
+
+        body.appendChild(iconEl);
+        body.appendChild(textEl);
+
+        let isDismissed = false;
+        let dismissTimer = null;
+        let remainingTime = duration;
+        let startTime = Date.now();
+
+        function dismiss() {
+            if (isDismissed) return;
+            isDismissed = true;
+            if (dismissTimer) clearTimeout(dismissTimer);
+            notif.classList.add('dismissing');
+            const onEnd = () => {
+                if (notif.parentNode) {
+                    notif.parentNode.removeChild(notif);
+                }
+                resolve();
+            };
+            notif.addEventListener('animationend', onEnd, { once: true });
+            setTimeout(onEnd, 350);
+        }
+
+        if (actionText && typeof onAction === 'function') {
+            const actionBtn = document.createElement('button');
+            actionBtn.className = 'app-notif-action-btn';
+            actionBtn.type = 'button';
+            actionBtn.textContent = actionText;
+            actionBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                try {
+                    onAction();
+                } catch (err) {
+                    console.error('Notification action error:', err);
+                }
+                dismiss();
+            });
+            body.appendChild(actionBtn);
+        }
+
+        if (dismissible) {
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'app-notif-close-btn';
+            closeBtn.type = 'button';
+            closeBtn.title = 'Dismiss';
+            closeBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+            closeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dismiss();
+            });
+            body.appendChild(closeBtn);
+        }
+
+        notif.appendChild(body);
+
+        let progressBar = null;
+        if (duration > 0) {
+            progressBar = document.createElement('div');
+            progressBar.className = 'app-notif-progress';
+            progressBar.style.animationDuration = `${duration}ms`;
+            notif.appendChild(progressBar);
+        }
+
+        // Insert at the beginning of the container so the newest drops down from the top
+        if (container.firstChild) {
+            container.insertBefore(notif, container.firstChild);
+        } else {
+            container.appendChild(notif);
+        }
+
+        function startTimer(timeMs) {
+            if (timeMs <= 0) return;
+            startTime = Date.now();
+            remainingTime = timeMs;
+            dismissTimer = setTimeout(dismiss, timeMs);
+            if (progressBar) {
+                progressBar.style.animationPlayState = 'running';
+            }
+        }
+
+        function pauseTimer() {
+            if (dismissTimer) {
+                clearTimeout(dismissTimer);
+                dismissTimer = null;
+                const elapsed = Date.now() - startTime;
+                remainingTime = Math.max(500, remainingTime - elapsed);
+                if (progressBar) {
+                    progressBar.style.animationPlayState = 'paused';
+                }
+            }
+        }
+
+        if (duration > 0) {
+            startTimer(duration);
+            notif.addEventListener('mouseenter', pauseTimer);
+            notif.addEventListener('mouseleave', () => startTimer(remainingTime));
+        }
     });
 }
+
+// Custom Alert System - now routed through the sleek Dropdown Notification
+export function showAlert(title, message, type = null) {
+    let resolvedType = type;
+    if (!resolvedType) {
+        const text = `${title || ''} ${message || ''}`.toLowerCase();
+        if (text.includes('error') || text.includes('failed') || text.includes('failure') || text.includes('exception') || text.includes('unavailable')) {
+            resolvedType = 'error';
+        } else if (text.includes('success') || text.includes('finished') || text.includes('completed') || text.includes('saved')) {
+            resolvedType = 'success';
+        } else if (text.includes('warning') || text.includes('notice') || text.includes('caution') || text.includes('alert')) {
+            resolvedType = 'warning';
+        } else {
+            resolvedType = 'info';
+        }
+    }
+    const duration = resolvedType === 'error' ? 7000 : 5000;
+    return showNotification({
+        title,
+        message,
+        type: resolvedType,
+        duration
+    });
+}
+
+window.showNotification = showNotification;
+window.showAlert = showAlert;
 
 export function showConfirm(title, message) {
     return new Promise(resolve => {
@@ -977,27 +1751,100 @@ export function setupHistoryUI() {
     }
 }
 
+export function isMultimodalModel(model = '', endpoint = '') {
+    const m = (model || '').toLowerCase();
+    const ep = (endpoint || '').toLowerCase();
+    if (ep.includes('googleapis.com') || ep.includes('generativelanguage')) return true;
+    if (m.includes('gemini')) return true;
+    if (m.includes('gpt-4o') || m.includes('gpt-4-turbo') || m.includes('gpt-4-vision') || m.includes('chatgpt-4o')) return true;
+    if (m.includes('claude-3') || m.includes('pixtral') || m.includes('llava') || m.includes('vision') || m.includes('-vl') || m.includes('_vl') || m.includes('minicpm-v') || m.includes('internvl') || m.includes('ovis') || m.includes('qwen-vl')) return true;
+    return false;
+}
+window.isMultimodalModel = isMultimodalModel;
+
+export function isVisionSupported() {
+    if (state.inferenceMode === 'api') {
+        if (state.apiMultimodal !== undefined && state.apiMultimodal !== null) {
+            return Boolean(state.apiMultimodal);
+        }
+        const model = (state.selectedModel || dom.apiModelInput?.value || '').toLowerCase();
+        const endpoint = (dom.apiChatUrl?.value || dom.apiBaseUrl?.value || '').toLowerCase();
+        return isMultimodalModel(model, endpoint);
+    }
+    if (state.inferenceMode === 'routing') {
+        return true;
+    }
+    if (state.inferenceMode === 'single') {
+        const role = dom.singleModelRoleSelect ? dom.singleModelRoleSelect.value : (state.selectedModel || 'custom');
+        if (role === 'vision') return true;
+        if (role === 'custom') {
+            const mmproj = (state.customMmprojPath || '').trim();
+            return Boolean(mmproj && mmproj.toLowerCase() !== 'none');
+        }
+        return false;
+    }
+    return false;
+}
+window.isVisionSupported = isVisionSupported;
+
+export function setVisionEnabled(enabled) {
+    if (!isVisionSupported()) {
+        enabled = false;
+    }
+    state.visionEnabled = !!enabled;
+    updateVisionAvailabilityUI();
+}
+window.setVisionEnabled = setVisionEnabled;
+
+export function updateVisionAvailabilityUI() {
+    const supported = isVisionSupported();
+    if (dom.visionToggleBtn) {
+        if (!supported) {
+            dom.visionToggleBtn.disabled = true;
+            dom.visionToggleBtn.classList.add('disabled');
+            dom.visionToggleBtn.classList.remove('active');
+            dom.visionToggleBtn.title = state.inferenceMode === 'api'
+                ? "Vision is disabled for this API provider/model (Enable Multimodal in API Settings)"
+                : "Vision is unavailable (No mmproj projector configured for this model)";
+            state.visionEnabled = false;
+            if (dom.attachImgBtn) dom.attachImgBtn.classList.add('hidden');
+            if (dom.micRecordBtn) dom.micRecordBtn.classList.add('hidden');
+            clearAttachedImage();
+        } else {
+            dom.visionToggleBtn.disabled = false;
+            dom.visionToggleBtn.classList.remove('disabled');
+            if (state.visionEnabled) {
+                dom.visionToggleBtn.classList.add('active');
+                dom.visionToggleBtn.title = "Vision is active (Multimodal enabled)";
+                if (dom.attachImgBtn) dom.attachImgBtn.classList.remove('hidden');
+                if (dom.micRecordBtn) dom.micRecordBtn.classList.remove('hidden');
+            } else {
+                dom.visionToggleBtn.classList.remove('active');
+                dom.visionToggleBtn.title = "Enable Vision (Multimodal)";
+                if (dom.attachImgBtn) dom.attachImgBtn.classList.add('hidden');
+                if (dom.micRecordBtn) dom.micRecordBtn.classList.add('hidden');
+            }
+        }
+    }
+}
+window.updateVisionAvailabilityUI = updateVisionAvailabilityUI;
+
 export function setupVisionUI() {
     if (dom.visionToggleBtn) {
         dom.visionToggleBtn.addEventListener('click', () => {
-            state.visionEnabled = !state.visionEnabled;
-            if (state.visionEnabled) {
-                dom.visionToggleBtn.classList.add('active');
-                if (dom.attachImgBtn) dom.attachImgBtn.classList.remove('hidden');
-            } else {
-                dom.visionToggleBtn.classList.remove('active');
-                if (dom.attachImgBtn) dom.attachImgBtn.classList.add('hidden');
-                clearAttachedImage();
-            }
+            if (state.inferenceMode === 'api' && !isVisionSupported()) return;
+            setVisionEnabled(!state.visionEnabled);
         });
     }
 
     if (dom.attachImgBtn && dom.imageUploadInput) {
         dom.attachImgBtn.addEventListener('click', () => {
+            if (state.inferenceMode === 'api' && !isVisionSupported()) return;
             dom.imageUploadInput.click();
         });
 
         dom.imageUploadInput.addEventListener('change', (e) => {
+            if (state.inferenceMode === 'api' && !isVisionSupported()) return;
             handleImageFiles(e.target.files);
         });
     }
@@ -1005,7 +1852,7 @@ export function setupVisionUI() {
     // Paste support
     if (dom.userPrompt) {
         dom.userPrompt.addEventListener('paste', (e) => {
-            if (!state.visionEnabled) return;
+            if ((state.inferenceMode === 'api' && !isVisionSupported()) || !state.visionEnabled) return;
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
             const files = [];
             for (let item of items) {
@@ -1032,7 +1879,7 @@ export function setupVisionUI() {
     });
 
     document.body.addEventListener('drop', (e) => {
-        if (!state.visionEnabled) return;
+        if ((state.inferenceMode === 'api' && !isVisionSupported()) || !state.visionEnabled) return;
         const dt = e.dataTransfer;
         const files = [];
         if (dt.files && dt.files.length > 0) {
@@ -1058,6 +1905,10 @@ window.removeAttachedImage = function(index) {
 };
 
 function handleImageFiles(files) {
+    if (state.inferenceMode === 'api' && !isVisionSupported()) {
+        showNotification('Current API provider/model is text-only. Enable Multimodal in API Settings to attach files.', 'warning');
+        return;
+    }
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         state.attachedImages.push({
@@ -1069,51 +1920,282 @@ function handleImageFiles(files) {
     renderImagePreviews();
 }
 
+let currentPreviewAudio = null;
+
+function buildAudioPreviewPill(imgObj, index) {
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'image-preview-item preview-audio-pill';
+    
+    const fileName = imgObj.file?.name || 'audio';
+    const isRecording = fileName.startsWith('recording_');
+    const displayName = isRecording ? 'Voice recording' : fileName;
+    
+    // Play button on the left
+    const playBtn = document.createElement('button');
+    playBtn.className = 'preview-audio-play';
+    playBtn.type = 'button';
+    playBtn.title = 'Play preview';
+    playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+    
+    // Info container in the middle
+    const info = document.createElement('div');
+    info.className = 'preview-audio-info';
+    
+    const metaRow = document.createElement('div');
+    metaRow.className = 'preview-audio-meta';
+    
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'preview-audio-name';
+    nameSpan.textContent = displayName.length > 20 ? displayName.substring(0, 18) + '...' : displayName;
+    nameSpan.title = fileName;
+    
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'preview-audio-time';
+    timeSpan.textContent = '0:00';
+    
+    metaRow.appendChild(nameSpan);
+    metaRow.appendChild(timeSpan);
+    
+    const waveWrap = document.createElement('div');
+    waveWrap.className = 'preview-waveform-wrap';
+    
+    const canvas = document.createElement('canvas');
+    canvas.className = 'preview-waveform-canvas';
+    waveWrap.appendChild(canvas);
+    
+    info.appendChild(metaRow);
+    info.appendChild(waveWrap);
+    
+    const audio = new Audio(imgObj.url);
+    audio.preload = 'metadata';
+    let bars = [];
+    let animFrame = null;
+    const numBars = 26;
+    
+    const formatTime = (s) => {
+        if (!s || isNaN(s) || !isFinite(s)) return '0:00';
+        const m = Math.floor(s / 60);
+        const sec = Math.floor(s % 60);
+        return `${m}:${sec < 10 ? '0' : ''}${sec}`;
+    };
+    
+    const generateBars = async () => {
+        try {
+            const response = await fetch(imgObj.url);
+            const arrayBuffer = await response.arrayBuffer();
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+            const rawData = decoded.getChannelData(0);
+            const blockSize = Math.floor(rawData.length / numBars);
+            bars = [];
+            for (let i = 0; i < numBars; i++) {
+                let sum = 0;
+                for (let j = 0; j < blockSize; j++) {
+                    sum += Math.abs(rawData[i * blockSize + j]);
+                }
+                bars.push(sum / blockSize);
+            }
+            const maxVal = Math.max(...bars) || 1;
+            bars = bars.map(b => Math.max(0.12, b / maxVal));
+            audioCtx.close();
+        } catch (e) {
+            bars = Array.from({ length: numBars }, () => 0.15 + Math.random() * 0.85);
+        }
+        drawWaveform();
+    };
+    
+    const drawWaveform = () => {
+        const dpr = window.devicePixelRatio || 1;
+        const w = waveWrap.clientWidth || 140;
+        const h = 18;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, w, h);
+        
+        if (bars.length === 0) return;
+        
+        const barW = Math.max(2, (w / bars.length) * 0.55);
+        const gap = w / bars.length;
+        const duration = isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 1;
+        const progress = audio.currentTime / duration;
+        const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent-color').trim() || '#f4f4f5';
+        
+        bars.forEach((val, i) => {
+            const barH = Math.max(3, val * (h - 2));
+            const x = i * gap + (gap - barW) / 2;
+            const y = (h - barH) / 2;
+            const barProgress = (i + 0.5) / bars.length;
+            
+            ctx.beginPath();
+            if (ctx.roundRect) {
+                ctx.roundRect(x, y, barW, barH, 1);
+            } else {
+                ctx.rect(x, y, barW, barH);
+            }
+            ctx.fillStyle = barProgress <= progress ? accentColor : 'rgba(255, 255, 255, 0.2)';
+            ctx.fill();
+        });
+    };
+    
+    const animLoop = () => {
+        drawWaveform();
+        if (isFinite(audio.duration) && audio.duration > 0) {
+            timeSpan.textContent = `${formatTime(audio.currentTime)} / ${formatTime(audio.duration)}`;
+        } else {
+            timeSpan.textContent = formatTime(audio.currentTime);
+        }
+        if (!audio.paused) {
+            animFrame = requestAnimationFrame(animLoop);
+        }
+    };
+    
+    playBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (audio.paused) {
+            if (currentPreviewAudio && currentPreviewAudio !== audio) {
+                currentPreviewAudio.pause();
+            }
+            currentPreviewAudio = audio;
+            audio.play().then(() => {
+                playBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+                playBtn.classList.add('playing');
+                animLoop();
+            }).catch(err => console.warn('Preview audio play error:', err));
+        } else {
+            audio.pause();
+            playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+            playBtn.classList.remove('playing');
+            if (animFrame) cancelAnimationFrame(animFrame);
+        }
+    };
+    
+    audio.onended = () => {
+        playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+        playBtn.classList.remove('playing');
+        if (animFrame) cancelAnimationFrame(animFrame);
+        drawWaveform();
+        if (isFinite(audio.duration) && audio.duration > 0) {
+            timeSpan.textContent = formatTime(audio.duration);
+        }
+    };
+    
+    audio.onloadedmetadata = () => {
+        if (isFinite(audio.duration) && audio.duration > 0) {
+            timeSpan.textContent = formatTime(audio.duration);
+        }
+    };
+    
+    waveWrap.onclick = (e) => {
+        e.stopPropagation();
+        if (!isFinite(audio.duration) || audio.duration <= 0) return;
+        const rect = waveWrap.getBoundingClientRect();
+        const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        audio.currentTime = frac * audio.duration;
+        drawWaveform();
+        timeSpan.textContent = `${formatTime(audio.currentTime)} / ${formatTime(audio.duration)}`;
+    };
+    
+    generateBars();
+    
+    // Remove button on the right (flex item, non-overlapping)
+    const rmBtn = document.createElement('button');
+    rmBtn.className = 'remove-image-btn';
+    rmBtn.type = 'button';
+    rmBtn.title = 'Remove';
+    rmBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+    rmBtn.onclick = (e) => {
+        e.stopPropagation();
+        audio.pause();
+        audio.src = '';
+        if (animFrame) cancelAnimationFrame(animFrame);
+        if (currentPreviewAudio === audio) currentPreviewAudio = null;
+        window.removeAttachedImage(index);
+    };
+    
+    itemDiv.appendChild(playBtn);
+    itemDiv.appendChild(info);
+    itemDiv.appendChild(rmBtn);
+    
+    return itemDiv;
+}
+
 function renderImagePreviews() {
     if (!dom.imagePreviewContainer) return;
+    
+    if (currentPreviewAudio) {
+        try {
+            currentPreviewAudio.pause();
+            currentPreviewAudio.src = '';
+        } catch (e) {}
+        currentPreviewAudio = null;
+    }
     
     dom.imagePreviewContainer.innerHTML = '';
     
     if (state.attachedImages.length > 0) {
         state.attachedImages.forEach((imgObj, index) => {
+            const isAudio = imgObj.type && imgObj.type.startsWith('audio/');
+            
+            if (isAudio) {
+                const audioPill = buildAudioPreviewPill(imgObj, index);
+                dom.imagePreviewContainer.appendChild(audioPill);
+                return;
+            }
+            
             const itemDiv = document.createElement('div');
             itemDiv.className = 'image-preview-item';
             
             const isVideo = imgObj.type && imgObj.type.startsWith('video/');
-            const isAudio = imgObj.type && imgObj.type.startsWith('audio/');
             const isPdf = imgObj.type === 'application/pdf' || imgObj.file.name.toLowerCase().endsWith('.pdf');
+            const fileName = imgObj.file?.name || 'file';
             
-            let media;
-            if (isAudio) {
-                media = document.createElement('audio');
-                media.controls = true;
-                media.style.width = '200px';
-                media.style.height = '40px';
-                media.style.borderRadius = '8px';
-                media.style.outline = 'none';
-            } else if (isPdf) {
-                media = document.createElement('div');
-                media.textContent = `PDF: ${imgObj.file.name}`;
-                media.style.padding = '18px 12px';
-                media.style.maxWidth = '220px';
-                media.style.color = 'var(--text-primary)';
+            if (isPdf) {
+                // PDF card
+                itemDiv.className = 'image-preview-item preview-doc-pill';
+                const icon = document.createElement('div');
+                icon.className = 'preview-doc-icon';
+                icon.innerHTML = '<i class="fa-solid fa-file-pdf"></i>';
+                const label = document.createElement('span');
+                label.className = 'preview-doc-name';
+                label.textContent = fileName.length > 20 ? fileName.substring(0, 17) + '...' : fileName;
+                label.title = fileName;
+                itemDiv.appendChild(icon);
+                itemDiv.appendChild(label);
+            } else if (isVideo) {
+                // Video thumbnail with play overlay
+                itemDiv.className = 'image-preview-item preview-video-thumb';
+                const vid = document.createElement('video');
+                vid.src = imgObj.url;
+                vid.muted = true;
+                vid.preload = 'metadata';
+                vid.playsInline = true;
+                vid.addEventListener('loadeddata', () => { vid.currentTime = 0.1; }, { once: true });
+                const playIcon = document.createElement('div');
+                playIcon.className = 'preview-video-play';
+                playIcon.innerHTML = '<i class="fa-solid fa-play"></i>';
+                // Type badge
+                const badge = document.createElement('span');
+                badge.className = 'preview-type-badge';
+                badge.textContent = '🎥';
+                itemDiv.appendChild(vid);
+                itemDiv.appendChild(playIcon);
+                itemDiv.appendChild(badge);
             } else {
-                media = document.createElement(isVideo ? 'video' : 'img');
-                if (isVideo) {
-                    media.autoplay = true;
-                    media.muted = true;
-                    media.loop = true;
-                    media.playsInline = true;
-                }
+                // Image thumbnail
+                const img = document.createElement('img');
+                img.src = imgObj.url;
+                itemDiv.appendChild(img);
             }
-            media.src = imgObj.url;
             
             const rmBtn = document.createElement('button');
             rmBtn.className = 'remove-image-btn';
+            rmBtn.type = 'button';
+            rmBtn.title = 'Remove';
             rmBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
             rmBtn.onclick = () => window.removeAttachedImage(index);
             
-            itemDiv.appendChild(media);
             itemDiv.appendChild(rmBtn);
             dom.imagePreviewContainer.appendChild(itemDiv);
         });
@@ -1124,6 +2206,13 @@ function renderImagePreviews() {
 }
 
 export function clearAttachedImage() {
+    if (currentPreviewAudio) {
+        try {
+            currentPreviewAudio.pause();
+            currentPreviewAudio.src = '';
+        } catch (e) {}
+        currentPreviewAudio = null;
+    }
     if (state.attachedImages) {
         state.attachedImages.forEach(img => URL.revokeObjectURL(img.url));
     }
@@ -1133,6 +2222,78 @@ export function clearAttachedImage() {
     if (dom.imageUploadInput) {
         dom.imageUploadInput.value = '';
     }
+}
+
+// ---------- Audio Recording ----------
+let mediaRecorder = null;
+let recordedChunks = [];
+
+export function setupAudioRecording() {
+    if (!dom.micRecordBtn) return;
+    
+    dom.micRecordBtn.addEventListener('click', async () => {
+        if (state.inferenceMode === 'api' && !isVisionSupported()) return;
+        
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            // Stop recording
+            mediaRecorder.stop();
+            return;
+        }
+        
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            recordedChunks = [];
+            
+            // Prefer webm, fallback to whatever is available
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                ? 'audio/webm;codecs=opus'
+                : MediaRecorder.isTypeSupported('audio/webm')
+                    ? 'audio/webm'
+                    : '';
+            
+            mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+            
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) recordedChunks.push(e.data);
+            };
+            
+            mediaRecorder.onstop = () => {
+                // Stop all tracks
+                stream.getTracks().forEach(t => t.stop());
+                
+                const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+                const ext = (mediaRecorder.mimeType || '').includes('webm') ? '.webm' : '.wav';
+                const file = new File([blob], `recording_${Date.now()}${ext}`, { type: blob.type });
+                
+                state.attachedImages.push({
+                    file: file,
+                    type: blob.type,
+                    url: URL.createObjectURL(blob)
+                });
+                renderImagePreviews();
+                
+                dom.micRecordBtn.classList.remove('recording');
+                dom.micRecordBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+                mediaRecorder = null;
+            };
+            
+            mediaRecorder.onerror = () => {
+                stream.getTracks().forEach(t => t.stop());
+                dom.micRecordBtn.classList.remove('recording');
+                dom.micRecordBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+                showNotification('Recording failed.', 'error');
+                mediaRecorder = null;
+            };
+            
+            mediaRecorder.start();
+            dom.micRecordBtn.classList.add('recording');
+            dom.micRecordBtn.innerHTML = '<i class="fa-solid fa-stop"></i>';
+            
+        } catch (e) {
+            console.error('Mic access denied:', e);
+            showNotification('Microphone access denied. Check browser permissions.', 'error');
+        }
+    });
 }
 
 let lbScale = 1;

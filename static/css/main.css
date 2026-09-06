@@ -43,3 +43,22 @@
 .thinking-toggle-btn.active i {
     text-shadow: 0 0 10px var(--accent-purple);
 }
+
+.thinking-toggle-btn:disabled,
+.thinking-toggle-btn.disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    border-color: rgba(255, 255, 255, 0.04);
+    background: rgba(255, 255, 255, 0.01);
+    color: var(--text-muted);
+    box-shadow: none !important;
+    text-shadow: none !important;
+}
+
+.thinking-toggle-btn:disabled:hover,
+.thinking-toggle-btn.disabled:hover {
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.01);
+    border-color: rgba(255, 255, 255, 0.04);
+    box-shadow: none;
+}

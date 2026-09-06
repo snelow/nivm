@@ -777,6 +777,24 @@
     opacity: 0.95;
 }
 
+/* Perlin Noise Flow Field */
+.flowfield-layer {
+    width: 100vw;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    z-index: -2;
+    opacity: 0;
+    background-color: var(--bg-black);
+    transition: opacity 0.8s ease;
+}
+
+.flowfield-layer.active {
+    opacity: 1;
+}
+
 .blackhole-container {
     position: absolute;
     right: -5%;

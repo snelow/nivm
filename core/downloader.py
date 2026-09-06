@@ -19,7 +19,8 @@ from typing import Optional, Dict, Any
 
 logger = logging.getLogger("model_downloader")
 
-MODELS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "models"))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODELS_DIR = os.path.abspath(os.path.join(PROJECT_ROOT, "models"))
 WORKER_SCRIPT = os.path.abspath(os.path.join(os.path.dirname(__file__), "download_worker.py"))
 STATUS_FILE = os.path.abspath(os.path.join(MODELS_DIR, ".download_status.json"))
 

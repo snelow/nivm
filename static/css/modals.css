@@ -2823,9 +2823,31 @@ body.site-glitch-active {
 }
 
 .bleh-easter-egg-container.reze-boom-active .bleh-pixel-avatar {
+    background: rgba(18, 10, 15, 0.95);
     border-color: #ff3838 !important;
-    box-shadow: 0 0 26px rgba(255, 56, 56, 0.9), 0 0 0 3px #ff1a00 !important;
+    box-shadow: 0 0 28px rgba(255, 56, 56, 0.95), 0 0 0 3px #ff1a00 !important;
     animation: rezeAvatarVibrate 0.3s ease infinite alternate;
+}
+
+/* Reze Form Toggling (Human vs Bomb Devil) */
+.bleh-easter-egg-container .reze-human-svg {
+    display: block;
+}
+.bleh-easter-egg-container .reze-bomb-svg {
+    display: none;
+}
+
+.bleh-easter-egg-container.reze-boom-active .reze-human-svg {
+    display: none;
+}
+.bleh-easter-egg-container.reze-boom-active .reze-bomb-svg {
+    display: block;
+    animation: rezeBombPulse 0.4s ease-in-out infinite alternate;
+}
+
+@keyframes rezeBombPulse {
+    0% { transform: scale(1) translateY(0); filter: drop-shadow(0 0 3px rgba(255, 68, 0, 0.5)); }
+    100% { transform: scale(1.06) translateY(-2px); filter: drop-shadow(0 0 10px rgba(255, 68, 0, 0.95)); }
 }
 
 @keyframes boomBubblePulse {
@@ -2837,6 +2859,7 @@ body.site-glitch-active {
     0% { transform: scale(1) rotate(-1.5deg); }
     100% { transform: scale(1.08) rotate(2deg); }
 }
+
 
 
 

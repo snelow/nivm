@@ -252,6 +252,7 @@ export function updateChatInputState(activeChat) {
         delete activeChat.pendingAppealText;
     }
 
+    const resumeBtnEl = dom.convoEndedResumeBtn || document.getElementById('convoEndedResumeBtn');
     if (resumeBtnEl) {
         resumeBtnEl.innerHTML = '<i class="fa-solid fa-unlock"></i> Resume';
         resumeBtnEl.disabled = false;

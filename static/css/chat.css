@@ -177,8 +177,8 @@
     font-family: var(--font-chat);
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    padding-bottom: 20px;
+    gap: 20px;
+    padding-bottom: 24px;
 }
 
 .message-row {
@@ -187,12 +187,12 @@
     animation: messageReveal 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* Tightly group consecutive assistant steps, tool calls, and thoughts in a multi-step chain */
+/* Cleanly group consecutive assistant steps, tool calls, and thoughts in a multi-step chain */
 .message-row.assistant-row + .message-row.assistant-row,
 .message-row.assistant-row + .tool-trace-block,
 .tool-trace-block + .message-row.assistant-row,
 .tool-trace-block + .tool-trace-block {
-    margin-top: -14px;
+    margin-top: -6px;
 }
 
 @keyframes messageReveal {
@@ -280,9 +280,10 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-top: 6px;
+    margin-top: 8px;
     padding-left: 4px;
     position: relative;
+    min-height: 32px;
 }
 
 .action-icon-btn {

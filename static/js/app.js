@@ -495,8 +495,13 @@ When the user attaches an image or video of a person and asks to describe, analy
                 // Hide action buttons immediately during intermediate tool steps
                 if (actionsContainer) actionsContainer.style.display = 'none';
 
-                // Keep the exact content including TOOL_CALL so history preserves it
-                assistantMsg.content = fullResponse.substring(0, interceptedToolCall.index + interceptedToolCall.fullMatch.length);
+                // Keep the exact content including TOOL_CALL so history preserves it.
+                // If model started thinking but emitted a tool call without closing </think>, seal the thought properly.
+                let preToolText = fullResponse.substring(0, interceptedToolCall.index);
+                if (preToolText.includes('<think>') && !preToolText.includes('</think>')) {
+                    preToolText = preToolText.trim() + '\n</think>\n';
+                }
+                assistantMsg.content = preToolText + fullResponse.substring(interceptedToolCall.index, interceptedToolCall.index + interceptedToolCall.fullMatch.length);
                 if (thinkDurationSec !== null) {
                     assistantMsg.thinkTime = thinkDurationSec;
                 }
@@ -579,6 +584,7 @@ When the user attaches an image or video of a person and asks to describe, analy
 
                     updateAssistantBubble(assistantBubble, cleanResponse, false, assistantMsg.thinkTime || thinkStartTime);
                     updateMessageActionIcons(actionsContainer, assistantMsg, assistantBubble.closest('.message-row'));
+                    if (actionsContainer) actionsContainer.style.display = '';
                     saveConversations();
 
                     // Generate AI chat title for the first message turn or if title is still a temporary placeholder

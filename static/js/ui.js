@@ -636,11 +636,10 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
 
     const actions = document.createElement('div');
     actions.className = 'message-actions';
+    updateMessageActionIcons(actions, msg, row);
     if (isStreaming) {
         actions.style.display = 'none';
     }
-    
-    updateMessageActionIcons(actions, msg, row);
 
     wrapper.appendChild(bubble);
     wrapper.appendChild(actions); // Render actions for all roles (including user/system) for the delete button
@@ -735,7 +734,9 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
 }
 
 export function updateMessageActionIcons(actionsContainer, msg, row) {
+    if (!actionsContainer) return;
     actionsContainer.innerHTML = '';
+    actionsContainer.style.display = '';
     const { role, content, meta } = msg;
     const copyText = getMessageText(content);
 
@@ -966,11 +967,7 @@ function deduplicateConsecutiveParagraphs(text) {
         answerText = answerText.replace(/<think>[\s\S]*$/gi, '').replace(/<\/think>/gi, '').trim();
         answerText = deduplicateConsecutiveParagraphs(answerText);
         
-        // If the model put its entire text inside <think> and output zero text outside,
-        // promote it to answerText so the user is never left with an empty bubble or hidden reply!
-        if (!isGenerating && answerText === '' && thinkContent) {
-            answerText = thinkContent;
-        } else if (thinkContent) {
+        if (thinkContent) {
             let thinkDuration = null;
             if (typeof thinkStartTimeOrDuration === 'number') {
                 if (isGenerating && thinkStartTimeOrDuration > 100000) {
@@ -1025,11 +1022,39 @@ function deduplicateConsecutiveParagraphs(text) {
         </details>`;
     } else if (!isGenerating && processedText.includes('<think>')) {
         // Generation completed with an unclosed <think> tag:
-        // Strip the dangling <think> tag so the model's text renders cleanly as the visible response
+        // Automatically enclose the thoughts in a thinking dropdown so they never leak into answerText
         stopThinkingPhraseRotation();
-        const cleanContent = processedText.replace(/<\/?think>/gi, '').trim();
-        answerText = deduplicateConsecutiveParagraphs(cleanContent);
-        thinkingHtml = '';
+        const parts = processedText.split('<think>');
+        answerText = deduplicateConsecutiveParagraphs(parts[0].trim());
+        const thinkContent = (parts[1] || '').trim();
+        if (thinkContent) {
+            let thinkDuration = null;
+            if (typeof thinkStartTimeOrDuration === 'number') {
+                if (thinkStartTimeOrDuration > 100000) {
+                    thinkDuration = Math.max(0.1, (performance.now() - thinkStartTimeOrDuration) / 1000);
+                } else {
+                    thinkDuration = thinkStartTimeOrDuration;
+                }
+            } else if (typeof thinkStartTimeOrDuration === 'string') {
+                const parsed = parseFloat(thinkStartTimeOrDuration);
+                if (!isNaN(parsed)) thinkDuration = parsed;
+            }
+            const durationLabel = thinkDuration !== null ? getCreativeDuration(thinkDuration) : 'Thought for a moment';
+            const parsedThink = window.marked ? marked.parse(thinkContent) : escapeHtml(thinkContent);
+            thinkingHtml = `
+            <details class="thinking-block"${openAttr}>
+                <summary class="thinking-summary">
+                    <div class="thinking-summary-left">
+                        <span class="think-icon-badge"><i class="fa-solid fa-brain"></i></span>
+                        <span class="think-status">${durationLabel}</span>
+                    </div>
+                    <div class="thinking-summary-right">
+                        <i class="fa-solid fa-chevron-right think-toggle-icon"></i>
+                    </div>
+                </summary>
+                <div class="thinking-content">${parsedThink}</div>
+            </details>`;
+        }
     } else if (isGenerating && processedText.trim() === '') {
         const pendingStatus = bubbleElement.dataset.initialStatus;
         const pendingIcon = bubbleElement.dataset.initialIcon;
@@ -1092,8 +1117,8 @@ function deduplicateConsecutiveParagraphs(text) {
     } else {
         bubbleElement.style.display = '';
         const actionsEl = bubbleElement.closest('.message-wrapper')?.querySelector('.message-actions');
-        if (actionsEl && isGenerating) {
-            actionsEl.style.display = 'none';
+        if (actionsEl) {
+            actionsEl.style.display = isGenerating ? 'none' : '';
         }
     }
 

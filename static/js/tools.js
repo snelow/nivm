@@ -344,40 +344,66 @@ export function parseToolCall(text, activeTools = tools) {
 
     if (!actionableText) return null;
 
-    // 2. Check for explicit TOOL_CALL: prefix anywhere in actionableText
     const explicitRegex = new RegExp(`(?:TOOL_CALL:|tool_call:|call:)\\s*(${toolNamesPattern})\\s*\\(([\\s\\S]*?)\\)`, 'i');
-    let match = actionableText.match(explicitRegex);
-    if (match) {
-        return {
-            command: match[1].toLowerCase(),
-            argsStr: match[2].trim(),
-            fullMatch: match[0],
-            index: text.indexOf(match[0])
-        };
-    }
-
-    // 3. Check for XML format: <function=name> ... <parameter=...
     const xmlRegex = new RegExp(`<function=(${toolNamesPattern})>[\\s\\S]*?<parameter=[^>]*>([\\s\\S]*?)<\\/parameter>`, 'i');
-    let xmlMatch = actionableText.match(xmlRegex);
-    if (xmlMatch) {
-        const fullXml = actionableText.match(/<tool_call>[\s\S]*?<\/tool_call>/i);
-        const matchedSnippet = fullXml ? fullXml[0] : xmlMatch[0];
+
+    // 2. Check for explicit TOOL_CALL: prefix anywhere in actionableText
+    if (actionableText) {
+        let match = actionableText.match(explicitRegex);
+        if (match) {
+            return {
+                command: match[1].toLowerCase(),
+                argsStr: match[2].trim(),
+                fullMatch: match[0],
+                index: text.indexOf(match[0])
+            };
+        }
+
+        // 3. Check for XML format: <function=name> ... <parameter=...
+        let xmlMatch = actionableText.match(xmlRegex);
+        if (xmlMatch) {
+            const fullXml = actionableText.match(/<tool_call>[\s\S]*?<\/tool_call>/i);
+            const matchedSnippet = fullXml ? fullXml[0] : xmlMatch[0];
+            return {
+                command: xmlMatch[1].toLowerCase(),
+                argsStr: xmlMatch[2].trim(),
+                fullMatch: matchedSnippet,
+                index: text.indexOf(matchedSnippet)
+            };
+        }
+
+        // 4. Check for direct tool call outside <think> (e.g. read_memory(user_profile) or `read_memory(...)`)
+        const directRegex = new RegExp(`(?:^|\\n|[\`\\s])\\s*(${toolNamesPattern})\\s*\\(([\\s\\S]*?)\\)(?:[\`\\s]|$)`, 'i');
+        let directMatch = actionableText.match(directRegex);
+        if (directMatch) {
+            const matchedSnippet = directMatch[0].trim();
+            return {
+                command: directMatch[1].toLowerCase(),
+                argsStr: directMatch[2].trim(),
+                fullMatch: matchedSnippet,
+                index: text.indexOf(matchedSnippet)
+            };
+        }
+    }
+
+    // 5. Fallback: If model emitted an explicit TOOL_CALL: or XML <tool_call> inside or after an unclosed <think> tag
+    const fallbackMatch = text.match(explicitRegex);
+    if (fallbackMatch) {
         return {
-            command: xmlMatch[1].toLowerCase(),
-            argsStr: xmlMatch[2].trim(),
-            fullMatch: matchedSnippet,
-            index: text.indexOf(matchedSnippet)
+            command: fallbackMatch[1].toLowerCase(),
+            argsStr: fallbackMatch[2].trim(),
+            fullMatch: fallbackMatch[0],
+            index: text.indexOf(fallbackMatch[0])
         };
     }
 
-    // 4. Check for direct tool call outside <think> (e.g. read_memory(user_profile) or `read_memory(...)`)
-    const directRegex = new RegExp(`(?:^|\\n|[\`\\s])\\s*(${toolNamesPattern})\\s*\\(([\\s\\S]*?)\\)(?:[\`\\s]|$)`, 'i');
-    let directMatch = actionableText.match(directRegex);
-    if (directMatch) {
-        const matchedSnippet = directMatch[0].trim();
+    let xmlMatchFallback = text.match(xmlRegex);
+    if (xmlMatchFallback) {
+        const fullXml = text.match(/<tool_call>[\s\S]*?<\/tool_call>/i);
+        const matchedSnippet = fullXml ? fullXml[0] : xmlMatchFallback[0];
         return {
-            command: directMatch[1].toLowerCase(),
-            argsStr: directMatch[2].trim(),
+            command: xmlMatchFallback[1].toLowerCase(),
+            argsStr: xmlMatchFallback[2].trim(),
             fullMatch: matchedSnippet,
             index: text.indexOf(matchedSnippet)
         };
@@ -388,7 +414,7 @@ export function parseToolCall(text, activeTools = tools) {
 
 /**
  * Strips tool calls from text so they do not leak into the user's visible bubble.
- * Preserves the <think>...</think> block intact.
+ * Preserves and properly seals the <think>...</think> block intact.
  */
 export function stripToolCallFromText(text, activeTools = tools) {
     if (!text) return '';
@@ -401,11 +427,24 @@ export function stripToolCallFromText(text, activeTools = tools) {
         const idx = text.indexOf('</think>') + 8;
         thinkPart = text.substring(0, idx);
         bodyPart = text.substring(idx);
+    } else if (text.includes('<think>')) {
+        // Unclosed think tag before tool call or end of text:
+        // Everything up to tool call (or entire text) belongs inside thinking
+        const toolRegex = new RegExp(`(?:TOOL_CALL:|tool_call:|call:)?\\s*(?:${toolNamesPattern})\\s*\\([\\s\\S]*?\\)|<tool_call>[\\s\\S]*?<\\/tool_call>|TOOL_CALL:.*$`, 'i');
+        const toolMatch = text.match(toolRegex);
+        if (toolMatch) {
+            const toolIdx = text.indexOf(toolMatch[0]);
+            thinkPart = text.substring(0, toolIdx).trim() + '\n</think>';
+            bodyPart = text.substring(toolIdx);
+        } else {
+            thinkPart = text.trim() + '\n</think>';
+            bodyPart = '';
+        }
     }
 
     bodyPart = bodyPart.replace(new RegExp(`(?:TOOL_CALL:|tool_call:|call:)?\\s*(?:${toolNamesPattern})\\s*\\([\\s\\S]*?\\)`, 'gi'), '');
     bodyPart = bodyPart.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '');
     bodyPart = bodyPart.replace(/TOOL_CALL:.*$/gm, '');
 
-    return (thinkPart + (thinkPart ? '\n\n' : '') + bodyPart.trim()).trim();
+    return (thinkPart + (thinkPart && bodyPart.trim() ? '\n\n' : '') + bodyPart.trim()).trim();
 }

@@ -2,7 +2,7 @@
    Thinking Block (Refined & Collapsible)
 ----------------------------------------- */
 .thinking-block {
-    margin: 3px 0 5px 0;
+    margin: 4px 0 14px 0;
     width: fit-content;
     max-width: 100%;
     border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
@@ -24,10 +24,20 @@
 .thinking-block[open] {
     display: block;
     width: 100%;
-    margin: 6px 0 10px 0;
+    margin: 8px 0 18px 0;
     border-color: var(--border-focus, rgba(255, 255, 255, 0.25));
     background: rgba(var(--bg-surface-rgb, 18, 18, 21), 0.75);
     box-shadow: var(--shadow-subtle, 0 4px 20px rgba(0, 0, 0, 0.25));
+}
+
+.thinking-block + p,
+.thinking-block + div,
+.thinking-block + pre,
+.thinking-block + ul,
+.thinking-block + ol,
+.thinking-block + blockquote,
+.thinking-block + table {
+    margin-top: 14px !important;
 }
 
 .thinking-block summary,

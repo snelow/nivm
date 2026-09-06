@@ -37,14 +37,15 @@ From parsing multi-page PDFs and blueprints to natural bidirectional voice conve
 ### 1. Bidirectional Sovereign Voice Engine
 - **Neural Speech Synthesis (TTS)**: Built-in Kokoro v1.0 (ONNX Runtime) delivering natural voice synthesis on CPU/GPU with zero GPU VRAM footprint on inference.
 - **Vocal Profiles**: Selectable acoustic profiles (Heart, Bella, Sarah, Nicole, Emma/FRIDAY) with real-time rate, expressivity, and audio DSP post-processing (sibilance de-esser, presence EQ, soft fade-out).
-- **Offline Speech-to-Text (STT)**: Integrated Faster-Whisper (`/api/stt`) running on CPU with Voice Activity Detection (VAD) and time-domain RMS metering for fluid local speech input.
+- **Offline Speech-to-Text (STT)**: Integrated Faster-Whisper (`/api/stt`) running on CPU with loudness normalization (`pydub`), conversational filler priming (`"Hello, um, can you..."`), silence threshold guards (`-45 dBFS`), and zero speech onset clipping.
+- **Dual-Layer Multimodal Audio**: Attaches raw normalized audio for direct acoustic ingestion when multimodal projectors (`mmproj`) are active.
 - **Custom Phonetic Lexicon**: Interactive pronunciation dictionary with live draft audio preview, backed by an offline CMUdict dataset (135,000+ words) and protected core terminology.
 - **Dynamic Iridescent Orb**: Real-time frequency-modulated audio visualizer and glowing orb for conversational voice mode (fullscreen and docked).
 
 ### 2. Dual Inference Architecture (Native GGUF + Multimodal API Mode)
 - **Native GGUF Engine**: Powered by `llama.cpp` with Flash Attention, KV-cache quantization (`q4_0`, `q8_0`, `f16`), split GPU layer offloading, and autonomous intent routing.
 - **External Multimodal API Mode**: Seamlessly connect to Google Gemini (e.g. `gemini-3.5-flash-lite`, `gemini-1.5-pro`), OpenAI, Groq, Ollama, LM Studio, or OpenRouter with zero code modifications.
-- **Unified Media Pipeline**: Ingest images, multi-page PDFs, and video keyframes across both local GGUF models (`mmproj`) and external multimodal API endpoints.
+- **Unified Media Pipeline**: Ingest images, multi-page PDFs, audio waveforms, and video keyframes across both local GGUF models (`mmproj`) and external multimodal API endpoints.
 
 ### 3. Integrated In-Browser File Explorer
 - Browse workstation disks, drives, and directory shortcuts (`Desktop`, `Downloads`, `Home`, `Workspace`, `Models`) directly inside the UI.
@@ -53,9 +54,15 @@ From parsing multi-page PDFs and blueprints to natural bidirectional voice conve
 ### 4. Reasoning Engine & Anti-Redundancy Pipeline
 - Deep reasoning block (`<think>`) extraction and collapsible thinking accordion blocks with rotation indicators and duration counters.
 - **Consecutive Paragraph Deduplication**: Automatic detection and elimination of redundant model output loops.
+- **Thought-Isolated Tool Parsing**: Private internal reasoning inside `<think>` tags is strictly isolated from tool dispatchers, ensuring thoughts never accidentally trigger false tool calls.
 - Audio text sanitization: strips escaped characters (`\n`, `/n`, markdown tags) to prevent verbal clutter in TTS playback.
 
-### 5. Cyber Glassmorphism Interface
+### 5. Agentic Tool Dispatcher & Safety Sentinel
+- **Dangerous Command Safety Guard**: Static command risk analyzer inspecting dynamic shell subcommands, pipe-to-shell patterns (`| bash`), root/system redirects, and destructive binaries (`rm`, `sudo`, `dd`, `truncate`, `git reset --hard`, `systemctl`).
+- **Interactive Security Modal**: Full-screen backdrop lock (`z-index: 99999`) with focus-trapping, shake animation, and explicit user `Allow` / `Deny` controls before dangerous terminal commands execute.
+- **Two-Step Memory Protocol**: Enforced `read_memory` inspection before committing updates via `write_memory`, with automatic JSON/text fact merging (`mergeMemoryValues`) to eliminate data erasure.
+
+### 6. Cyber Glassmorphism Interface
 - 4 interactive dynamic canvas backgrounds: Neural Synapses, Matrix Rain, WebGL Fluid Dynamics, and Cyber Flowfield.
 - Floating draggable window management, categorized long-term memory drawer, and token/cost analytics.
 

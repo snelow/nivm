@@ -109,7 +109,7 @@ def transcribe_speech_bytes(audio_bytes: bytes, max_duration_s=60) -> str:
             beam_size=5,
             best_of=5,
             vad_filter=False,
-            initial_prompt="A user speaking commands, queries, or thoughts to an AI assistant.",
+            initial_prompt="Hello, um, can you...",
             condition_on_previous_text=False
         )
 

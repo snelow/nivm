@@ -873,6 +873,40 @@ function getCreativeDuration(seconds) {
     return `Thought for ${mins}m ${secs}s`;
 }
 
+function resolveThinkDuration(thinkStartTimeOrDuration, isGenerating) {
+    if (thinkStartTimeOrDuration === null || thinkStartTimeOrDuration === undefined) {
+        return null;
+    }
+    if (typeof thinkStartTimeOrDuration === 'string') {
+        const parsed = parseFloat(thinkStartTimeOrDuration);
+        if (!isNaN(parsed)) thinkStartTimeOrDuration = parsed;
+        else return null;
+    }
+    if (typeof thinkStartTimeOrDuration !== 'number' || isNaN(thinkStartTimeOrDuration) || thinkStartTimeOrDuration <= 0) {
+        return null;
+    }
+
+    if (isGenerating) {
+        // While streaming, thinkStartTimeOrDuration is the start timestamp in ms from performance.now()
+        const elapsedSec = (performance.now() - thinkStartTimeOrDuration) / 1000;
+        return (elapsedSec > 0 && elapsedSec < 3600) ? Math.max(0.1, elapsedSec) : null;
+    }
+
+    // When generation is finished:
+    // If value is <= 600, it is already the computed duration in seconds (e.g. 2.4s)
+    if (thinkStartTimeOrDuration <= 600) {
+        return Math.max(0.1, thinkStartTimeOrDuration);
+    }
+
+    // If value > 600, it was likely passed as a raw performance.now() millisecond timestamp
+    const elapsedSec = (performance.now() - thinkStartTimeOrDuration) / 1000;
+    if (elapsedSec > 0 && elapsedSec < 600) {
+        return Math.max(0.1, elapsedSec);
+    }
+
+    return null;
+}
+
 function startThinkingPhraseRotation() {
     if (thinkPhraseInterval) return;
     thinkPhraseIndex = Math.floor(Math.random() * thinkingPhrases.length);
@@ -968,17 +1002,7 @@ function deduplicateConsecutiveParagraphs(text) {
         answerText = deduplicateConsecutiveParagraphs(answerText);
         
         if (thinkContent) {
-            let thinkDuration = null;
-            if (typeof thinkStartTimeOrDuration === 'number') {
-                if (isGenerating && thinkStartTimeOrDuration > 100000) {
-                    thinkDuration = Math.max(0.1, (performance.now() - thinkStartTimeOrDuration) / 1000);
-                } else {
-                    thinkDuration = thinkStartTimeOrDuration;
-                }
-            } else if (typeof thinkStartTimeOrDuration === 'string') {
-                const parsed = parseFloat(thinkStartTimeOrDuration);
-                if (!isNaN(parsed)) thinkDuration = parsed;
-            }
+            const thinkDuration = resolveThinkDuration(thinkStartTimeOrDuration, isGenerating);
             const durationLabel = thinkDuration !== null ? getCreativeDuration(thinkDuration) : 'Thought for a moment';
             const parsedThink = window.marked ? marked.parse(thinkContent) : escapeHtml(thinkContent);
             thinkingHtml = `
@@ -1028,17 +1052,7 @@ function deduplicateConsecutiveParagraphs(text) {
         answerText = deduplicateConsecutiveParagraphs(parts[0].trim());
         const thinkContent = (parts[1] || '').trim();
         if (thinkContent) {
-            let thinkDuration = null;
-            if (typeof thinkStartTimeOrDuration === 'number') {
-                if (thinkStartTimeOrDuration > 100000) {
-                    thinkDuration = Math.max(0.1, (performance.now() - thinkStartTimeOrDuration) / 1000);
-                } else {
-                    thinkDuration = thinkStartTimeOrDuration;
-                }
-            } else if (typeof thinkStartTimeOrDuration === 'string') {
-                const parsed = parseFloat(thinkStartTimeOrDuration);
-                if (!isNaN(parsed)) thinkDuration = parsed;
-            }
+            const thinkDuration = resolveThinkDuration(thinkStartTimeOrDuration, isGenerating);
             const durationLabel = thinkDuration !== null ? getCreativeDuration(thinkDuration) : 'Thought for a moment';
             const parsedThink = window.marked ? marked.parse(thinkContent) : escapeHtml(thinkContent);
             thinkingHtml = `
@@ -1093,9 +1107,9 @@ function deduplicateConsecutiveParagraphs(text) {
     if (!answerText.trim()) {
         if (isGenerating && !thinkingHtml) {
             answerText = '<div style="opacity: 0.6; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-circle-notch fa-spin"></i> <span>Processing...</span></div>';
-        } else if (isGenerating && thinkingHtml) {
+        } else if (isGenerating && thinkingHtml && !thinkingHtml.includes('is-streaming')) {
             answerText = '<div class="streaming-cursor-placeholder" style="opacity: 0.5; font-size: 0.85em; margin-top: 8px; display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-circle-notch fa-spin"></i> <span>Responding…</span></div>';
-        } else if (!isGenerating && !thinkingHtml) {
+        } else {
             answerText = '';
         }
     }

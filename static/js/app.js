@@ -507,6 +507,18 @@ When the user attaches an image or video of a person and asks to describe, analy
                 }
                 assistantMsg.meta = metaStats;
 
+                const textWithoutTool = stripToolCallFromText(assistantMsg.content, tools).trim();
+                const textOutsideThoughts = textWithoutTool
+                    .replace(/<(think|thought|reasoning)>[\s\S]*?<\/\1>/gi, '')
+                    .replace(/<(think|thought|reasoning)>[\s\S]*$/gi, '')
+                    .trim();
+                const hasCompletedThought = textWithoutTool.includes('</think>') || textWithoutTool.includes('</thought>') || textWithoutTool.includes('</reasoning>');
+
+                // Clean up streaming state immediately so "Responding..." placeholder is removed while tool executes
+                if (hasCompletedThought || textOutsideThoughts) {
+                    updateAssistantBubble(assistantBubble, assistantMsg.content, false, assistantMsg.thinkTime || thinkDurationSec);
+                }
+
                 // Handle the tool call
                 let resultStr = "";
                 const matchedTool = tools.find(t => t.name === interceptedToolCall.command);
@@ -549,13 +561,6 @@ When the user attaches an image or video of a person and asks to describe, analy
                 const sysMsg = { role: 'user', content: `${sysNotificationHeader} Result: ${resultStr}\n\n${toolAdvice}` };
                 activeChat.messages.push(sysMsg);
 
-                const textWithoutTool = stripToolCallFromText(assistantMsg.content, tools).trim();
-                const textOutsideThoughts = textWithoutTool
-                    .replace(/<(think|thought|reasoning)>[\s\S]*?<\/\1>/gi, '')
-                    .replace(/<(think|thought|reasoning)>[\s\S]*$/gi, '')
-                    .trim();
-                const hasCompletedThought = textWithoutTool.includes('</think>') || textWithoutTool.includes('</thought>') || textWithoutTool.includes('</reasoning>');
-
                 const sysBubbleHtml = buildToolTraceHtml(interceptedToolCall.command, interceptedToolCall.argsStr, resultStr);
 
                 if (textOutsideThoughts === '' && !hasCompletedThought) {
@@ -565,7 +570,7 @@ When the user attaches an image or video of a person and asks to describe, analy
                     dom.messagesContainer.insertAdjacentHTML('beforeend', sysBubbleHtml);
                 } else {
                     // Render bubble with sanitized content
-                    updateAssistantBubble(assistantBubble, assistantMsg.content, false, assistantMsg.thinkTime || thinkStartTime);
+                    updateAssistantBubble(assistantBubble, assistantMsg.content, false, assistantMsg.thinkTime || thinkDurationSec);
                     actionsContainer.style.display = 'none';
                     assistantBubble.insertAdjacentHTML('afterend', sysBubbleHtml);
                 }
@@ -582,7 +587,7 @@ When the user attaches an image or video of a person and asks to describe, analy
                     if (thinkDurationSec !== null) assistantMsg.thinkTime = thinkDurationSec;
                     assistantMsg.meta = metaStats;
 
-                    updateAssistantBubble(assistantBubble, cleanResponse, false, assistantMsg.thinkTime || thinkStartTime);
+                    updateAssistantBubble(assistantBubble, cleanResponse, false, assistantMsg.thinkTime || thinkDurationSec);
                     updateMessageActionIcons(actionsContainer, assistantMsg, assistantBubble.closest('.message-row'));
                     if (actionsContainer) actionsContainer.style.display = '';
                     saveConversations();

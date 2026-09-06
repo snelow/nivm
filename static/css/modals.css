@@ -2295,10 +2295,20 @@
     background: rgba(0, 0, 0, 0.75);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
-    pointer-events: auto !important;
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: opacity 0.25s ease;
+}
+
+#creatorModal.hidden {
+    display: none !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+}
+
+#creatorModal:not(.hidden) {
+    pointer-events: auto !important;
 }
 
 #creatorWindow {
@@ -2593,6 +2603,12 @@
     pointer-events: auto;
     cursor: pointer;
     user-select: none;
+}
+
+.bleh-easter-egg-container.hidden {
+    display: none !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
 }
 
 .bleh-content-wrapper {

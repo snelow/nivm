@@ -16,7 +16,7 @@
     <script src="/static/vendor/marked.min.js"></script>
     <!-- WebGL Fluid Simulation -->
     <script src="/static/vendor/webgl-fluid.js" defer></script>
-    <link rel="stylesheet" href="/static/css/main.css?v=3.7">
+    <link rel="stylesheet" href="/static/css/main.css?v=3.8">
 </head>
 
 <body>
@@ -412,7 +412,7 @@
     <!-- Creator Card Modal -->
     <div class="window-wrapper hidden" id="creatorModal" style="z-index: 960; display: flex; align-items: center; justify-content: center;">
         <canvas id="confettiCanvas" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 961;"></canvas>
-        <div class="draggable-window creator-window" id="creatorWindow" style="max-width: 480px; width: 92%;">
+        <div class="draggable-window creator-window" id="creatorWindow">
             <div class="window-header" id="creatorWindowHeader">
                 <div class="window-title">
                     <i class="fa-solid fa-sparkles" style="color: var(--accent-purple, #a855f7);"></i>
@@ -422,8 +422,11 @@
             </div>
             <div class="window-body creator-body">
                 <div class="creator-badge-row">
-                    <div class="creator-avatar-glow">
-                        <i class="fa-brands fa-github creator-avatar-icon"></i>
+                    <div class="creator-avatar-glow" id="creatorAvatarWrap" title="Click to spin! ✨">
+                        <img id="creatorAvatarImg" src="https://github.com/snelow.png" alt="snelow" class="creator-avatar-img" onerror="this.style.display='none'; document.getElementById('creatorAvatarFallback').style.display='flex';" />
+                        <div id="creatorAvatarFallback" class="creator-avatar-fallback" style="display: none;">
+                            <i class="fa-brands fa-github creator-avatar-icon"></i>
+                        </div>
                     </div>
                     <div class="creator-meta">
                         <div class="creator-name-row">
@@ -435,11 +438,16 @@
                 </div>
 
                 <div class="creator-message-card">
-                    <div class="creator-quote-icon"><i class="fa-solid fa-quote-left"></i></div>
                     <p class="creator-message-text">
                         Heya! a huge thanks for testing out nivm!<br>
                         Whether you're here for chatting, using tools, or just to have fun, you're awesome &lt;3
                     </p>
+                </div>
+
+                <div class="creator-feature-chips">
+                    <span class="feat-chip"><i class="fa-solid fa-bolt"></i> Local &amp; Cloud</span>
+                    <span class="feat-chip"><i class="fa-solid fa-microphone"></i> Voice &amp; Vision</span>
+                    <span class="feat-chip"><i class="fa-solid fa-lock"></i> Lockout &amp; Appeals</span>
                 </div>
 
                 <div class="creator-links-grid">
@@ -462,11 +470,11 @@
                 </div>
 
                 <div class="creator-footer-actions">
-                    <button type="button" id="copyRepoUrlBtn" class="btn-secondary" style="font-size: 0.82rem; gap: 6px;">
-                        <i class="fa-solid fa-copy"></i> Copy Repo Link
+                    <button type="button" id="creatorHypeBtn" class="hype-heart-btn" title="Send love to the creator!">
+                        <i class="fa-solid fa-heart"></i> <span>Send Love</span> <span id="hypeCountBadge" class="hype-badge">0</span>
                     </button>
-                    <button type="button" id="dismissCreatorBtn" class="btn-primary" style="margin-left: auto;">
-                        <i class="fa-solid fa-heart"></i> You're Awesome!
+                    <button type="button" id="dismissCreatorBtn" class="btn-secondary" style="font-size: 0.82rem; padding: 8px 16px;">
+                        Close
                     </button>
                 </div>
             </div>
@@ -1796,7 +1804,7 @@
     </div>
 
     <!-- Application Logic -->
-    <script type="module" src="/static/js/app.js?v=4.6"></script>
+    <script type="module" src="/static/js/app.js?v=4.7"></script>
 </body>
 
 </html>

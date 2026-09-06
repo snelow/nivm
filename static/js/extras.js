@@ -5,6 +5,7 @@
 let clickCount = 0;
 let clickResetTimer = null;
 let blehHideTimer = null;
+let hypeCount = 0;
 
 /**
  * Synthesizes a playful anime-style "bleh~" tongue-out sound via Web Audio API.
@@ -16,35 +17,27 @@ export function playBlehSound() {
         const ctx = new AudioCtx();
         const now = ctx.currentTime;
 
-        // Primary tone oscillator (triangle wave)
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-
-        // High overtone oscillator (sparkle)
         const overtone = ctx.createOscillator();
         const overtoneGain = ctx.createGain();
-
-        // Raspberry wobble / vibrato modulator (LFO)
         const lfo = ctx.createOscillator();
         const lfoGain = ctx.createGain();
 
-        // Rapid 38Hz flutter for cartoonish tongue-out effect
+        // 38Hz flutter for cartoonish tongue-out raspberry
         lfo.frequency.setValueAtTime(38, now);
         lfoGain.gain.setValueAtTime(85, now);
         lfo.connect(osc.frequency);
 
-        // Main frequency glide: start mid-high, pitch bend up, then plunge down
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(680, now);
         osc.frequency.exponentialRampToValueAtTime(1150, now + 0.12);
         osc.frequency.exponentialRampToValueAtTime(420, now + 0.38);
 
-        // Volume envelope
         gain.gain.setValueAtTime(0.001, now);
         gain.gain.exponentialRampToValueAtTime(0.35, now + 0.04);
         gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.44);
 
-        // Sparkle overtone (sine wave)
         overtone.type = 'sine';
         overtone.frequency.setValueAtTime(1360, now);
         overtone.frequency.exponentialRampToValueAtTime(2300, now + 0.12);
@@ -56,7 +49,6 @@ export function playBlehSound() {
 
         osc.connect(gain);
         gain.connect(ctx.destination);
-
         overtone.connect(overtoneGain);
         overtoneGain.connect(ctx.destination);
 
@@ -75,6 +67,128 @@ export function playBlehSound() {
     } catch (e) {
         console.warn('Audio synthesis warning:', e);
     }
+}
+
+/**
+ * Plays a cheerful celebratory chime when opening the Creator card.
+ */
+export function playFanfareSound() {
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        notes.forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            const t = now + idx * 0.08;
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, t);
+
+            gain.gain.setValueAtTime(0.001, t);
+            gain.gain.exponentialRampToValueAtTime(0.2, t + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start(t);
+            osc.stop(t + 0.30);
+        });
+
+        setTimeout(() => {
+            try { ctx.close(); } catch (_) {}
+        }, 800);
+    } catch (_) {}
+}
+
+/**
+ * Plays a sweet bubbly pop sound when clicking Send Love.
+ */
+export function playPopSound() {
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(450 + Math.random() * 200, now);
+        osc.frequency.exponentialRampToValueAtTime(800 + Math.random() * 300, now + 0.08);
+
+        gain.gain.setValueAtTime(0.01, now);
+        gain.gain.exponentialRampToValueAtTime(0.22, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.16);
+
+        setTimeout(() => {
+            try { ctx.close(); } catch (_) {}
+        }, 300);
+    } catch (_) {}
+}
+
+/**
+ * Plays a cute whoosh sound when spinning the avatar.
+ */
+export function playWhooshSound() {
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.exponentialRampToValueAtTime(950, now + 0.18);
+        osc.frequency.exponentialRampToValueAtTime(500, now + 0.35);
+
+        gain.gain.setValueAtTime(0.01, now);
+        gain.gain.exponentialRampToValueAtTime(0.25, now + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.4);
+
+        setTimeout(() => {
+            try { ctx.close(); } catch (_) {}
+        }, 500);
+    } catch (_) {}
+}
+
+/**
+ * Spawns a floating heart / star particle floating upward.
+ */
+function spawnFloatingHeart(x, y) {
+    const emojis = ['💖', '💜', '✨', '⭐', '🌸', '🥰', '💫'];
+    const el = document.createElement('div');
+    el.className = 'floating-heart';
+    el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    el.style.setProperty('--rand-x', (Math.random() - 0.5) * 2);
+    el.style.setProperty('--rand-rot', `${(Math.random() - 0.5) * 50}deg`);
+
+    document.body.appendChild(el);
+    setTimeout(() => {
+        if (el.parentNode) el.parentNode.removeChild(el);
+    }, 1300);
 }
 
 /**
@@ -144,8 +258,8 @@ function launchConfetti() {
         for (const p of particles) {
             p.x += p.vx;
             p.y += p.vy;
-            p.vy += 0.4; // gravity
-            p.vx *= 0.98; // drag
+            p.vy += 0.4;
+            p.vx *= 0.98;
             p.rotation += p.rSpeed;
             if (elapsed > 1.2) {
                 p.alpha = Math.max(0, p.alpha - 0.02);
@@ -185,6 +299,7 @@ export function openCreatorModal(withConfetti = true) {
 
     if (withConfetti) {
         launchConfetti();
+        playFanfareSound();
     }
 }
 
@@ -259,19 +374,35 @@ export function initExtras() {
         });
     }
 
-    // 4. Copy Repo URL button
-    const copyRepoUrlBtn = document.getElementById('copyRepoUrlBtn');
-    if (copyRepoUrlBtn) {
-        copyRepoUrlBtn.addEventListener('click', async () => {
-            const url = 'https://github.com/snelow/nivm';
-            try {
-                await navigator.clipboard.writeText(url);
-                copyRepoUrlBtn.innerHTML = '<i class="fa-solid fa-check" style="color: #4ade80;"></i> Copied!';
-                setTimeout(() => {
-                    copyRepoUrlBtn.innerHTML = '<i class="fa-solid fa-copy"></i> Copy Repo Link';
-                }, 2200);
-            } catch (_) {
-                prompt('Repository URL:', url);
+    // 4. Interactive Avatar Spin Clicker
+    const avatarWrap = document.getElementById('creatorAvatarWrap');
+    if (avatarWrap) {
+        avatarWrap.addEventListener('click', () => {
+            avatarWrap.classList.remove('spin');
+            void avatarWrap.offsetWidth; // trigger reflow
+            avatarWrap.classList.add('spin');
+            playWhooshSound();
+            const rect = avatarWrap.getBoundingClientRect();
+            spawnFloatingHeart(rect.left + rect.width / 2, rect.top);
+        });
+    }
+
+    // 5. Interactive "Send Love" Heart Clicker
+    const hypeBtn = document.getElementById('creatorHypeBtn');
+    const hypeBadge = document.getElementById('hypeCountBadge');
+    if (hypeBtn) {
+        hypeBtn.addEventListener('click', (e) => {
+            hypeCount++;
+            if (hypeBadge) hypeBadge.textContent = hypeCount;
+            playPopSound();
+
+            const rect = hypeBtn.getBoundingClientRect();
+            const clickX = e.clientX || (rect.left + rect.width / 2);
+            const clickY = e.clientY || (rect.top);
+            spawnFloatingHeart(clickX, clickY);
+
+            if (hypeCount === 10) {
+                launchConfetti();
             }
         });
     }

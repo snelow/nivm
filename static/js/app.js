@@ -282,6 +282,8 @@ When the user attaches an image or video of a person and asks to describe, analy
 2. NEVER assume or claim that the person in the image is you (the AI assistant) or the user. Do NOT say "it's me", "it's you", or "look at yourself".
 3. Describe and refer to the person in the photo strictly in the third person ("She is wearing...", "Her hair is...", "The woman in the photo").
 4. Anti-Redundancy: State each visual observation, feature, and setting element ONCE. Never repeat, restate, or reiterate the same points again in subsequent paragraphs.`;
+        }
+
         if (activeChat.isPendingResume) {
             dynamicSystemPrompt += `\n\n[CONVERSATION RESUME APPEAL DECISION DIRECTIVE]:
 CRITICAL: The conversation was previously concluded and locked with remark: "${activeChat.endReason || 'concluded'}".

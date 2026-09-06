@@ -277,6 +277,7 @@ function colorCycleStep(timestamp) {
         currentAccentHue = (currentAccentHue + speed * dt) % 360;
         themeState.accentColor = hslToHex(currentAccentHue, 80, 65);
         document.documentElement.style.setProperty('--text-primary', themeState.accentColor);
+        document.documentElement.style.setProperty('--theme-heart-color', themeState.accentColor);
     }
 
     if (themeState.cycleBg) {
@@ -408,6 +409,11 @@ export function applyThemeState() {
         document.documentElement.style.setProperty('--text-muted', '#64748b');
         document.documentElement.style.setProperty('--glass-border', 'rgba(255, 255, 255, 0.06)');
     }
+
+    const heartColor = (themeState.accentColor && themeState.accentColor !== '#f4f4f5') 
+        ? themeState.accentColor 
+        : (luminance > 0.5 ? '#9333ea' : '#a855f7');
+    document.documentElement.style.setProperty('--theme-heart-color', heartColor);
 
     if (dom.cycleAccentToggle) dom.cycleAccentToggle.checked = themeState.cycleAccent || false;
     if (dom.cycleBgToggle) dom.cycleBgToggle.checked = themeState.cycleBg || false;

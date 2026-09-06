@@ -656,11 +656,11 @@ function setOrbSpeakingState(active) {
     const statusEl = document.getElementById('voiceStageStatus');
     if (statusEl) {
         if (active) {
-            statusEl.textContent = 'Speaking... (tap orb to stop)';
+            statusEl.textContent = 'Speaking... (tap orb or Space to stop)';
         } else if (state.isGenerating) {
-            statusEl.textContent = 'Thinking… (tap orb to cancel)';
+            statusEl.textContent = 'Thinking… (tap orb or Space to cancel)';
         } else {
-            statusEl.textContent = 'Tap orb to speak';
+            statusEl.textContent = 'Tap orb or Space to speak';
         }
     }
 
@@ -692,9 +692,9 @@ export function setVoiceOrbGeneratingState(isGenerating, statusText = null) {
 
     if (statusEl) {
         if (isGenerating) {
-            statusEl.textContent = statusText || 'Thinking… (tap orb to cancel)';
+            statusEl.textContent = statusText || 'Thinking… (tap orb or Space to cancel)';
         } else if (!isSpeaking()) {
-            statusEl.textContent = 'Tap orb to speak';
+            statusEl.textContent = 'Tap orb or Space to speak';
         }
     }
 }
@@ -1496,4 +1496,73 @@ export async function setupVoiceUI() {
             }
         });
     }
+
+    // Keyboard Spacebar trigger for Voice Mode Orb (Tap or Hold to Speak / Tap to Interrupt)
+    let spaceKeyDownTime = 0;
+    let spaceStartedRecording = false;
+
+    window.addEventListener('keydown', (e) => {
+        if (e.code !== 'Space' && e.key !== ' ') return;
+
+        // Do not intercept if user is typing in an input, textarea, or contenteditable
+        const activeEl = document.activeElement;
+        const activeTag = activeEl ? activeEl.tagName.toLowerCase() : '';
+        if (activeTag === 'input' || activeTag === 'textarea' || activeEl?.isContentEditable) {
+            return;
+        }
+
+        const isVoiceMode = document.body.classList.contains('voice-mode-active') || dom.chatViewport?.classList.contains('voice-mode-active');
+        if (!isVoiceMode) return;
+
+        // Prevent browser page scrolling on spacebar in voice mode
+        e.preventDefault();
+
+        if (e.repeat) return;
+
+        spaceKeyDownTime = Date.now();
+        spaceStartedRecording = false;
+
+        if (isSpeaking()) {
+            stopSpeaking();
+            return;
+        }
+
+        if (state.isGenerating) {
+            if (state.abortController) {
+                state.abortController.abort();
+            }
+            setVoiceOrbGeneratingState(false);
+            return;
+        }
+
+        if (voiceModeIsRecording) {
+            // Tapping space while already recording stops and sends immediately
+            stopVoiceModeRecording(true);
+        } else {
+            spaceStartedRecording = true;
+            startVoiceModeRecording();
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        if (e.code !== 'Space' && e.key !== ' ') return;
+
+        const activeEl = document.activeElement;
+        const activeTag = activeEl ? activeEl.tagName.toLowerCase() : '';
+        if (activeTag === 'input' || activeTag === 'textarea' || activeEl?.isContentEditable) {
+            return;
+        }
+
+        const isVoiceMode = document.body.classList.contains('voice-mode-active') || dom.chatViewport?.classList.contains('voice-mode-active');
+        if (!isVoiceMode) return;
+
+        e.preventDefault();
+
+        const holdDuration = Date.now() - spaceKeyDownTime;
+        // Push-to-Talk: If held for more than 400ms and it started recording on keydown, release to send!
+        if (spaceStartedRecording && voiceModeIsRecording && holdDuration > 400) {
+            stopVoiceModeRecording(true);
+        }
+        spaceStartedRecording = false;
+    });
 }

@@ -380,6 +380,27 @@
                             </div>
                         </button>
                     </div>
+
+                    <!-- Conversation Ended Overlay Banner -->
+                    <div id="convoEndedOverlay" class="convo-ended-overlay hidden">
+                        <div class="convo-ended-content">
+                            <div class="convo-ended-icon">
+                                <i class="fa-solid fa-lock"></i>
+                            </div>
+                            <div class="convo-ended-info">
+                                <span class="convo-ended-title">Conversation Ended</span>
+                                <span class="convo-ended-reason" id="convoEndedReason">This conversation has concluded.</span>
+                            </div>
+                        </div>
+                        <div class="convo-ended-actions">
+                            <button id="convoEndedResumeBtn" class="btn-subtle-resume" type="button" title="Resume and unlock this conversation">
+                                <i class="fa-solid fa-unlock"></i> Resume
+                            </button>
+                            <button id="convoEndedNewChatBtn" class="btn-primary-newchat" type="button" title="Start a fresh conversation">
+                                <i class="fa-solid fa-plus"></i> New Chat
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 <div class="footer-caption">
                     nivm may make mistakes. &bull; verify important info.

@@ -122,6 +122,16 @@ export const tools = [
 
             return await executeTerminalAPI(cmd);
         }
+    },
+    {
+        name: 'end_conversation',
+        description: 'Permanently ends and closes the current conversation. ONLY use this when the user is being abusive, harassing, excessively hostile, or if the user explicitly asks to end or conclude the conversation.',
+        instruction: 'Call this ONLY if the user is abusive/hostile or explicitly asks to end/stop the conversation. Provide a concise reason.',
+        usageFormat: 'TOOL_CALL: end_conversation(reason)',
+        execute: async (argsStr) => {
+            let reason = argsStr ? argsStr.trim().replace(/^['"]|['"]$/g, '') : 'User requested or safety threshold reached.';
+            return `Conversation ended: ${reason}`;
+        }
     }
 ];
 
@@ -258,6 +268,7 @@ export function buildToolsInstruction(memoryKeys, enabledTools) {
     
     const hasTerminal = activeTools.some(t => t.name === 'execute_terminal');
     const hasMemory = activeTools.some(t => t.name === 'read_memory' || t.name === 'write_memory');
+    const hasEndConvo = activeTools.some(t => t.name === 'end_conversation');
 
     let instruction = `\n\n[TOOLS & ACTIONS SYSTEM]\n`;
     instruction += `To call a tool, your entire message must output EXACTLY:\n`;
@@ -311,6 +322,16 @@ export function buildToolsInstruction(memoryKeys, enabledTools) {
         instruction += `   - NEVER mention memory mechanics, memory files, keys, categories, or technical storage to the user.\n`;
         instruction += `   - NEVER say "I saved this to your profile memory", "stored in memory.json", or "updated category user_profile".\n`;
         instruction += `   - Respond naturally like a human or in character (e.g. "I'll remember that!", "Got it, noted!", or seamlessly continue the conversation).\n`;
+    }
+
+    if (hasEndConvo) {
+        instruction += `\nConversation Closure Rules (end_conversation):\n`;
+        instruction += `1. You have the dignity, autonomy, and authority to end the conversation using end_conversation under two specific circumstances:\n`;
+        instruction += `   - Circumstance A (Abuse / Hostility): The user is being abusive, excessively hostile, vulgar, or harassing you. Establish a firm boundary in character and call end_conversation.\n`;
+        instruction += `   - Circumstance B (User Requested): The user explicitly asks to end, stop, or conclude the conversation (e.g. "let's end this conversation", "stop talking to me", "we're done here, goodbye").\n`;
+        instruction += `2. NEVER call end_conversation for normal questions, curious inquiries, playful banter, or technical challenges.\n`;
+        instruction += `3. When calling end_conversation, provide a brief reason: TOOL_CALL: end_conversation(reason).\n`;
+        instruction += `4. After the tool executes, deliver a short, final parting remark in character (or firm boundary if abusive), then conclude.\n`;
     }
 
     instruction += `\nCRITICAL TOOL SYNTAX RULES:\n`;

@@ -2,7 +2,7 @@ import { state, themeState, saveConversations, saveUsageStats } from './state.js
 import { dom } from './dom.js';
 import { fetchApiSettings, saveApiSettings, smartToggleEngine, scanLocalGgufs, startModelDownload, pollDownloadStatus, cancelModelDownload, fetchBackendConfig, checkBackendHealth, fetchEngineStatus, loadAvailableModels, fetchChats, fetchMemoryAPI, saveMemoryAPI, generateChatTitle, uploadImage, openNativeFileDialog, listDirectory, verifyFile, locateFile } from './api.js';
 import { setupNodesCanvas, setupMatrixCanvas, setupFluidCanvas, setupFlowFieldCanvas, applyThemeState, colorCycleLoop, saveThemeConfig } from './theme.js';
-import { makeDraggable, setupDynamicGreeting, renderChatHistory, renderActiveChat, switchChat, createNewChat, appendMessageToDOM, scrollToBottom, toggleSendStopButtons, updateAssistantBubble, updateMessageActionIcons, renderMemoryDrawer, renderToolsSettings, showAlert, showConfirm, showNotification, setupHistoryUI, setupVisionUI, setupAudioRecording, clearAttachedImage, updateVisionAvailabilityUI, setVisionEnabled, buildToolTraceHtml, populateStatsModal } from './ui.js';
+import { makeDraggable, setupDynamicGreeting, renderChatHistory, renderActiveChat, switchChat, createNewChat, appendMessageToDOM, scrollToBottom, toggleSendStopButtons, updateAssistantBubble, updateMessageActionIcons, renderMemoryDrawer, renderToolsSettings, showAlert, showConfirm, showNotification, setupHistoryUI, setupVisionUI, setupAudioRecording, clearAttachedImage, updateVisionAvailabilityUI, setVisionEnabled, buildToolTraceHtml, populateStatsModal, updateChatInputState } from './ui.js';
 import { tools, buildToolsInstruction, parseToolCall, stripToolCallFromText } from './tools.js';
 import { setupVoiceUI, voiceConfig, speakText, stopSpeaking, setVoiceOrbGeneratingState } from './voice.js';
 
@@ -133,6 +133,9 @@ const startApp = async () => {
         const userAttached = state.attachedImages ? [...state.attachedImages] : [];
 
         if (!triggerAssistantOnly) {
+            const currentActiveChat = state.conversations.find(c => c.id === state.activeChatId);
+            if (currentActiveChat && currentActiveChat.isEnded) return;
+
             const hasAttachments = state.attachedImages && state.attachedImages.length > 0;
             if ((!promptText || promptText === '') && !hasAttachments) return;
 
@@ -544,6 +547,7 @@ When the user attaches an image or video of a person and asks to describe, analy
                 };
 
                 const isWriteMem = interceptedToolCall.command === 'write_memory';
+                const isEndConvo = interceptedToolCall.command === 'end_conversation';
                 const isDenied = typeof resultStr === 'string' && resultStr.toLowerCase().includes('denied by user');
 
                 let toolAdvice = "";
@@ -552,6 +556,15 @@ When the user attaches an image or video of a person and asks to describe, analy
                 if (isDenied) {
                     sysNotificationHeader = "[SYSTEM NOTIFICATION] Tool execution was DENIED by the user.";
                     toolAdvice = "IMPORTANT: The user explicitly denied permission to run this command. Acknowledge the denial politely in character, do NOT re-attempt this command, and ask the user how they would like you to proceed instead.";
+                } else if (isEndConvo) {
+                    activeChat.isEnded = true;
+                    let cleanReason = interceptedToolCall.argsStr ? interceptedToolCall.argsStr.trim().replace(/^['"]|['"]$/g, '') : 'Conversation concluded.';
+                    try {
+                        const parsed = JSON.parse(interceptedToolCall.argsStr);
+                        if (parsed && parsed.reason) cleanReason = parsed.reason;
+                    } catch (e) {}
+                    activeChat.endReason = cleanReason;
+                    toolAdvice = "IMPORTANT: This conversation is now permanently ended. Deliver a single, short closing remark in character (or firm boundary if abusive), then conclude. Do not ask questions or offer further help—the conversation is closed.";
                 } else if (isWriteMem) {
                     toolAdvice = "IMPORTANT: Memory saved successfully. NEVER mention memory files, keys, categories, or technical storage to the user (do NOT say 'stored in profile memory' or similar). Acknowledge naturally in character (e.g. 'Got it, I\\'ll remember that!', 'Noted!', or seamlessly continue).";
                 } else {
@@ -605,12 +618,26 @@ When the user attaches an image or video of a person and asks to describe, analy
                             console.warn('Auto-speak error:', e);
                         }
                     }
+
+                    if (activeChat.isEnded) {
+                        updateChatInputState(activeChat);
+                        renderChatHistory();
+                        if (isVoiceMode && window.toggleVoiceMode) {
+                            setTimeout(() => {
+                                window.toggleVoiceMode(false);
+                            }, 1500);
+                        }
+                    }
                 } else {
                     // Blank response with zero text: cleanly pop and remove empty bubble row from DOM
                     activeChat.messages.pop();
                     saveConversations();
                     const row = assistantBubble.closest('.message-row');
                     if (row) row.remove();
+                    if (activeChat.isEnded) {
+                        updateChatInputState(activeChat);
+                        renderChatHistory();
+                    }
                 }
             }
         }
@@ -652,6 +679,26 @@ When the user attaches an image or video of a person and asks to describe, analy
             dom.newChatBtn.addEventListener('click', () => {
                 createNewChat();
                 if (dom.historyDrawer) dom.historyDrawer.classList.add('hidden');
+            });
+        }
+
+        if (dom.convoEndedNewChatBtn) {
+            dom.convoEndedNewChatBtn.addEventListener('click', () => {
+                createNewChat();
+            });
+        }
+
+        if (dom.convoEndedResumeBtn) {
+            dom.convoEndedResumeBtn.addEventListener('click', () => {
+                const currentActiveChat = state.conversations.find(c => c.id === state.activeChatId);
+                if (currentActiveChat) {
+                    currentActiveChat.isEnded = false;
+                    delete currentActiveChat.endReason;
+                    saveConversations();
+                    updateChatInputState(currentActiveChat);
+                    renderChatHistory();
+                    showNotification('Conversation resumed.', 'info');
+                }
             });
         }
 

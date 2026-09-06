@@ -1092,6 +1092,7 @@ export async function setupVoiceUI() {
     if (dom.exitVoiceModeBtn) {
         dom.exitVoiceModeBtn.addEventListener('click', () => toggleVoiceMode(false));
     }
+    window.toggleVoiceMode = toggleVoiceMode;
 
     // Robust Voice Conversation Recording with Live Audio Visualization, Filler Protection & Silence Detection
     let voiceModeStream = null;

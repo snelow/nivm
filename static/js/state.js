@@ -43,7 +43,11 @@ Core Directives:
     models: [],
     usageStats: JSON.parse(localStorage.getItem('nivm_usageStats') || '{"totalTokens": 0, "totalCost": 0, "totalDurationSec": 0}'),
     memory: {},
-    enabledTools: JSON.parse(localStorage.getItem('nivm_enabledTools') || '{"read_memory": true, "write_memory": true, "execute_terminal": false}'),
+    enabledTools: (() => {
+        const stored = JSON.parse(localStorage.getItem('nivm_enabledTools') || '{"read_memory": true, "write_memory": true, "execute_terminal": false, "end_conversation": true}');
+        if (stored.end_conversation === undefined) stored.end_conversation = true;
+        return stored;
+    })(),
     terminalSecurityMode: localStorage.getItem('nivm_terminalSecurityMode') || 'dangerous',
     visionEnabled: false,
     attachedImages: []

@@ -221,7 +221,11 @@ export function renderChatHistory() {
 
         const title = document.createElement('span');
         title.className = 'chat-item-title';
-        title.textContent = chat.title || 'New Chat';
+        if (chat.isEnded) {
+            title.innerHTML = `<i class="fa-solid fa-lock" style="font-size: 0.72rem; opacity: 0.6; margin-right: 5px;" title="Conversation Ended"></i> ${escapeHtml(chat.title || 'New Chat')}`;
+        } else {
+            title.textContent = chat.title || 'New Chat';
+        }
 
         const actions = document.createElement('div');
         actions.className = 'chat-item-actions';
@@ -236,6 +240,49 @@ export function renderChatHistory() {
         item.appendChild(actions);
         dom.chatHistoryList.appendChild(item);
     });
+}
+
+export function updateChatInputState(activeChat) {
+    const isEnded = Boolean(activeChat?.isEnded);
+    const endOverlay = dom.convoEndedOverlay || document.getElementById('convoEndedOverlay');
+    const endReasonEl = dom.convoEndedReason || document.getElementById('convoEndedReason');
+
+    if (isEnded) {
+        if (endOverlay) {
+            endOverlay.classList.remove('hidden');
+            if (endReasonEl) {
+                const reason = activeChat.endReason || 'Conversation concluded.';
+                endReasonEl.textContent = reason;
+            }
+        }
+        if (dom.userPrompt) {
+            dom.userPrompt.disabled = true;
+            if (!dom.userPrompt.dataset.originalPlaceholder) {
+                dom.userPrompt.dataset.originalPlaceholder = dom.userPrompt.placeholder || 'Message nivm...';
+            }
+            dom.userPrompt.placeholder = 'This conversation has ended.';
+        }
+        if (dom.sendBtn) dom.sendBtn.disabled = true;
+        if (dom.micRecordBtn) dom.micRecordBtn.disabled = true;
+        if (dom.attachImgBtn) dom.attachImgBtn.disabled = true;
+        if (dom.visionToggleBtn) dom.visionToggleBtn.disabled = true;
+    } else {
+        if (endOverlay) {
+            endOverlay.classList.add('hidden');
+        }
+        if (dom.userPrompt) {
+            dom.userPrompt.disabled = false;
+            if (dom.userPrompt.dataset.originalPlaceholder) {
+                dom.userPrompt.placeholder = dom.userPrompt.dataset.originalPlaceholder;
+            } else {
+                dom.userPrompt.placeholder = 'Message nivm...';
+            }
+        }
+        if (dom.sendBtn) dom.sendBtn.disabled = false;
+        if (dom.micRecordBtn) dom.micRecordBtn.disabled = false;
+        if (dom.attachImgBtn) dom.attachImgBtn.disabled = false;
+        if (dom.visionToggleBtn) dom.visionToggleBtn.disabled = false;
+    }
 }
 
 function getMessageText(content) {
@@ -266,6 +313,7 @@ export function renderActiveChat() {
             appendMessageToDOM(msg, false, idx, activeChat.messages);
         });
     }
+    updateChatInputState(activeChat);
     scrollToBottom();
 }
 
@@ -283,6 +331,7 @@ export function buildToolTraceHtml(command, argsStr, resultStr = null) {
     const cmdLower = (command || '').toLowerCase();
     const isTerminal = cmdLower.includes('terminal');
     const isMemory = cmdLower.includes('memory');
+    const isEndConvo = cmdLower.includes('end_conversation') || cmdLower.includes('end_convo');
     
     let badgeClass = 'generic';
     let toolIcon = 'fa-cube';
@@ -296,6 +345,10 @@ export function buildToolTraceHtml(command, argsStr, resultStr = null) {
         badgeClass = 'memory';
         toolIcon = cmdLower.includes('read') ? 'fa-book-bookmark' : 'fa-floppy-disk';
         toolLabel = command;
+    } else if (isEndConvo) {
+        badgeClass = 'terminal';
+        toolIcon = 'fa-door-closed';
+        toolLabel = 'end_conversation';
     }
 
     let cleanArgs = (argsStr || '').trim();
@@ -304,11 +357,12 @@ export function buildToolTraceHtml(command, argsStr, resultStr = null) {
     }
     const previewArgs = cleanArgs.length > 55 ? cleanArgs.substring(0, 52) + '…' : cleanArgs;
 
-    const isDenied = resultStr && resultStr.toLowerCase().includes('denied');
-    const isError = !isDenied && resultStr && (resultStr.toLowerCase().includes('error') || resultStr.toLowerCase().includes('failed'));
-    const statusClass = isDenied ? 'warning' : (isError ? 'error' : 'success');
-    const statusText = isDenied ? 'Denied' : (isError ? 'Failed' : 'Executed');
-    const statusIcon = isDenied ? 'fa-ban' : (isError ? 'fa-triangle-exclamation' : 'fa-check');
+    const isConcluded = isEndConvo;
+    const isDenied = !isConcluded && resultStr && resultStr.toLowerCase().includes('denied');
+    const isError = !isDenied && !isConcluded && resultStr && (resultStr.toLowerCase().includes('error') || resultStr.toLowerCase().includes('failed'));
+    const statusClass = isConcluded ? 'warning' : (isDenied ? 'warning' : (isError ? 'error' : 'success'));
+    const statusText = isConcluded ? 'Concluded' : (isDenied ? 'Denied' : (isError ? 'Failed' : 'Executed'));
+    const statusIcon = isConcluded ? 'fa-lock' : (isDenied ? 'fa-ban' : (isError ? 'fa-triangle-exclamation' : 'fa-check'));
 
     const fullInvocation = `${command}(${cleanArgs})`;
     const escapedInvocation = escapeHtml(fullInvocation).replace(/'/g, "\\'");

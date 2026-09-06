@@ -247,6 +247,12 @@ export function updateChatInputState(activeChat) {
     const isEnded = Boolean(activeChat?.isEnded);
     const endOverlay = dom.convoEndedOverlay || document.getElementById('convoEndedOverlay');
     const endReasonEl = dom.convoEndedReason || document.getElementById('convoEndedReason');
+    const resumeBtnEl = dom.convoEndedResumeBtn || document.getElementById('convoEndedResumeBtn');
+
+    if (resumeBtnEl) {
+        resumeBtnEl.innerHTML = '<i class="fa-solid fa-unlock"></i> Resume';
+        resumeBtnEl.disabled = false;
+    }
 
     if (isEnded) {
         if (endOverlay) {
@@ -712,8 +718,16 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
         </details>`;
         attachCodeCopyButtons(bubble);
     } else {
+        let displayContent = content;
+        if (!isStreaming && typeof displayContent === 'string' && !displayContent.trim() && allMessages && typeof msgIndex === 'number' && msgIndex > 0) {
+            const prevMsg = allMessages[msgIndex - 1];
+            if (prevMsg && typeof prevMsg.content === 'string' && prevMsg.content.startsWith('[Appeal to Resume]')) {
+                displayContent = "I've reviewed your appeal, but I'm keeping this conversation closed for now.";
+                msg.content = displayContent;
+            }
+        }
         const thinkTime = msg.thinkTime || msg.meta?.thinkTime || null;
-        updateAssistantBubble(bubble, content, isStreaming, thinkTime);
+        updateAssistantBubble(bubble, displayContent, isStreaming, thinkTime);
     }
 
     const actions = document.createElement('div');
@@ -1033,8 +1047,9 @@ export function updateAssistantBubble(bubbleElement, rawText, isGenerating = fal
         processedText = '<think>' + processedText;
     }
 
-    // Hide and strip tool calls from the user UI
+    // Hide and strip tool calls and decision codes from the user UI
     processedText = stripToolCallFromText(processedText, tools);
+    processedText = processedText.replace(/\[DECISION:\s*(?:ACCEPT_RESUME|REJECT_RESUME)\]/gi, '');
 
     let thinkingHtml = '';
     let answerText = processedText;

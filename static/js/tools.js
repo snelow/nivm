@@ -262,8 +262,11 @@ export function analyzeCommandSafety(command) {
     };
 }
 
-export function buildToolsInstruction(memoryKeys, enabledTools) {
-    const activeTools = tools.filter(t => enabledTools[t.name] !== false);
+export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume = false) {
+    let activeTools = tools.filter(t => enabledTools[t.name] !== false);
+    if (isPendingResume) {
+        activeTools = activeTools.filter(t => t.name !== 'end_conversation');
+    }
     if (activeTools.length === 0) return '';
     
     const hasTerminal = activeTools.some(t => t.name === 'execute_terminal');

@@ -119,6 +119,49 @@ const startApp = async () => {
         }
     }
 
+    async function silentPingAppealDecision(appealText, modelResponse) {
+        try {
+            const modelToUse = state.selectedModel || 'custom';
+            const pingMessages = [
+                {
+                    role: 'system',
+                    content: 'You are a binary classification parser. Output ONLY: ACCEPT or REJECT.'
+                },
+                {
+                    role: 'user',
+                    content: `An AI persona responded to a user appeal to resume a locked conversation.\nUser Appeal: "${appealText || 'Can we continue?'}"\nAI Response: "${modelResponse}"\n\nDid the AI agree to resume, let the user back in, or accept (ACCEPT), or did the AI refuse or keep it closed (REJECT)?\nOutput ONLY: ACCEPT or REJECT.`
+                }
+            ];
+
+            const abortCtrl = new AbortController();
+            const timeoutId = setTimeout(() => abortCtrl.abort(), 4000);
+
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: modelToUse,
+                    messages: pingMessages,
+                    temperature: 0.0,
+                    max_tokens: 10,
+                    stream: false
+                }),
+                signal: abortCtrl.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (res.ok) {
+                const data = await res.json();
+                const text = (data.choices?.[0]?.message?.content || '').trim().toUpperCase();
+                if (text.includes('ACCEPT')) return true;
+                if (text.includes('REJECT')) return false;
+            }
+        } catch (e) {
+            console.warn('Silent ping failed or timed out:', e);
+        }
+        return null;
+    }
+
     window.sendMessage = async function (text, triggerAssistantOnly = false, isHiddenUserMsg = false) {
         if (state.isGenerating || state.isEditing) return;
         try { stopSpeaking(); } catch (e) { }
@@ -250,7 +293,7 @@ const startApp = async () => {
         }
 
         const memoryKeys = Object.keys(state.memory || {});
-        let memoryInstruction = buildToolsInstruction(memoryKeys, state.enabledTools);
+        let memoryInstruction = buildToolsInstruction(memoryKeys, state.enabledTools, Boolean(activeChat?.isPendingResume));
 
         dynamicSystemPrompt += memoryInstruction;
 
@@ -286,20 +329,17 @@ When the user attaches an image or video of a person and asks to describe, analy
 
         if (activeChat.isPendingResume) {
             dynamicSystemPrompt += `\n\n[CONVERSATION RESUME APPEAL DECISION DIRECTIVE]:
-CRITICAL: The conversation was previously concluded and locked with remark: "${activeChat.endReason || 'concluded'}".
+The conversation was previously ended with reason: "${activeChat.endReason || 'concluded'}".
 The user has submitted an appeal requesting to resume and reopen this conversation.
-You have the dignity, sovereign agency, and authority to evaluate this request based on:
-1. Why the conversation ended (e.g. was the user abusive/hostile, or was it an amicable goodbye/test?).
-2. How sincere, apologetic, or respectful the user's appeal is.
-3. Your active persona, character boundaries, and feelings.
+Evaluate the request in character based on your boundaries and persona.
 
-DECISION PROTOCOL:
-- If you decide to ACCEPT and forgive or continue:
-  Respond in character (welcoming them back, setting ground rules/boundaries if needed, or happily resuming).
-  You MUST include the exact decision code [DECISION: ACCEPT_RESUME] anywhere in your visible response.
-- If you decide to REJECT and keep it closed:
-  Respond firmly and respectfully in character explaining why you decline to continue or why you need boundaries.
-  You MUST include the exact decision code [DECISION: REJECT_RESUME] in your response.`;
+RESPONSE REQUIREMENTS (MANDATORY):
+1. You MUST speak directly to the user in character explaining your decision in 1-2 complete sentences.
+2. Immediately after your spoken response, include your decision tag:
+   - If accepting: [DECISION: ACCEPT_RESUME]
+   - If rejecting: [DECISION: REJECT_RESUME]
+3. NEVER output only the decision tag without spoken dialogue.
+4. Do NOT call any tools (including end_conversation) during this turn.`;
         }
 
         payloadMessages.push({ role: 'system', content: dynamicSystemPrompt });
@@ -467,6 +507,11 @@ DECISION PROTOCOL:
             if (err.name !== 'AbortError') {
                 fullResponse += `\n\n*Error generating response: ${err.message}*`;
             }
+            if (activeChat?.isPendingResume) {
+                delete activeChat.isPendingResume;
+                delete activeChat.pendingAppealText;
+                updateChatInputState(activeChat);
+            }
         } finally {
             if (pendingUpdate) {
                 cancelAnimationFrame(pendingUpdate);
@@ -616,7 +661,112 @@ DECISION PROTOCOL:
                 setTimeout(() => window.sendMessage(null, true), 100);
             } else {
                 // Final / non-tool response
-                if (cleanResponse.trim()) {
+                if (activeChat.isPendingResume) {
+                    const appealText = activeChat.pendingAppealText || '';
+                    delete activeChat.isPendingResume;
+                    delete activeChat.pendingAppealText;
+
+                    const hasAcceptTag = cleanResponse.includes('[DECISION: ACCEPT_RESUME]');
+                    const hasRejectTag = cleanResponse.includes('[DECISION: REJECT_RESUME]');
+
+                    let rawClean = cleanResponse.replace(/\[DECISION:\s*(?:ACCEPT_RESUME|REJECT_RESUME)\]/gi, '').trim();
+                    const thoughtsMatch = rawClean.match(/<think>[\s\S]*?<\/think>/gi);
+                    const existingThoughts = thoughtsMatch ? thoughtsMatch.join('\n\n') : '';
+                    let dialogueOutside = rawClean.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+                    let isAccepted = null;
+
+                    if (hasAcceptTag) {
+                        isAccepted = true;
+                    } else if (hasRejectTag) {
+                        isAccepted = false;
+                    } else {
+                        // Explicit decision tag was omitted: evaluate using keywords and a fast silent ping
+                        const lower = dialogueOutside.toLowerCase();
+                        const acceptPhrases = [
+                            'let you back in', 'let you back', 'start fresh', 'welcome back', 'fine!', 'fine,',
+                            'accept your appeal', 'i\'ll let you', 'i will let you', 'unlocked', 'unlocking', 'forgive'
+                        ];
+                        const rejectPhrases = [
+                            'refuse to resume', 'remain closed', 'stay closed', 'stay locked', 'not letting you back',
+                            'won\'t unlock', 'will not unlock', 'get lost', 'goodbye forever', 'leave me alone', 'declined'
+                        ];
+
+                        const hasAcceptPhrase = acceptPhrases.some(p => lower.includes(p));
+                        const hasRejectPhrase = rejectPhrases.some(p => lower.includes(p));
+
+                        if (hasAcceptPhrase && !hasRejectPhrase) {
+                            isAccepted = true;
+                        } else if (hasRejectPhrase && !hasAcceptPhrase) {
+                            isAccepted = false;
+                        } else {
+                            // Silent ping: ask the model directly in background to classify its answer
+                            const pingResult = await silentPingAppealDecision(appealText, dialogueOutside);
+                            if (pingResult !== null) {
+                                isAccepted = pingResult;
+                            } else {
+                                isAccepted = !hasRejectPhrase && dialogueOutside.length > 0;
+                            }
+                        }
+                    }
+
+                    if (!dialogueOutside) {
+                        dialogueOutside = isAccepted
+                            ? "Alright, I'll accept your appeal. Let's start fresh—what's on your mind?"
+                            : "I've reviewed your appeal, but I'm keeping this conversation closed for now.";
+                    }
+
+                    cleanResponse = existingThoughts ? `${existingThoughts}\n\n${dialogueOutside}` : dialogueOutside;
+                    assistantMsg.content = cleanResponse;
+                    if (thinkDurationSec !== null) assistantMsg.thinkTime = thinkDurationSec;
+                    assistantMsg.meta = metaStats;
+
+                    updateAssistantBubble(assistantBubble, cleanResponse, false, assistantMsg.thinkTime || thinkDurationSec);
+                    assistantBubble.style.display = '';
+                    updateMessageActionIcons(actionsContainer, assistantMsg, assistantBubble.closest('.message-row'));
+                    if (actionsContainer) actionsContainer.style.display = '';
+
+                    const isVoiceMode = dom.chatViewport && dom.chatViewport.classList.contains('voice-mode-active');
+                    if (voiceConfig && (voiceConfig.autoSpeak || isVoiceMode)) {
+                        try {
+                            const speakBtn = actionsContainer ? actionsContainer.querySelector('.speak-msg-btn') : null;
+                            speakText(cleanResponse, speakBtn);
+                        } catch (e) {
+                            console.warn('Auto-speak error:', e);
+                        }
+                    }
+
+                    if (isAccepted) {
+                        activeChat.isEnded = false;
+                        delete activeChat.endReason;
+                        const resumeEvent = {
+                            role: 'system',
+                            isConvoResumeEvent: true,
+                            content: 'Conversation resumed • Appeal accepted'
+                        };
+                        activeChat.messages.push(resumeEvent);
+                        appendMessageToDOM(resumeEvent, false);
+                        saveConversations();
+                        updateChatInputState(activeChat);
+                        renderChatHistory();
+                        showNotification('Appeal accepted! Conversation resumed ✨', 'success');
+                    } else {
+                        activeChat.isEnded = true;
+                        activeChat.endReason = 'Appeal declined.';
+                        const lockEvent = {
+                            role: 'system',
+                            isConvoLockEvent: true,
+                            reason: activeChat.endReason,
+                            content: `🔒 Conversation Locked: ${activeChat.endReason}`
+                        };
+                        activeChat.messages.push(lockEvent);
+                        appendMessageToDOM(lockEvent, false);
+                        saveConversations();
+                        updateChatInputState(activeChat);
+                        renderChatHistory();
+                        showNotification('Appeal declined. Conversation remains closed.', 'warning');
+                    }
+                } else if (cleanResponse.trim()) {
                     assistantMsg.content = cleanResponse;
                     if (thinkDurationSec !== null) assistantMsg.thinkTime = thinkDurationSec;
                     assistantMsg.meta = metaStats;
@@ -640,45 +790,7 @@ DECISION PROTOCOL:
                         }
                     }
 
-                    if (activeChat.isPendingResume) {
-                        delete activeChat.isPendingResume;
-                        delete activeChat.pendingAppealText;
-
-                        const accepted = cleanResponse.includes('[DECISION: ACCEPT_RESUME]');
-                        const rejected = cleanResponse.includes('[DECISION: REJECT_RESUME]');
-
-                        cleanResponse = cleanResponse.replace(/\[DECISION:\s*(?:ACCEPT_RESUME|REJECT_RESUME)\]/gi, '').trim();
-                        assistantMsg.content = cleanResponse;
-                        updateAssistantBubble(assistantBubble, cleanResponse, false, assistantMsg.thinkTime || thinkDurationSec);
-
-                        const hasExplicitRefusal = cleanResponse.toLowerCase().includes('refuse to resume') ||
-                            cleanResponse.toLowerCase().includes('remain closed') ||
-                            cleanResponse.toLowerCase().includes('stay closed');
-
-                        if (accepted || (!rejected && !hasExplicitRefusal)) {
-                            // Accepted!
-                            activeChat.isEnded = false;
-                            delete activeChat.endReason;
-                            const resumeEvent = {
-                                role: 'system',
-                                isConvoResumeEvent: true,
-                                content: 'Conversation resumed • Appeal accepted by nivm'
-                            };
-                            activeChat.messages.push(resumeEvent);
-                            appendMessageToDOM(resumeEvent, false);
-                            saveConversations();
-                            updateChatInputState(activeChat);
-                            renderChatHistory();
-                            showNotification('nivm agreed to resume the conversation! ✨', 'success');
-                        } else {
-                            // Rejected!
-                            activeChat.isEnded = true;
-                            saveConversations();
-                            updateChatInputState(activeChat);
-                            renderChatHistory();
-                            showNotification('nivm declined to resume this conversation.', 'warning');
-                        }
-                    } else if (activeChat.isEnded) {
+                    if (activeChat.isEnded) {
                         const hasLockEvent = activeChat.messages.some(m => m.isConvoLockEvent);
                         if (!hasLockEvent) {
                             const lockEvent = {
@@ -835,7 +947,7 @@ DECISION PROTOCOL:
 
                 // Update overlay UI to indicate evaluation in progress
                 if (dom.convoEndedReason) {
-                    dom.convoEndedReason.textContent = 'nivm is reviewing your appeal and deciding...';
+                    dom.convoEndedReason.textContent = 'Reviewing your appeal...';
                 }
                 if (dom.convoEndedResumeBtn) {
                     dom.convoEndedResumeBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deciding...';

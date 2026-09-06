@@ -16,7 +16,7 @@
     <script src="/static/vendor/marked.min.js"></script>
     <!-- WebGL Fluid Simulation -->
     <script src="/static/vendor/webgl-fluid.js" defer></script>
-    <link rel="stylesheet" href="/static/css/main.css?v=3.9">
+    <link rel="stylesheet" href="/static/css/main.css?v=4.0">
 </head>
 
 <body>
@@ -412,8 +412,8 @@
     <!-- Creator Card Modal -->
     <div class="window-wrapper hidden" id="creatorModal" style="z-index: 960; display: flex; align-items: center; justify-content: center;">
         <canvas id="confettiCanvas" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 961;"></canvas>
-        <div class="draggable-window creator-window" id="creatorWindow">
-            <div class="window-header" id="creatorWindowHeader">
+        <div class="creator-window" id="creatorWindow">
+            <div class="window-header" id="creatorWindowHeader" style="cursor: default;">
                 <div class="window-title">
                     <i class="fa-solid fa-sparkles" style="color: var(--accent-purple, #a855f7);"></i>
                     <span>Creator &amp; Project</span>
@@ -444,12 +444,6 @@
                     </p>
                 </div>
 
-                <div class="creator-feature-chips">
-                    <span class="feat-chip"><i class="fa-solid fa-bolt"></i> Local &amp; Cloud</span>
-                    <span class="feat-chip"><i class="fa-solid fa-microphone"></i> Voice &amp; Vision</span>
-                    <span class="feat-chip"><i class="fa-solid fa-lock"></i> Lockout &amp; Appeals</span>
-                </div>
-
                 <div class="creator-links-grid">
                     <a href="https://github.com/snelow/nivm" target="_blank" rel="noopener noreferrer" class="creator-link-card repo-link">
                         <div class="link-icon"><i class="fa-solid fa-star"></i></div>
@@ -472,9 +466,6 @@
                 <div class="creator-footer-actions">
                     <button type="button" id="creatorHypeBtn" class="hype-heart-btn" title="Send love to the creator!">
                         <i class="fa-solid fa-heart"></i> <span>Send Love</span> <span id="hypeCountBadge" class="hype-badge">0</span>
-                    </button>
-                    <button type="button" id="dismissCreatorBtn" class="btn-secondary" style="font-size: 0.82rem; padding: 8px 16px;">
-                        Close
                     </button>
                 </div>
             </div>

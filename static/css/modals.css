@@ -2322,6 +2322,12 @@
 }
 
 .creator-window {
+    border-radius: var(--radius-xl, 16px);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     background: radial-gradient(circle at 10% 10%, rgba(168, 85, 247, 0.14), transparent 45%),
                 radial-gradient(circle at 90% 90%, rgba(236, 72, 153, 0.12), transparent 45%),
                 var(--glass-bg);
@@ -2444,47 +2450,26 @@
     font-family: inherit;
 }
 
-.creator-feature-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.feat-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.74rem;
-    font-weight: 500;
-    color: var(--text-secondary);
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    padding: 4px 10px;
-    border-radius: 16px;
-}
-
-.feat-chip i {
-    color: var(--accent-purple, #a855f7);
-    font-size: 0.72rem;
-}
-
 .creator-links-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
 }
 
 .creator-link-card {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
+    gap: 12px;
+    padding: 10px 14px;
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--glass-border);
     text-decoration: none;
     color: var(--text-primary);
     transition: all 0.2s ease;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .creator-link-card:hover {
@@ -2497,6 +2482,7 @@
 .creator-link-card .link-icon {
     font-size: 1.15rem;
     color: #d8b4fe;
+    flex-shrink: 0;
 }
 
 .creator-link-card.repo-link .link-icon {
@@ -2511,7 +2497,7 @@
 }
 
 .creator-link-card .link-title {
-    font-size: 0.8rem;
+    font-size: 0.82rem;
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
@@ -2519,7 +2505,7 @@
 }
 
 .creator-link-card .link-sub {
-    font-size: 0.68rem;
+    font-size: 0.7rem;
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
@@ -2529,14 +2515,16 @@
 .creator-link-card .link-arrow {
     font-size: 0.72rem;
     color: var(--text-muted);
+    flex-shrink: 0;
+    margin-left: auto;
 }
 
 .creator-footer-actions {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 12px;
-    margin-top: 4px;
+    justify-content: center;
+    width: 100%;
+    margin-top: 6px;
 }
 
 .hype-heart-btn {

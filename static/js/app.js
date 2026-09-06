@@ -90,9 +90,6 @@ const startApp = async () => {
             if (dom.resumeAppealWindow && dom.resumeAppealWindowHeader) {
                 makeDraggable(dom.resumeAppealWindow, dom.resumeAppealWindowHeader);
             }
-            if (dom.creatorWindow && dom.creatorWindowHeader) {
-                makeDraggable(dom.creatorWindow, dom.creatorWindowHeader);
-            }
             setupVoiceUI();
             setupDynamicGreeting();
             initExtras();

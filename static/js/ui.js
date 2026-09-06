@@ -247,7 +247,10 @@ export function updateChatInputState(activeChat) {
     const isEnded = Boolean(activeChat?.isEnded);
     const endOverlay = dom.convoEndedOverlay || document.getElementById('convoEndedOverlay');
     const endReasonEl = dom.convoEndedReason || document.getElementById('convoEndedReason');
-    const resumeBtnEl = dom.convoEndedResumeBtn || document.getElementById('convoEndedResumeBtn');
+    if (activeChat?.isPendingResume && !state.isGenerating) {
+        delete activeChat.isPendingResume;
+        delete activeChat.pendingAppealText;
+    }
 
     if (resumeBtnEl) {
         resumeBtnEl.innerHTML = '<i class="fa-solid fa-unlock"></i> Resume';
@@ -687,6 +690,7 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
             </div>`;
             wrapper.appendChild(bubble);
             row.appendChild(wrapper);
+            dom.messagesContainer.appendChild(row);
             return { bubble, actions: null };
         } else if (msg.isConvoResumeEvent) {
             bubble.style.cssText = 'background: transparent; border: none; padding: 0; width: 100%;';
@@ -699,6 +703,7 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
             </div>`;
             wrapper.appendChild(bubble);
             row.appendChild(wrapper);
+            dom.messagesContainer.appendChild(row);
             return { bubble, actions: null };
         }
         bubble.style.cssText = 'background: transparent; border: none; padding: 0; width: 100%;';

@@ -119,49 +119,6 @@ const startApp = async () => {
         }
     }
 
-    async function silentPingAppealDecision(appealText, modelResponse) {
-        try {
-            const modelToUse = state.selectedModel || 'custom';
-            const pingMessages = [
-                {
-                    role: 'system',
-                    content: 'You are a binary classification parser. Output ONLY: ACCEPT or REJECT.'
-                },
-                {
-                    role: 'user',
-                    content: `An AI persona responded to a user appeal to resume a locked conversation.\nUser Appeal: "${appealText || 'Can we continue?'}"\nAI Response: "${modelResponse}"\n\nDid the AI agree to resume, let the user back in, or accept (ACCEPT), or did the AI refuse or keep it closed (REJECT)?\nOutput ONLY: ACCEPT or REJECT.`
-                }
-            ];
-
-            const abortCtrl = new AbortController();
-            const timeoutId = setTimeout(() => abortCtrl.abort(), 4000);
-
-            const res = await fetch('/api/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: modelToUse,
-                    messages: pingMessages,
-                    temperature: 0.0,
-                    max_tokens: 10,
-                    stream: false
-                }),
-                signal: abortCtrl.signal
-            });
-            clearTimeout(timeoutId);
-
-            if (res.ok) {
-                const data = await res.json();
-                const text = (data.choices?.[0]?.message?.content || '').trim().toUpperCase();
-                if (text.includes('ACCEPT')) return true;
-                if (text.includes('REJECT')) return false;
-            }
-        } catch (e) {
-            console.warn('Silent ping failed or timed out:', e);
-        }
-        return null;
-    }
-
     window.sendMessage = async function (text, triggerAssistantOnly = false, isHiddenUserMsg = false) {
         if (state.isGenerating || state.isEditing) return;
         try { stopSpeaking(); } catch (e) { }
@@ -507,11 +464,6 @@ RESPONSE REQUIREMENTS (MANDATORY):
             if (err.name !== 'AbortError') {
                 fullResponse += `\n\n*Error generating response: ${err.message}*`;
             }
-            if (activeChat?.isPendingResume) {
-                delete activeChat.isPendingResume;
-                delete activeChat.pendingAppealText;
-                updateChatInputState(activeChat);
-            }
         } finally {
             if (pendingUpdate) {
                 cancelAnimationFrame(pendingUpdate);
@@ -666,30 +618,31 @@ RESPONSE REQUIREMENTS (MANDATORY):
                     delete activeChat.isPendingResume;
                     delete activeChat.pendingAppealText;
 
-                    const hasAcceptTag = cleanResponse.includes('[DECISION: ACCEPT_RESUME]');
-                    const hasRejectTag = cleanResponse.includes('[DECISION: REJECT_RESUME]');
+                    const hasAcceptTag = /\[?(?:DECISION:?\s*)?ACCEPT(?:_RESUME)?\]?/i.test(cleanResponse);
+                    const hasRejectTag = /\[?(?:DECISION:?\s*)?REJECT(?:_RESUME)?\]?/i.test(cleanResponse);
 
-                    let rawClean = cleanResponse.replace(/\[DECISION:\s*(?:ACCEPT_RESUME|REJECT_RESUME)\]/gi, '').trim();
-                    const thoughtsMatch = rawClean.match(/<think>[\s\S]*?<\/think>/gi);
+                    let rawClean = cleanResponse.replace(/\[?(?:DECISION:?\s*)?(?:ACCEPT|REJECT)(?:_RESUME)?\]?/gi, '').trim();
+                    const thoughtsMatch = rawClean.match(/<(think|thought|reasoning)>[\s\S]*?<\/\1>/gi);
                     const existingThoughts = thoughtsMatch ? thoughtsMatch.join('\n\n') : '';
-                    let dialogueOutside = rawClean.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+                    let dialogueOutside = rawClean.replace(/<(think|thought|reasoning)>[\s\S]*?<\/\1>/gi, '').trim();
 
-                    let isAccepted = null;
+                    let isAccepted = false;
 
-                    if (hasAcceptTag) {
+                    if (hasAcceptTag && !hasRejectTag) {
                         isAccepted = true;
-                    } else if (hasRejectTag) {
+                    } else if (hasRejectTag && !hasAcceptTag) {
                         isAccepted = false;
                     } else {
-                        // Explicit decision tag was omitted: evaluate using keywords and a fast silent ping
                         const lower = dialogueOutside.toLowerCase();
                         const acceptPhrases = [
-                            'let you back in', 'let you back', 'start fresh', 'welcome back', 'fine!', 'fine,',
-                            'accept your appeal', 'i\'ll let you', 'i will let you', 'unlocked', 'unlocking', 'forgive'
+                            'let you back', 'let you in', 'fine!', 'fine,', 'fine.', 'fine...', 'start fresh',
+                            'welcome back', 'i\'ll allow', 'i will allow', 'i accept', 'accept your appeal',
+                            'forgive', 'bored and', 'talk again', 'let\'s talk', 'continue'
                         ];
                         const rejectPhrases = [
                             'refuse to resume', 'remain closed', 'stay closed', 'stay locked', 'not letting you back',
-                            'won\'t unlock', 'will not unlock', 'get lost', 'goodbye forever', 'leave me alone', 'declined'
+                            'won\'t unlock', 'will not unlock', 'get lost', 'goodbye forever', 'leave me alone',
+                            'declined', 'denied', 'stay out', 'get out'
                         ];
 
                         const hasAcceptPhrase = acceptPhrases.some(p => lower.includes(p));
@@ -700,13 +653,7 @@ RESPONSE REQUIREMENTS (MANDATORY):
                         } else if (hasRejectPhrase && !hasAcceptPhrase) {
                             isAccepted = false;
                         } else {
-                            // Silent ping: ask the model directly in background to classify its answer
-                            const pingResult = await silentPingAppealDecision(appealText, dialogueOutside);
-                            if (pingResult !== null) {
-                                isAccepted = pingResult;
-                            } else {
-                                isAccepted = !hasRejectPhrase && dialogueOutside.length > 0;
-                            }
+                            isAccepted = !hasRejectPhrase && dialogueOutside.length > 0;
                         }
                     }
 

@@ -631,11 +631,14 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
         attachCodeCopyButtons(bubble);
     } else {
         const thinkTime = msg.thinkTime || msg.meta?.thinkTime || null;
-        updateAssistantBubble(bubble, content, false, thinkTime);
+        updateAssistantBubble(bubble, content, isStreaming, thinkTime);
     }
 
     const actions = document.createElement('div');
     actions.className = 'message-actions';
+    if (isStreaming) {
+        actions.style.display = 'none';
+    }
     
     updateMessageActionIcons(actions, msg, row);
 
@@ -1065,6 +1068,8 @@ function deduplicateConsecutiveParagraphs(text) {
     if (!answerText.trim()) {
         if (isGenerating && !thinkingHtml) {
             answerText = '<div style="opacity: 0.6; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-circle-notch fa-spin"></i> <span>Processing...</span></div>';
+        } else if (isGenerating && thinkingHtml) {
+            answerText = '<div class="streaming-cursor-placeholder" style="opacity: 0.5; font-size: 0.85em; margin-top: 8px; display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-circle-notch fa-spin"></i> <span>Responding…</span></div>';
         } else if (!isGenerating && !thinkingHtml) {
             answerText = '';
         }
@@ -1079,13 +1084,17 @@ function deduplicateConsecutiveParagraphs(text) {
 
     bubbleElement.innerHTML = thinkingHtml + parsedAnswer;
 
-    // If completely blank (no thoughts and no answer), hide the empty bubble wrapper so no blank message is shown
-    if (!thinkingHtml && !parsedAnswer.trim()) {
+    // If completely blank (no thoughts and no answer), hide the empty bubble wrapper only when NOT generating
+    if (!isGenerating && !thinkingHtml && !parsedAnswer.trim()) {
         bubbleElement.style.display = 'none';
         const actionsEl = bubbleElement.closest('.message-wrapper')?.querySelector('.message-actions');
         if (actionsEl) actionsEl.style.display = 'none';
     } else {
         bubbleElement.style.display = '';
+        const actionsEl = bubbleElement.closest('.message-wrapper')?.querySelector('.message-actions');
+        if (actionsEl && isGenerating) {
+            actionsEl.style.display = 'none';
+        }
     }
 
     attachCodeCopyButtons(bubbleElement);
@@ -2514,7 +2523,13 @@ export function setupAudioRecording() {
         }
         
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            });
             recordedChunks = [];
             
             // Prefer webm, fallback to whatever is available

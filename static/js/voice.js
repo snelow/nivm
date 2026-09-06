@@ -1016,8 +1016,10 @@ export async function setupVoiceUI() {
             stopSpeaking();
             stopVoiceModeRecording(false);
 
-            // Re-render conversation cleanly so everything said/replied in voice mode is visible in normal chat
-            renderActiveChat();
+            // Re-render conversation cleanly when idle so everything said/replied in voice mode is visible in normal chat
+            if (!state.isGenerating) {
+                renderActiveChat();
+            }
             scrollToBottom();
         }
     }
@@ -1031,8 +1033,7 @@ export async function setupVoiceUI() {
         if (isCollapsed) {
             if (icon) icon.className = 'fa-solid fa-up-right-and-down-left-from-center';
             if (label) label.textContent = 'Expand';
-            // Render active chat messages above the dock and scroll to bottom
-            renderActiveChat();
+            // Messages are already preserved in the DOM, smooth scroll to latest message
             scrollToBottom();
         } else {
             if (icon) icon.className = 'fa-solid fa-down-left-and-up-right-to-center';
@@ -1218,7 +1219,13 @@ export async function setupVoiceUI() {
         if (voiceModeIsRecording) return;
 
         try {
-            voiceModeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            voiceModeStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            });
             voiceModeIsRecording = true;
             voiceModeHasSpoken = false;
             voiceModeTranscript = '';

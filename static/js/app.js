@@ -427,6 +427,7 @@ When the user attaches an image or video of a person and asks to describe, analy
 
                 if (!pendingUpdate) {
                     pendingUpdate = requestAnimationFrame(() => {
+                        assistantMsg.content = fullResponse;
                         updateAssistantBubble(assistantBubble, sanitizeAssistantText(fullResponse), true, thinkStartTime);
                         scrollToBottom();
                         pendingUpdate = false;

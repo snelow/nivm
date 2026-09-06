@@ -19,15 +19,20 @@ _whisper_model = None
 
 
 def _get_whisper_model():
-    """Lazily load faster-whisper model on CPU using pre-cached base.en model."""
+    """Lazily load faster-whisper model on CPU using pre-cached model (distil-medium.en, small.en, or base.en)."""
     global _whisper_model
     if _whisper_model is not None:
         return _whisper_model
     try:
         from faster_whisper import WhisperModel
         # Use CPU with int8 quantization so 0 MB of GPU VRAM is used
-        _whisper_model = WhisperModel("base.en", device="cpu", compute_type="int8", local_files_only=True)
-        return _whisper_model
+        for model_name in ["distil-medium.en", "small.en", "base.en"]:
+            try:
+                _whisper_model = WhisperModel(model_name, device="cpu", compute_type="int8", local_files_only=True)
+                logger.info(f"Loaded faster-whisper local model: {model_name} (int8 on CPU)")
+                return _whisper_model
+            except Exception:
+                continue
     except Exception as e:
         logger.warning(f"Could not load faster-whisper local model: {e}")
         return None
@@ -109,7 +114,6 @@ def transcribe_speech_bytes(audio_bytes: bytes, max_duration_s=60) -> str:
             beam_size=5,
             best_of=5,
             vad_filter=False,
-            initial_prompt="Hello, um, can you...",
             condition_on_previous_text=False
         )
 

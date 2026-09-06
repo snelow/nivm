@@ -5,6 +5,7 @@ import { setupNodesCanvas, setupMatrixCanvas, setupFluidCanvas, setupFlowFieldCa
 import { makeDraggable, setupDynamicGreeting, renderChatHistory, renderActiveChat, switchChat, createNewChat, appendMessageToDOM, scrollToBottom, toggleSendStopButtons, updateAssistantBubble, updateMessageActionIcons, renderMemoryDrawer, renderToolsSettings, showAlert, showConfirm, showNotification, setupHistoryUI, setupVisionUI, setupAudioRecording, clearAttachedImage, updateVisionAvailabilityUI, setVisionEnabled, buildToolTraceHtml, populateStatsModal, updateChatInputState } from './ui.js';
 import { tools, buildToolsInstruction, parseToolCall, stripToolCallFromText } from './tools.js';
 import { setupVoiceUI, voiceConfig, speakText, stopSpeaking, setVoiceOrbGeneratingState } from './voice.js';
+import { initExtras, openCreatorModal } from './extras.js';
 
 // Export state for UI modules that need direct access
 window.__nivm_state = state;
@@ -89,8 +90,12 @@ const startApp = async () => {
             if (dom.resumeAppealWindow && dom.resumeAppealWindowHeader) {
                 makeDraggable(dom.resumeAppealWindow, dom.resumeAppealWindowHeader);
             }
+            if (dom.creatorWindow && dom.creatorWindowHeader) {
+                makeDraggable(dom.creatorWindow, dom.creatorWindowHeader);
+            }
             setupVoiceUI();
             setupDynamicGreeting();
+            initExtras();
             renderToolsSettings();
             setupHistoryUI();
             setupVisionUI();
@@ -140,6 +145,13 @@ const startApp = async () => {
         if (!triggerAssistantOnly) {
             const currentActiveChat = state.conversations.find(c => c.id === state.activeChatId);
             if (currentActiveChat && currentActiveChat.isEnded) return;
+
+            const trimmedCheck = (promptText || '').trim().toLowerCase();
+            if (trimmedCheck === 'heysnelow' || trimmedCheck === '/heysnelow' || trimmedCheck === 'heysnelow!') {
+                if (dom.userPrompt) dom.userPrompt.value = '';
+                openCreatorModal(true);
+                return;
+            }
 
             const hasAttachments = state.attachedImages && state.attachedImages.length > 0;
             if ((!promptText || promptText === '') && !hasAttachments) return;

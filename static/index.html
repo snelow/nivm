@@ -16,7 +16,7 @@
     <script src="/static/vendor/marked.min.js"></script>
     <!-- WebGL Fluid Simulation -->
     <script src="/static/vendor/webgl-fluid.js" defer></script>
-    <link rel="stylesheet" href="/static/css/main.css?v=3.6">
+    <link rel="stylesheet" href="/static/css/main.css?v=3.7">
 </head>
 
 <body>
@@ -403,10 +403,120 @@
                     </div>
                 </div>
                 <div class="footer-caption">
-                    nivm may make mistakes. &bull; verify important info.
+                    nivm may make mistakes. &bull; <a href="#" id="openCreatorBtn" class="credits-link" title="Meet the creator">crafted with 💜 by snelow</a> &bull; <a href="https://github.com/snelow/nivm" target="_blank" rel="noopener noreferrer" class="credits-link" title="GitHub Repository"><i class="fa-brands fa-github"></i> repo</a>
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Creator Card Modal -->
+    <div class="window-wrapper hidden" id="creatorModal" style="z-index: 960; display: flex; align-items: center; justify-content: center;">
+        <canvas id="confettiCanvas" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 961;"></canvas>
+        <div class="draggable-window creator-window" id="creatorWindow" style="max-width: 480px; width: 92%;">
+            <div class="window-header" id="creatorWindowHeader">
+                <div class="window-title">
+                    <i class="fa-solid fa-sparkles" style="color: var(--accent-purple, #a855f7);"></i>
+                    <span>Creator &amp; Project</span>
+                </div>
+                <button class="icon-btn-sm" id="closeCreatorBtn" type="button"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="window-body creator-body">
+                <div class="creator-badge-row">
+                    <div class="creator-avatar-glow">
+                        <i class="fa-brands fa-github creator-avatar-icon"></i>
+                    </div>
+                    <div class="creator-meta">
+                        <div class="creator-name-row">
+                            <span class="creator-name">snelow</span>
+                            <span class="creator-tag">Author &amp; Maintainer</span>
+                        </div>
+                        <span class="creator-project">nivm &bull; Neural Interface &amp; Voice Machine</span>
+                    </div>
+                </div>
+
+                <div class="creator-message-card">
+                    <div class="creator-quote-icon"><i class="fa-solid fa-quote-left"></i></div>
+                    <p class="creator-message-text">
+                        Heya! a huge thanks for testing out nivm!<br>
+                        Whether you're here for chatting, using tools, or just to have fun, you're awesome &lt;3
+                    </p>
+                </div>
+
+                <div class="creator-links-grid">
+                    <a href="https://github.com/snelow/nivm" target="_blank" rel="noopener noreferrer" class="creator-link-card repo-link">
+                        <div class="link-icon"><i class="fa-solid fa-star"></i></div>
+                        <div class="link-info">
+                            <span class="link-title">Star nivm on GitHub</span>
+                            <span class="link-sub">github.com/snelow/nivm</span>
+                        </div>
+                        <i class="fa-solid fa-arrow-up-right-from-square link-arrow"></i>
+                    </a>
+                    <a href="https://github.com/snelow" target="_blank" rel="noopener noreferrer" class="creator-link-card profile-link">
+                        <div class="link-icon"><i class="fa-brands fa-github"></i></div>
+                        <div class="link-info">
+                            <span class="link-title">snelow's Profile</span>
+                            <span class="link-sub">github.com/snelow</span>
+                        </div>
+                        <i class="fa-solid fa-arrow-up-right-from-square link-arrow"></i>
+                    </a>
+                </div>
+
+                <div class="creator-footer-actions">
+                    <button type="button" id="copyRepoUrlBtn" class="btn-secondary" style="font-size: 0.82rem; gap: 6px;">
+                        <i class="fa-solid fa-copy"></i> Copy Repo Link
+                    </button>
+                    <button type="button" id="dismissCreatorBtn" class="btn-primary" style="margin-left: auto;">
+                        <i class="fa-solid fa-heart"></i> You're Awesome!
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pixel Art Bleh Popup Overlay -->
+    <div id="blehEasterEgg" class="bleh-easter-egg-container hidden" title="Click to dismiss">
+        <div class="bleh-content-wrapper">
+            <div class="bleh-speech-bubble">
+                <span class="bleh-bubble-text">Bleh~! 😜</span>
+            </div>
+            <div class="bleh-pixel-avatar">
+                <svg viewBox="0 0 32 32" class="pixel-art-svg" shape-rendering="crispEdges">
+                    <!-- Face Background -->
+                    <rect x="8" y="6" width="16" height="2" fill="#2d132c"/>
+                    <rect x="6" y="8" width="20" height="2" fill="#522546"/>
+                    <rect x="4" y="10" width="24" height="14" fill="#ffd1dc"/>
+                    <!-- Hair bangs -->
+                    <rect x="4" y="8" width="6" height="6" fill="#88304e"/>
+                    <rect x="22" y="8" width="6" height="6" fill="#88304e"/>
+                    <rect x="9" y="8" width="14" height="3" fill="#88304e"/>
+                    <rect x="11" y="11" width="3" height="3" fill="#88304e"/>
+                    <rect x="18" y="11" width="3" height="3" fill="#88304e"/>
+                    <!-- Eyes (> <) -->
+                    <rect x="8" y="15" width="2" height="1" fill="#31112c"/>
+                    <rect x="10" y="16" width="2" height="1" fill="#31112c"/>
+                    <rect x="8" y="17" width="2" height="1" fill="#31112c"/>
+                    <rect x="22" y="15" width="2" height="1" fill="#31112c"/>
+                    <rect x="20" y="16" width="2" height="1" fill="#31112c"/>
+                    <rect x="22" y="17" width="2" height="1" fill="#31112c"/>
+                    <!-- Blushing cheeks -->
+                    <rect x="6" y="18" width="4" height="2" fill="#ff7597"/>
+                    <rect x="22" y="18" width="4" height="2" fill="#ff7597"/>
+                    <!-- Open mouth & tongue sticking out -->
+                    <rect x="13" y="19" width="6" height="3" fill="#4a154b"/>
+                    <rect x="14" y="21" width="4" height="4" fill="#ff4d79"/>
+                    <rect x="15" y="23" width="2" height="3" fill="#ff2a5f"/>
+                    <rect x="16" y="22" width="1" height="3" fill="#ffffff" opacity="0.6"/>
+                    <!-- Chin -->
+                    <rect x="6" y="24" width="20" height="2" fill="#ffd1dc"/>
+                    <rect x="8" y="26" width="16" height="2" fill="#2d132c"/>
+                </svg>
+            </div>
+            <div class="bleh-sparkles">
+                <span class="bleh-star s1">✦</span>
+                <span class="bleh-star s2">✧</span>
+                <span class="bleh-star s3">✦</span>
+            </div>
+        </div>
     </div>
 
     <!-- Resume Appeal Decision Modal -->
@@ -1686,7 +1796,7 @@
     </div>
 
     <!-- Application Logic -->
-    <script type="module" src="/static/js/app.js?v=4.5"></script>
+    <script type="module" src="/static/js/app.js?v=4.6"></script>
 </body>
 
 </html>

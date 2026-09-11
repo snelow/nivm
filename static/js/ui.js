@@ -91,20 +91,18 @@ export function setupDynamicGreeting() {
     }
 
     const subtitles = [
-        'What are we engineering today?',
+        'What are we cookin today?',
         'Local hardware, zero telemetry, pure inference.',
         'Drop a problem, paste a log, or architect from scratch.',
         'Ready to reason through whatever you are building.',
         'Draft architecture, refactor code, or unpack an idea.',
         'Give me a goal, a file, or a tough problem.',
         'Your local intelligence engine is standing by.',
-        'Ask a question, trace an edge case, or write something new.',
-        'Where are we directing compute today?',
-        'Fast local execution. What shall we tackle?'
+        'Ask a question, trace an edge case, or write something new.'
     ];
 
-    const chosenGreeting = timeGreetings[Math.floor(Math.random() * timeGreetings.length)];
-    const chosenSub = subtitles[Math.floor(Math.random() * subtitles.length)];
+    const chosenGreeting = 'Good evening';
+    const chosenSub = 'What are we cookin today?';
 
     if (dom.heroGreeting) {
         const name = state.userName ? state.userName.trim() : '';
@@ -151,6 +149,7 @@ export function switchChat(id) {
     renderChatHistory();
     renderActiveChat();
 }
+window.switchChat = switchChat;
 
 export function extractMediaUrlsFromChat(chat) {
     const urls = [];

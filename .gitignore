@@ -45,3 +45,7 @@ yarn-error.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Icon generators
+make_icon.js
+make_icon.html

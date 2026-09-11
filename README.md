@@ -20,6 +20,10 @@
 [![Faster-Whisper](https://img.shields.io/badge/Neural%20STT-Faster--Whisper%20INT8-blueviolet.svg)](https://github.com/SYSTRAN/faster-whisper)
 [![Air--Gap Verified](https://img.shields.io/badge/Air--Gap-100%25%20Verified%20Local-success.svg)]()
 
+<p align="center">
+  <img src="assets/thumbnail.png" alt="nivm — Sovereign On-Premise Multimodal AI Workbench" width="100%">
+</p>
+
 ---
 
 ## Overview

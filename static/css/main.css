@@ -2,9 +2,28 @@
 @import 'base.css';
 @import 'backgrounds.css';
 @import 'layout.css';
-@import 'chat.css';
 @import 'markdown.css';
-@import 'modals.css';
+
+/* Modals */
+@import 'modals/modals_base.css';
+@import 'modals/theme_modal.css';
+@import 'modals/settings_modal.css';
+@import 'modals/sentinel_modal.css';
+@import 'modals/downloader_modal.css';
+@import 'modals/voice_modal.css';
+@import 'modals/extras_modal.css';
+@import 'modals/modals_mobile.css';
+
+/* Chat */
+@import 'chat/chat_drawers.css';
+@import 'chat/chat_layout.css';
+@import 'chat/chat_messages.css';
+@import 'chat/chat_input.css';
+@import 'chat/chat_media.css';
+@import 'chat/chat_events.css';
+@import 'chat/chat_notifications.css';
+@import 'chat/chat_voice.css';
+@import 'chat/chat_mobile.css';
 
 /* Thinking Toggle Button */
 .thinking-toggle-btn {

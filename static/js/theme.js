@@ -114,6 +114,8 @@ export function setupMatrixCanvas() {
         for (let x = 0; x < columns; x++) {
             drops[x] = 1;
         }
+        ctx.fillStyle = themeState.bgTone || '#09090b';
+        ctx.fillRect(0, 0, width, height);
     }
 
     window.addEventListener('resize', resizeCanvas);
@@ -137,9 +139,10 @@ export function setupMatrixCanvas() {
         lastDrawTime = timestamp;
 
         const accentHex = themeState.accentColor || '#f4f4f5';
+        const bgRgb = hexToRgb(themeState.bgTone || '#09090b');
 
         const fade = themeState.matrixFade || 0.05;
-        ctx.fillStyle = `rgba(0, 0, 0, ${fade})`;
+        ctx.fillStyle = `rgba(${bgRgb.r}, ${bgRgb.g}, ${bgRgb.b}, ${fade})`;
         ctx.fillRect(0, 0, width, height);
 
         ctx.fillStyle = accentHex;
@@ -160,7 +163,7 @@ export function setupMatrixCanvas() {
 
     window.startMatrixAnimation = function() {
         if (!matrixAnimationId) {
-            ctx.fillStyle = '#000';
+            ctx.fillStyle = themeState.bgTone || '#09090b';
             ctx.fillRect(0, 0, width, height);
             matrixAnimationId = requestAnimationFrame(drawMatrixLoop);
         }
@@ -169,11 +172,24 @@ export function setupMatrixCanvas() {
 
 // WebGL Fluid Simulation Engine
 export function setupFluidCanvas() {
-    window.startFluidAnimation = function() {};
+    const updateFluidTheme = () => {
+        if (window.fluidConfig) {
+            const bgRgb = hexToRgb(themeState.bgTone || '#09090b');
+            window.fluidConfig.BACK_COLOR = { r: bgRgb.r, g: bgRgb.g, b: bgRgb.b };
+            if (themeState.fluidRadius !== undefined) window.fluidConfig.SPLAT_RADIUS = themeState.fluidRadius;
+            if (themeState.fluidCurl !== undefined) window.fluidConfig.CURL = themeState.fluidCurl;
+            if (themeState.fluidBloom !== undefined) window.fluidConfig.BLOOM_INTENSITY = themeState.fluidBloom;
+        }
+    };
+    updateFluidTheme();
+    window.startFluidAnimation = function() {
+        updateFluidTheme();
+    };
 }
 
 function hexToRgb(hex) {
     let r = 0, g = 0, b = 0;
+    if (!hex) return {r, g, b, str: `${r}, ${g}, ${b}`};
     if (hex.length === 4) {
         r = parseInt(hex[1] + hex[1], 16);
         g = parseInt(hex[2] + hex[2], 16);
@@ -326,6 +342,10 @@ function colorCycleStep(timestamp) {
         const luminance = getLuminance(bgRgb.r, bgRgb.g, bgRgb.b);
         document.documentElement.style.setProperty('--glass-border', luminance > 0.5 ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.06)');
 
+        if (window.fluidConfig) {
+            window.fluidConfig.BACK_COLOR = { r: bgRgb.r, g: bgRgb.g, b: bgRgb.b };
+        }
+
         const cycleMuted = (themeState.mutedColor && typeof themeState.mutedColor === 'string' && themeState.mutedColor.startsWith('#'))
             ? themeState.mutedColor
             : calculateHarmonizedMutedColor(themeState.bgTone, themeState.accentColor, themeState.brandColor);
@@ -395,6 +415,14 @@ export function applyThemeState() {
     if (dom.flowFieldBgCanvas) {
         dom.flowFieldBgCanvas.classList.toggle('active', themeState.bgMotion === 'flowfield');
         if (themeState.bgMotion === 'flowfield' && window.startFlowFieldAnimation) window.startFlowFieldAnimation();
+    }
+
+    if (window.fluidConfig) {
+        const bg = hexToRgb(themeState.bgTone || '#09090b');
+        window.fluidConfig.BACK_COLOR = { r: bg.r, g: bg.g, b: bg.b };
+        if (themeState.fluidRadius !== undefined) window.fluidConfig.SPLAT_RADIUS = themeState.fluidRadius;
+        if (themeState.fluidCurl !== undefined) window.fluidConfig.CURL = themeState.fluidCurl;
+        if (themeState.fluidBloom !== undefined) window.fluidConfig.BLOOM_INTENSITY = themeState.fluidBloom;
     }
 
     if (dom.animationSettingsPanel) {

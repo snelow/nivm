@@ -1,6 +1,4 @@
-/* -----------------------------------------
-   Layout Core
------------------------------------------ */
+/* layout */
 .app-container {
     display: flex;
     width: 100vw;
@@ -10,9 +8,7 @@
     background: transparent;
 }
 
-/* -----------------------------------------
-   Sidebar (Ultra-clean Glass)
------------------------------------------ */
+/* Sidebar ( Glass) */
 .icon-sidebar {
     width: 72px;
     background-color: var(--glass-bg);
@@ -144,9 +140,6 @@
     background-color: currentColor;
 }
 
-/* -----------------------------------------
-   Mobile Responsive Navigation & Header
------------------------------------------ */
 .mobile-top-bar {
     display: none;
 }
@@ -380,5 +373,4 @@
         padding: 0;
     }
 }
-
 

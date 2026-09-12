@@ -30,6 +30,23 @@ SOFTWARE.
 const canvas = document.getElementById('fluidBgCanvas');
 resizeCanvas();
 
+function getInitialFluidBg() {
+    try {
+        const saved = localStorage.getItem('nivm_theme_config');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed && parsed.bgTone && typeof parsed.bgTone === 'string' && parsed.bgTone.startsWith('#') && parsed.bgTone.length === 7) {
+                return {
+                    r: parseInt(parsed.bgTone.substring(1, 3), 16),
+                    g: parseInt(parsed.bgTone.substring(3, 5), 16),
+                    b: parseInt(parsed.bgTone.substring(5, 7), 16)
+                };
+            }
+        }
+    } catch (e) {}
+    return { r: 9, g: 9, b: 11 };
+}
+
 let config = {
     SIM_RESOLUTION: 128,
     DYE_RESOLUTION: 1024,
@@ -45,7 +62,7 @@ let config = {
     COLORFUL: true,
     COLOR_UPDATE_SPEED: 10,
     PAUSED: false,
-    BACK_COLOR: { r: 0, g: 0, b: 0 },
+    BACK_COLOR: getInitialFluidBg(),
     TRANSPARENT: false,
     BLOOM: true,
     BLOOM_ITERATIONS: 8,

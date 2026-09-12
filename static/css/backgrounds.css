@@ -1,6 +1,4 @@
-/* -----------------------------------------
-   Animated Background Layers
------------------------------------------ */
+/* background layers */
 .bg-layer {
     position: fixed;
     top: 0;
@@ -332,9 +330,6 @@
     }
 }
 
-
-
-
 /* Gentle Rain */
 .rain-layer {
     overflow: hidden;
@@ -460,9 +455,7 @@
     }
 }
 
-
 /* Cyber Grid */
-
 
 /* Bioluminescent Jellyfish */
 .jellyfish-layer {
@@ -758,7 +751,6 @@
 }
 
 /* Aurora Borealis */
-
 
 /* WebGL / Canvas Fluid Simulation */
 .fluid-layer {

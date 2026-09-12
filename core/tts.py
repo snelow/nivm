@@ -95,6 +95,32 @@ def get_kokoro_engine(force_cpu: bool = False):
         logger.error(f"Failed to load Kokoro engine on CPU: {e}")
         return None
 
+def unload_kokoro_engine() -> bool:
+    """
+    Unloads the Kokoro-ONNX neural TTS engine from memory and releases GPU VRAM / CUDA sessions.
+    """
+    global _kokoro_instance, _active_device
+    if _kokoro_instance is not None:
+        try:
+            if hasattr(_kokoro_instance, 'sess'):
+                del _kokoro_instance.sess
+        except Exception as e:
+            logger.debug(f"Exception deleting Kokoro session: {e}")
+        _kokoro_instance = None
+        _active_device = "cpu"
+        import gc
+        gc.collect()
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
+        except Exception:
+            pass
+        logger.info("Kokoro Neural TTS engine unloaded and VRAM released.")
+        return True
+    return False
+
 def get_piper_engine():
     """Initializes and returns the Sherpa-ONNX Piper VITS engine."""
     global _piper_instance

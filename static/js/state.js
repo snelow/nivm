@@ -60,12 +60,17 @@ export let themeState = JSON.parse(localStorage.getItem('nivm_theme_config') || 
     bgTone: '#09090b',
     sidebarTone: '#121215',
     accentColor: '#f4f4f5',
+    brandColor: '#a855f7',
+    mutedColor: null,
     cycleAccent: false,
     cycleBg: false,
     cycleSpeed: 50,
     chatWidth: 'default',
     fontSize: 15
 }));
+if (themeState.mutedColor === undefined) {
+    themeState.mutedColor = null;
+}
 
 export function saveThemeConfig() {
     localStorage.setItem('nivm_theme_config', JSON.stringify(themeState));

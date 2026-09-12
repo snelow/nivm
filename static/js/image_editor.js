@@ -27,7 +27,7 @@ export function createImageProgressCard(promptText, isEdit = false) {
     card.className = 'image-gen-progress-card';
     card.style.cssText = `
         background: rgba(18, 18, 26, 0.85);
-        border: 1px solid rgba(139, 92, 246, 0.35);
+        border: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.35);
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
         backdrop-filter: blur(12px);
         border-radius: 12px;
@@ -42,7 +42,7 @@ export function createImageProgressCard(promptText, isEdit = false) {
 
     card.innerHTML = `
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-            <div style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; color: #c084fc;">
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; color: var(--accent-purple, #c084fc);">
                 <i class="fa-solid fa-wand-magic-sparkles fa-spin" style="--fa-animation-duration: 3s;"></i>
                 <span>${isEdit ? 'Refining Image (Qwen-Rapid)' : 'Synthesizing Image (Qwen-Rapid)'}</span>
             </div>
@@ -56,18 +56,18 @@ export function createImageProgressCard(promptText, isEdit = false) {
         <!-- Live Latent Preview Image -->
         <div class="preview-container" style="position: relative; width: 100%; height: 220px; background: rgba(0,0,0,0.3); border-radius: 8px; overflow: hidden; margin-bottom: 12px; display: flex; align-items: center; justify-content: center;">
             <div class="preview-placeholder" style="display: flex; flex-direction: column; align-items: center; gap: 8px; color: #64748b; font-size: 0.8rem;">
-                <i class="fa-solid fa-spinner fa-spin" style="font-size: 1.5rem; color: #8b5cf6;"></i>
+                <i class="fa-solid fa-spinner fa-spin" style="font-size: 1.5rem; color: var(--accent-purple, #8b5cf6);"></i>
                 <span>Awaiting live preview…</span>
             </div>
             <img class="preview-img" style="display: none; width: 100%; height: 100%; object-fit: contain; border-radius: 8px;" alt="Live Preview" />
-            <div class="preview-badge" style="position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.65); padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; color: #a855f7; display: none;">
+            <div class="preview-badge" style="position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.65); padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; color: var(--accent-purple, #a855f7); display: none;">
                 <i class="fa-solid fa-eye"></i> LIVE PREVIEW
             </div>
         </div>
 
         <!-- Progress Bar Track (5-Color Voice Orb Rainbow Flow) -->
         <div style="background: rgba(255, 255, 255, 0.08); height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 8px;">
-            <div class="gen-progress-bar" style="width: 5%; height: 100%; background: linear-gradient(90deg, #22c55e, #f59e0b, #f97316, #f43f5e, #a855f7, #22c55e); background-size: 200% 100%; animation: voiceOrbRainbowFlow 2.5s linear infinite; border-radius: 3px; transition: width 0.3s ease; box-shadow: 0 0 12px rgba(168, 85, 247, 0.45);"></div>
+            <div class="gen-progress-bar" style="width: 5%; height: 100%; background: linear-gradient(90deg, #22c55e, #f59e0b, #f97316, #f43f5e, var(--accent-purple, #a855f7), #22c55e); background-size: 200% 100%; animation: voiceOrbRainbowFlow 2.5s linear infinite; border-radius: 3px; transition: width 0.3s ease; box-shadow: 0 0 12px rgba(var(--accent-purple-rgb, 168, 85, 247), 0.45);"></div>
         </div>
 
         <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: #94a3b8;">
@@ -253,7 +253,7 @@ export function createBeforeAfterSlider(beforeUrl, afterUrl, promptText, duratio
 
             <!-- Divider Line and Handle -->
             <div class="slider-divider" style="position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: #fff; transform: translateX(-50%); pointer-events: none; z-index: 10; box-shadow: 0 0 8px rgba(0,0,0,0.6);">
-                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 28px; height: 28px; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: #8b5cf6; font-size: 14px; font-weight: bold;">
+                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 28px; height: 28px; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: var(--accent-purple, #8b5cf6); font-size: 14px; font-weight: bold;">
                     ◂▸
                 </div>
             </div>
@@ -358,7 +358,7 @@ export function openImageDetailModal(afterUrl, beforeUrl = null, promptText = ''
     modal.innerHTML = `
         <div style="background: rgba(22, 22, 32, 0.95); border: 1px solid rgba(255,255,255,0.15); border-radius: 16px; max-width: 900px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.7);">
             <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.08);">
-                <span style="font-weight: 600; font-size: 0.95rem; color: #f1f5f9;"><i class="fa-solid fa-eye" style="color: #a855f7; margin-right: 6px;"></i>Image Inspection</span>
+                <span style="font-weight: 600; font-size: 0.95rem; color: #f1f5f9;"><i class="fa-solid fa-eye" style="color: var(--accent-purple, #a855f7); margin-right: 6px;"></i>Image Inspection</span>
                 <button class="modal-close-btn icon-btn-sm" style="background: transparent; border: none; color: #94a3b8; font-size: 1.1rem; cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
             </div>
 

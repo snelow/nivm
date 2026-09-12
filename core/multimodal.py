@@ -38,6 +38,23 @@ def _get_whisper_model():
         return None
 
 
+def unload_whisper_model() -> bool:
+    """Unload faster-whisper model from memory."""
+    global _whisper_model
+    if _whisper_model is not None:
+        try:
+            if hasattr(_whisper_model, 'model'):
+                del _whisper_model.model
+        except Exception:
+            pass
+        _whisper_model = None
+        import gc
+        gc.collect()
+        logger.info("Faster-Whisper STT model unloaded from memory.")
+        return True
+    return False
+
+
 def _transcribe_audio_file(filepath_or_bytes, max_duration_s=180) -> str:
     """Transcribe speech in an audio file using faster-whisper."""
     model = _get_whisper_model()

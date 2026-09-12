@@ -156,3 +156,71 @@ def restore_vram_after_image_generation(saved_state: Optional[Dict[str, Any]]):
         logger.info(f"Successfully reloaded LLM ({active_role}).")
     except Exception as e:
         logger.error(f"Failed to restore LLM after image generation: {e}")
+
+
+async def free_all_system_models() -> Dict[str, Any]:
+    """
+    Comprehensive GPU VRAM and system memory release:
+    1. Unloads all llama.cpp LLMs
+    2. Unloads Kokoro Neural TTS ONNX session and flushes CUDA/CPU memory
+    3. Unloads Faster-Whisper STT model
+    4. Tells ComfyUI to free diffusion models and VRAM
+    5. Flushes PyTorch CUDA cache & triggers gc.collect()
+    """
+    unloaded = []
+
+    # 1. LLM
+    try:
+        if model_manager.has_any_loaded():
+            model_manager.unload_all()
+            unloaded.append("llm")
+    except Exception as e:
+        logger.warning(f"Error unloading LLM: {e}")
+
+    # 2. Kokoro TTS
+    try:
+        from .tts import unload_kokoro_engine
+        if unload_kokoro_engine():
+            unloaded.append("tts")
+    except Exception as e:
+        logger.warning(f"Error unloading TTS: {e}")
+
+    # 3. Whisper STT
+    try:
+        from .multimodal import unload_whisper_model
+        if unload_whisper_model():
+            unloaded.append("stt")
+    except Exception as e:
+        logger.warning(f"Error unloading STT: {e}")
+
+    # 4. ComfyUI Diffusion Models
+    try:
+        import httpx
+        from .image_engine.config import COMFY_HOST, COMFY_PORT
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.post(
+                f"http://{COMFY_HOST}:{COMFY_PORT}/free",
+                json={"unload_models": True, "free_memory": True}
+            )
+            if resp.status_code == 200:
+                unloaded.append("diffusion")
+    except Exception:
+        pass
+
+    # 5. PyTorch CUDA cache
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+            unloaded.append("cuda_cache")
+    except Exception:
+        pass
+
+    gc.collect()
+
+    return {
+        "status": "success",
+        "unloaded": unloaded,
+        "message": f"Successfully unloaded: {', '.join(unloaded) if unloaded else 'all models already idle'}"
+    }

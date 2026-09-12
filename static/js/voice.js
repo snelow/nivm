@@ -987,6 +987,12 @@ export async function setupVoiceUI() {
         });
     }
 
+    if (dom.voiceStageSettingsBtn) {
+        dom.voiceStageSettingsBtn.addEventListener('click', () => {
+            if (dom.voiceModal) dom.voiceModal.classList.remove('hidden');
+        });
+    }
+
     if (dom.closeVoiceBtn) {
         dom.closeVoiceBtn.addEventListener('click', () => {
             if (dom.voiceModal) dom.voiceModal.classList.add('hidden');
@@ -1008,9 +1014,27 @@ export async function setupVoiceUI() {
             if (firstBtn) {
                 colorBtns.forEach(b => b.classList.remove('active'));
                 firstBtn.classList.add('active');
-                updateAccent(firstBtn.getAttribute('data-color') || '#22c55e');
+                applyVoiceAccent('af_heart');
             }
             saveVoiceConfig();
+        });
+    }
+
+    if (dom.unloadVoiceBtn) {
+        dom.unloadVoiceBtn.addEventListener('click', async () => {
+            dom.unloadVoiceBtn.disabled = true;
+            try {
+                const res = await fetch('/api/tts/unload', { method: 'POST' });
+                if (res.ok) {
+                    if (window.showNotification) {
+                        window.showNotification('Voice Engine Unloaded — GPU VRAM released', 'info');
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to unload voice engine:', err);
+            } finally {
+                dom.unloadVoiceBtn.disabled = false;
+            }
         });
     }
 

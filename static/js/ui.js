@@ -270,7 +270,7 @@ export function renderChatHistory() {
         const title = document.createElement('span');
         title.className = 'chat-item-title';
         if (chat.isEnded) {
-            title.innerHTML = `<span class="chat-item-lock-pill"><i class="fa-solid fa-lock"></i> Locked</span> ${escapeHtml(chat.title || 'New Chat')}`;
+            title.innerHTML = `<i class="fa-solid fa-lock chat-item-lock-icon" title="Ended conversation"></i><span>${escapeHtml(chat.title || 'New Chat')}</span>`;
             item.classList.add('chat-item-locked');
         } else {
             title.textContent = chat.title || 'New Chat';
@@ -1493,7 +1493,7 @@ export function renderMemoryDrawer() {
             user_education: { label: 'User Education', icon: 'fa-solid fa-graduation-cap', color: '#3b82f6' },
             user_university: { label: 'University & Academics', icon: 'fa-solid fa-graduation-cap', color: '#3b82f6' },
             user_academics: { label: 'User Academics', icon: 'fa-solid fa-graduation-cap', color: '#3b82f6' },
-            user_projects: { label: 'User Projects', icon: 'fa-solid fa-diagram-project', color: '#8b5cf6' },
+            user_projects: { label: 'User Projects', icon: 'fa-solid fa-diagram-project', color: 'var(--accent-purple, #a855f7)' },
             user_preferences: { label: 'User Preferences', icon: 'fa-solid fa-sliders', color: '#f59e0b' },
             user_work: { label: 'User Career & Work', icon: 'fa-solid fa-briefcase', color: '#06b6d4' },
             user_career: { label: 'User Career', icon: 'fa-solid fa-briefcase', color: '#06b6d4' },
@@ -1509,7 +1509,7 @@ export function renderMemoryDrawer() {
         if (CATEGORY_META[key]) return CATEGORY_META[key];
 
         let icon = 'fa-solid fa-bookmark';
-        let color = '#a855f7';
+        let color = 'var(--accent-purple, #a855f7)';
         if (lower.includes('friend') || lower.includes('relat') || lower.includes('social') || lower.includes('fam') || lower.includes('people') || lower.includes('contact')) {
             icon = 'fa-solid fa-user-group';
             color = '#f43f5e';
@@ -1521,7 +1521,7 @@ export function renderMemoryDrawer() {
             color = '#06b6d4';
         } else if (lower.includes('code') || lower.includes('dev') || lower.includes('stack') || lower.includes('proj')) {
             icon = 'fa-solid fa-diagram-project';
-            color = '#8b5cf6';
+            color = 'var(--accent-purple, #a855f7)';
         } else if (lower.includes('game') || lower.includes('hobby') || lower.includes('music') || lower.includes('art')) {
             icon = 'fa-solid fa-gamepad';
             color = '#ec4899';
@@ -1749,7 +1749,7 @@ export async function renderToolsSettings() {
         title.style.gap = '6px';
 
         const iconClass = isImageTool ? 'fa-solid fa-paintbrush' : 'fa-solid fa-screwdriver-wrench';
-        const iconColor = isImageTool ? '#c084fc' : 'var(--accent-purple)';
+        const iconColor = 'var(--accent-purple)';
         title.innerHTML = `<i class="${iconClass}" style="font-size: 0.8em; color: ${iconColor};"></i><span>${escapeHtml(tool.name)}</span>`;
 
         if (isBlocked) {
@@ -1801,7 +1801,7 @@ export async function renderToolsSettings() {
                     <i class="fa-solid fa-triangle-exclamation"></i>
                     <span>${reasonText}</span>
                 </span>
-                <button type="button" class="btn-secondary redirect-to-model-settings" style="padding: 3px 8px; font-size: 0.72rem; color: #c084fc; border-color: rgba(139, 92, 246, 0.4); display: flex; align-items: center; gap: 4px; white-space: nowrap;">
+                <button type="button" class="btn-secondary redirect-to-model-settings" style="padding: 3px 8px; font-size: 0.72rem; color: var(--accent-purple); border-color: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.4); display: flex; align-items: center; gap: 4px; white-space: nowrap;">
                     <span>Download in Model Settings</span> <i class="fa-solid fa-arrow-right"></i>
                 </button>
             `;
@@ -1815,7 +1815,7 @@ export async function renderToolsSettings() {
                 if (studioSection) {
                     studioSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     studioSection.style.transition = 'box-shadow 0.4s ease';
-                    studioSection.style.boxShadow = '0 0 20px rgba(139, 92, 246, 0.6)';
+                    studioSection.style.boxShadow = '0 0 20px rgba(var(--accent-purple-rgb, 168, 85, 247), 0.6)';
                     setTimeout(() => { studioSection.style.boxShadow = ''; }, 2500);
                 }
             };
@@ -2809,12 +2809,53 @@ export function setupMobileNav() {
         };
     }
 
+    const drawerVoiceBtn = document.getElementById('drawerVoiceBtn');
+    if (drawerVoiceBtn) {
+        drawerVoiceBtn.onclick = () => {
+            closeAllDrawers();
+            const vBtn = document.getElementById('voiceBtn');
+            if (vBtn) {
+                vBtn.click();
+            } else {
+                const voiceModal = document.getElementById('voiceModal');
+                if (voiceModal) voiceModal.classList.remove('hidden');
+            }
+        };
+    }
+
     const drawerThemeBtn = document.getElementById('drawerThemeBtn');
     if (drawerThemeBtn) {
         drawerThemeBtn.onclick = () => {
             closeAllDrawers();
             const thBtn = document.getElementById('themeBtn');
             if (thBtn) thBtn.click();
+        };
+    }
+
+    const drawerStatsBtn = document.getElementById('drawerStatsBtn');
+    if (drawerStatsBtn) {
+        drawerStatsBtn.onclick = () => {
+            closeAllDrawers();
+            const sBtn = document.getElementById('statsBtn') || document.getElementById('mobileStatsBtn');
+            if (sBtn) {
+                sBtn.click();
+            } else {
+                const statsWindow = document.getElementById('statsWindow');
+                if (statsWindow) statsWindow.classList.remove('hidden');
+            }
+        };
+    }
+
+    const drawerUnloadBtn = document.getElementById('drawerUnloadBtn');
+    if (drawerUnloadBtn) {
+        drawerUnloadBtn.onclick = async () => {
+            closeAllDrawers();
+            if (typeof window.handleUnloadAllModels === 'function') {
+                await window.handleUnloadAllModels(drawerUnloadBtn);
+            } else {
+                const uBtn = document.getElementById('unloadAllModelsBtn');
+                if (uBtn) uBtn.click();
+            }
         };
     }
 

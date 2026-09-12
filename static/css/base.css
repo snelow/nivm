@@ -55,3 +55,10 @@ textarea {
     font-family: inherit;
 }
 
+input::placeholder,
+textarea::placeholder,
+::placeholder {
+    color: var(--text-muted);
+    opacity: 0.75;
+}
+

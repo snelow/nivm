@@ -300,6 +300,22 @@ export async function smartToggleEngine() {
     throw new Error('Smart toggle failed');
 }
 
+export async function unloadAllModels() {
+    const res = await fetch('/api/engine/unload-all', { method: 'POST' });
+    if (res.ok) {
+        return await res.json();
+    }
+    throw new Error('Failed to unload all models');
+}
+
+export async function unloadVoiceEngine() {
+    const res = await fetch('/api/tts/unload', { method: 'POST' });
+    if (res.ok) {
+        return await res.json();
+    }
+    throw new Error('Failed to unload voice engine');
+}
+
 export async function fetchBackendConfig() {
     try {
         const res = await fetch('/api/config', { cache: 'no-store' });

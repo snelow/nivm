@@ -1,6 +1,6 @@
 import { state, themeState, saveConversations, saveUsageStats } from './state.js';
 import { dom } from './dom.js';
-import { fetchApiSettings, saveApiSettings, smartToggleEngine, scanLocalGgufs, startModelDownload, pollDownloadStatus, cancelModelDownload, fetchBackendConfig, checkBackendHealth, fetchEngineStatus, loadAvailableModels, fetchChats, fetchMemoryAPI, saveMemoryAPI, generateChatTitle, uploadImage, openNativeFileDialog, listDirectory, verifyFile, locateFile } from './api.js';
+import { fetchApiSettings, saveApiSettings, smartToggleEngine, unloadAllModels, unloadVoiceEngine, scanLocalGgufs, startModelDownload, pollDownloadStatus, cancelModelDownload, fetchBackendConfig, checkBackendHealth, fetchEngineStatus, loadAvailableModels, fetchChats, fetchMemoryAPI, saveMemoryAPI, generateChatTitle, uploadImage, openNativeFileDialog, listDirectory, verifyFile, locateFile } from './api.js';
 import { setupNodesCanvas, setupMatrixCanvas, setupFluidCanvas, setupFlowFieldCanvas, applyThemeState, colorCycleLoop, saveThemeConfig } from './theme.js';
 import { makeDraggable, setupDynamicGreeting, renderChatHistory, renderActiveChat, switchChat, createNewChat, appendMessageToDOM, scrollToBottom, toggleSendStopButtons, updateAssistantBubble, updateMessageActionIcons, renderMemoryDrawer, renderToolsSettings, initImageStudioSettings, showAlert, showConfirm, showNotification, setupHistoryUI, setupMobileNav, setupVisionUI, setupAudioRecording, clearAttachedImage, updateVisionAvailabilityUI, setVisionEnabled, buildToolTraceHtml, populateStatsModal, updateChatInputState } from './ui.js?v=5.5';
 import { tools, buildToolsInstruction, parseToolCall, stripToolCallFromText } from './tools.js';
@@ -1338,6 +1338,12 @@ RESPONSE REQUIREMENTS (MANDATORY):
                 dom.openPersonalityFromSettingsBtn.addEventListener('click', () => {
                     dom.settingsModal.classList.add('hidden');
                     dom.personalityModal.classList.remove('hidden');
+                });
+            }
+            if (dom.openVoiceFromSettingsBtn) {
+                dom.openVoiceFromSettingsBtn.addEventListener('click', () => {
+                    dom.settingsModal.classList.add('hidden');
+                    dom.voiceModal.classList.remove('hidden');
                 });
             }
             if (dom.closePersonalityBtn) {
@@ -2717,6 +2723,61 @@ RESPONSE REQUIREMENTS (MANDATORY):
             });
         }
 
+        // ── Unload All Models & Free VRAM Handler ──
+        async function handleUnloadAllModels(triggerBtn) {
+            if (triggerBtn) triggerBtn.disabled = true;
+            if (dom.engineStatusText) {
+                dom.engineStatusText.textContent = 'Freeing VRAM & memory...';
+                dom.engineStatusText.style.color = 'var(--text-secondary)';
+            }
+            try {
+                const res = await unloadAllModels();
+                await fetchEngineStatus();
+                state.isModelLoaded = false;
+
+                if (dom.engineStatusText) {
+                    dom.engineStatusText.textContent = 'Status: All Unloaded';
+                    dom.engineStatusText.style.color = 'var(--text-tertiary)';
+                }
+                if (dom.smartToggleBtn) {
+                    dom.smartToggleBtn.classList.remove('is-loaded');
+                    dom.smartToggleLabel.textContent = 'Load Engine';
+                }
+                if (window.updateModelAvailabilityUI) {
+                    window.updateModelAvailabilityUI(false);
+                }
+
+                showNotification({
+                    title: 'Memory & VRAM Freed',
+                    message: res.message || 'All models (LLM, Voice TTS, STT, Diffusion) unloaded and VRAM released',
+                    type: 'info',
+                    icon: 'fa-broom'
+                });
+            } catch (err) {
+                showNotification({
+                    title: 'Unload Notice',
+                    message: err.message || 'Failed to unload models',
+                    type: 'error'
+                });
+            } finally {
+                if (triggerBtn) triggerBtn.disabled = false;
+            }
+        }
+
+        window.handleUnloadAllModels = handleUnloadAllModels;
+
+        if (dom.unloadAllModelsBtn) {
+            dom.unloadAllModelsBtn.addEventListener('click', () => handleUnloadAllModels(dom.unloadAllModelsBtn));
+        }
+
+        if (dom.statsUnloadAllBtn) {
+            dom.statsUnloadAllBtn.addEventListener('click', () => handleUnloadAllModels(dom.statsUnloadAllBtn));
+        }
+
+        if (dom.drawerUnloadBtn) {
+            dom.drawerUnloadBtn.addEventListener('click', () => handleUnloadAllModels(dom.drawerUnloadBtn));
+        }
+
         // ── Update engine status display when settings open ──
         async function refreshEngineStatusUI() {
             try {
@@ -3152,9 +3213,19 @@ RESPONSE REQUIREMENTS (MANDATORY):
             });
         }
 
+        if (dom.bgTonePicker) {
+            dom.bgTonePicker.addEventListener('input', (e) => {
+                themeState.bgTone = e.target.value;
+                if (themeState.cycleBg) { themeState.cycleBg = false; if (dom.cycleBgToggle) dom.cycleBgToggle.checked = false; }
+                applyThemeState();
+                saveThemeConfig();
+            });
+        }
+
         if (dom.sidebarTonePicker) {
             dom.sidebarTonePicker.addEventListener('input', (e) => {
                 themeState.sidebarTone = e.target.value;
+                applyThemeState();
                 saveThemeConfig();
             });
         }
@@ -3163,6 +3234,23 @@ RESPONSE REQUIREMENTS (MANDATORY):
             dom.accentColorPicker.addEventListener('input', (e) => {
                 themeState.accentColor = e.target.value;
                 if (themeState.cycleAccent) { themeState.cycleAccent = false; if (dom.cycleAccentToggle) dom.cycleAccentToggle.checked = false; }
+                applyThemeState();
+                saveThemeConfig();
+            });
+        }
+
+        if (dom.mutedColorPicker) {
+            dom.mutedColorPicker.addEventListener('input', (e) => {
+                themeState.mutedColor = e.target.value;
+                applyThemeState();
+                saveThemeConfig();
+            });
+        }
+
+        if (dom.brandColorPicker) {
+            dom.brandColorPicker.addEventListener('input', (e) => {
+                themeState.brandColor = e.target.value;
+                applyThemeState();
                 saveThemeConfig();
             });
         }
@@ -3298,6 +3386,8 @@ RESPONSE REQUIREMENTS (MANDATORY):
                     bgTone: '#09090b',
                     sidebarTone: '#121215',
                     accentColor: '#f4f4f5',
+                    brandColor: '#a855f7',
+                    mutedColor: null,
                     cycleAccent: false,
                     cycleBg: false,
                     cycleSpeed: 50,

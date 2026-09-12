@@ -133,9 +133,28 @@ async def engine_activate(role: str):
 
 @router.post("/api/engine/unload")
 async def engine_unload():
-    """Unload all active models."""
-    await asyncio.to_thread(model_manager.unload_all)
-    return {"status": "unloaded"}
+    """Unload all active models across LLM, TTS, STT, and Diffusion, freeing VRAM."""
+    from .vram_coordinator import free_all_system_models
+    return await free_all_system_models()
+
+
+@router.post("/api/engine/unload-all")
+async def engine_unload_all():
+    """Comprehensive unload for all models in GPU/VRAM/system memory."""
+    from .vram_coordinator import free_all_system_models
+    return await free_all_system_models()
+
+
+@router.post("/api/tts/unload")
+async def tts_unload():
+    """Unload Kokoro Neural TTS engine and release GPU VRAM."""
+    from .tts import unload_kokoro_engine
+    success = unload_kokoro_engine()
+    return {
+        "status": "unloaded" if success else "already_idle",
+        "engine": "kokoro",
+        "message": "Kokoro Neural TTS engine unloaded from memory" if success else "Voice engine already idle"
+    }
 
 
 @router.post("/api/engine/smart-toggle")
@@ -146,7 +165,8 @@ async def engine_smart_toggle():
     - If nothing loaded → apply user overrides and load the appropriate model
     """
     if model_manager.has_any_loaded():
-        await asyncio.to_thread(model_manager.unload_all)
+        from .vram_coordinator import free_all_system_models
+        await free_all_system_models()
         return {
             "action": "unloaded",
             "status": "All models unloaded",

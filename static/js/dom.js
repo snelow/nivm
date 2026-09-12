@@ -72,6 +72,7 @@ const rawDom = {
     closeVoiceBtn: document.getElementById('closeVoiceBtn'),
     saveVoiceBtn: document.getElementById('saveVoiceBtn'),
     resetVoiceBtn: document.getElementById('resetVoiceBtn'),
+    unloadVoiceBtn: document.getElementById('unloadVoiceBtn'),
     voicePresetSelect: document.getElementById('voicePresetSelect'),
     voiceSelect: document.getElementById('voiceSelect'),
     voicePitchSlider: document.getElementById('voicePitchSlider'),
@@ -84,6 +85,11 @@ const rawDom = {
     voiceVolumeVal: document.getElementById('voiceVolumeVal'),
     autoSpeakToggle: document.getElementById('autoSpeakToggle'),
     previewVoiceBtn: document.getElementById('previewVoiceBtn'),
+    voiceStageSettingsBtn: document.getElementById('voiceStageSettingsBtn'),
+    openVoiceFromSettingsBtn: document.getElementById('openVoiceFromSettingsBtn'),
+    drawerVoiceBtn: document.getElementById('drawerVoiceBtn'),
+    drawerStatsBtn: document.getElementById('drawerStatsBtn'),
+    drawerUnloadBtn: document.getElementById('drawerUnloadBtn'),
     
     // Stats Modal Elements
     statsBtn: document.getElementById('statsBtn'),
@@ -148,6 +154,8 @@ const rawDom = {
     bgTonePicker: document.getElementById('bgTonePicker'),
     sidebarTonePicker: document.getElementById('sidebarTonePicker'),
     accentColorPicker: document.getElementById('accentColorPicker'),
+    mutedColorPicker: document.getElementById('mutedColorPicker'),
+    brandColorPicker: document.getElementById('brandColorPicker'),
     
     // Experimental API Setup
     openApiSetupBtn: document.getElementById('openApiSetupBtn'),
@@ -296,6 +304,8 @@ const rawDom = {
     smartToggleBtn: document.getElementById('smartToggleBtn'),
     smartToggleLabel: document.getElementById('smartToggleLabel'),
     engineStatusText: document.getElementById('engineStatusText'),
+    unloadAllModelsBtn: document.getElementById('unloadAllModelsBtn'),
+    statsUnloadAllBtn: document.getElementById('statsUnloadAllBtn'),
 
     // Background System
     bgElements: document.querySelectorAll('.bg-element'),

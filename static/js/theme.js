@@ -205,6 +205,43 @@ function hslToHex(h, s, l) {
     return `#${f(0)}${f(8)}${f(4)}`;
 }
 
+export function rgbToHex(r, g, b) {
+    const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
+    return '#' + [clamp(r), clamp(g), clamp(b)]
+        .map(x => x.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+export function calculateHarmonizedMutedColor(bgHex, primaryHex, brandHex) {
+    const bg = hexToRgb(bgHex || '#09090b');
+    const primary = hexToRgb(primaryHex || '#f4f4f5');
+    const brand = hexToRgb(brandHex || '#a855f7');
+    const lum = getLuminance(bg.r, bg.g, bg.b);
+
+    if (lum > 0.5) {
+        // Light background: muted text blends text (55%), background (35%), brand (10%)
+        const r = primary.r * 0.55 + bg.r * 0.35 + brand.r * 0.10;
+        const g = primary.g * 0.55 + bg.g * 0.35 + brand.g * 0.10;
+        const b = primary.b * 0.55 + bg.b * 0.35 + brand.b * 0.10;
+        return rgbToHex(r, g, b);
+    } else {
+        // Dark background: muted text blends primary text (~52%), canvas background (~36%), brand accent (~12%)
+        const r = primary.r * 0.52 + bg.r * 0.36 + brand.r * 0.12;
+        const g = primary.g * 0.52 + bg.g * 0.36 + brand.g * 0.12;
+        const b = primary.b * 0.52 + bg.b * 0.36 + brand.b * 0.12;
+        return rgbToHex(r, g, b);
+    }
+}
+
+export function calculateHarmonizedSecondaryColor(mutedHex, primaryHex) {
+    const muted = hexToRgb(mutedHex);
+    const primary = hexToRgb(primaryHex || '#f4f4f5');
+    const r = muted.r * 0.65 + primary.r * 0.35;
+    const g = muted.g * 0.65 + primary.g * 0.35;
+    const b = muted.b * 0.65 + primary.b * 0.35;
+    return rgbToHex(r, g, b);
+}
+
 function hexToHue(hex) {
     if (!hex || typeof hex !== 'string') return 275;
     const { r, g, b } = hexToRgb(hex);
@@ -287,15 +324,14 @@ function colorCycleStep(timestamp) {
 
         const bgRgb = hexToRgb(themeState.bgTone);
         const luminance = getLuminance(bgRgb.r, bgRgb.g, bgRgb.b);
-        if (luminance > 0.5) {
-            document.documentElement.style.setProperty('--text-secondary', '#334155');
-            document.documentElement.style.setProperty('--text-muted', '#64748b');
-            document.documentElement.style.setProperty('--glass-border', 'rgba(0, 0, 0, 0.1)');
-        } else {
-            document.documentElement.style.setProperty('--text-secondary', '#94a3b8');
-            document.documentElement.style.setProperty('--text-muted', '#64748b');
-            document.documentElement.style.setProperty('--glass-border', 'rgba(255, 255, 255, 0.06)');
-        }
+        document.documentElement.style.setProperty('--glass-border', luminance > 0.5 ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.06)');
+
+        const cycleMuted = (themeState.mutedColor && typeof themeState.mutedColor === 'string' && themeState.mutedColor.startsWith('#'))
+            ? themeState.mutedColor
+            : calculateHarmonizedMutedColor(themeState.bgTone, themeState.accentColor, themeState.brandColor);
+        const cycleSec = calculateHarmonizedSecondaryColor(cycleMuted, themeState.accentColor);
+        document.documentElement.style.setProperty('--text-muted', cycleMuted);
+        document.documentElement.style.setProperty('--text-secondary', cycleSec);
     }
 
     // Throttle color picker DOM updates to at most 4x/sec and ONLY if theme window is visible
@@ -304,6 +340,9 @@ function colorCycleStep(timestamp) {
         if (dom.themeWindow && dom.themeWindow.style.display !== 'none') {
             if (themeState.cycleAccent && dom.accentColorPicker) dom.accentColorPicker.value = themeState.accentColor;
             if (themeState.cycleBg && dom.bgTonePicker) dom.bgTonePicker.value = themeState.bgTone;
+            if (dom.mutedColorPicker && !themeState.mutedColor) {
+                dom.mutedColorPicker.value = calculateHarmonizedMutedColor(themeState.bgTone, themeState.accentColor, themeState.brandColor);
+            }
         }
     }
 
@@ -317,6 +356,8 @@ export function applyThemeState() {
     if (!isValidHex(themeState.bgTone)) themeState.bgTone = '#09090b';
     if (!isValidHex(themeState.sidebarTone)) themeState.sidebarTone = '#121215';
     if (!isValidHex(themeState.accentColor)) themeState.accentColor = '#f4f4f5';
+    if (!isValidHex(themeState.brandColor)) themeState.brandColor = '#a855f7';
+    if (themeState.mutedColor !== null && !isValidHex(themeState.mutedColor)) themeState.mutedColor = null;
     if (themeState.cycleAccent === undefined) themeState.cycleAccent = false;
     if (themeState.cycleBg === undefined) themeState.cycleBg = false;
     if (themeState.cycleSpeed === undefined) themeState.cycleSpeed = 50;
@@ -378,11 +419,28 @@ export function applyThemeState() {
     if (dom.bgTonePicker) dom.bgTonePicker.value = themeState.bgTone;
     if (dom.sidebarTonePicker) dom.sidebarTonePicker.value = themeState.sidebarTone;
     if (dom.accentColorPicker) dom.accentColorPicker.value = themeState.accentColor;
+    if (dom.brandColorPicker) dom.brandColorPicker.value = themeState.brandColor;
+
+    const activeMutedColor = (themeState.mutedColor && isValidHex(themeState.mutedColor))
+        ? themeState.mutedColor
+        : calculateHarmonizedMutedColor(themeState.bgTone, themeState.accentColor, themeState.brandColor);
+    const activeSecondaryColor = calculateHarmonizedSecondaryColor(activeMutedColor, themeState.accentColor);
+
+    if (dom.mutedColorPicker) dom.mutedColorPicker.value = activeMutedColor;
 
     document.documentElement.style.setProperty('--bg-black', themeState.bgTone);
     document.documentElement.style.setProperty('--bg-surface', themeState.sidebarTone);
     document.documentElement.style.setProperty('--text-primary', themeState.accentColor);
+    document.documentElement.style.setProperty('--text-muted', activeMutedColor);
+    document.documentElement.style.setProperty('--text-secondary', activeSecondaryColor);
     document.documentElement.style.setProperty('--font-size-base', `${themeState.fontSize}px`);
+    
+    // Dynamic Brand Accent (Custom Purple replacement)
+    const brandRgb = hexToRgb(themeState.brandColor);
+    document.documentElement.style.setProperty('--accent-purple', themeState.brandColor);
+    document.documentElement.style.setProperty('--accent-purple-rgb', brandRgb.str);
+    document.documentElement.style.setProperty('--accent-purple-glow', `rgba(${brandRgb.str}, 0.35)`);
+
     let maxWidthStr = themeState.chatWidth === 'full' ? '100%' : '800px';
     document.documentElement.style.setProperty('--chat-max-width', maxWidthStr);
     
@@ -401,18 +459,14 @@ export function applyThemeState() {
     const luminance = getLuminance(bgRgb.r, bgRgb.g, bgRgb.b);
     
     if (luminance > 0.5) {
-        document.documentElement.style.setProperty('--text-secondary', '#334155');
-        document.documentElement.style.setProperty('--text-muted', '#64748b');
         document.documentElement.style.setProperty('--glass-border', 'rgba(0, 0, 0, 0.1)');
     } else {
-        document.documentElement.style.setProperty('--text-secondary', '#94a3b8');
-        document.documentElement.style.setProperty('--text-muted', '#64748b');
         document.documentElement.style.setProperty('--glass-border', 'rgba(255, 255, 255, 0.06)');
     }
 
     const heartColor = (themeState.accentColor && themeState.accentColor !== '#f4f4f5') 
         ? themeState.accentColor 
-        : (luminance > 0.5 ? '#9333ea' : '#a855f7');
+        : themeState.brandColor;
     document.documentElement.style.setProperty('--theme-heart-color', heartColor);
 
     if (dom.cycleAccentToggle) dom.cycleAccentToggle.checked = themeState.cycleAccent || false;

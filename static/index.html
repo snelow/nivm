@@ -31,7 +31,7 @@
     <script src="/static/vendor/marked.min.js"></script>
     <!-- WebGL Fluid Simulation -->
     <script src="/static/vendor/webgl-fluid.js" defer></script>
-    <link rel="stylesheet" href="/static/css/main.css?v=5.6">
+    <link rel="stylesheet" href="/static/css/main.css?v=6.7">
 </head>
 
 <body>
@@ -240,13 +240,8 @@
                 </div>
                 <button class="icon-btn-sm" id="closeHistoryBtn" title="Close Drawer"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <div class="drawer-new-chat-container">
-                <button class="drawer-new-chat-btn" id="drawerNewChatBtn" type="button">
-                    <i class="fa-solid fa-plus"></i>
-                    <span>New Chat</span>
-                </button>
-            </div>
             <div class="drawer-search">
+                <i class="fa-solid fa-magnifying-glass drawer-search-icon"></i>
                 <input type="text" id="chatSearchInput" class="search-input" placeholder="Search conversations...">
             </div>
             <div class="drawer-body">
@@ -254,27 +249,39 @@
                     <!-- Chat items populated by JS -->
                 </div>
             </div>
-            <!-- Quick Tools Footer for Mobile -->
+            <!-- Quick Tools Footer for Mobile (8 items: Voice, Themes, Persona, Memory, Tools, Settings, Stats, Free VRAM) -->
             <div class="drawer-tools-footer" id="drawerToolsFooter">
-                <button class="drawer-tool-item" id="drawerSettingsBtn" title="Settings" type="button">
-                    <i class="fa-solid fa-gear"></i>
-                    <span>Settings</span>
+                <button class="drawer-tool-item" id="drawerVoiceBtn" title="Voice & Speech Profile" type="button">
+                    <i class="fa-solid fa-microphone-lines"></i>
+                    <span>Voice</span>
+                </button>
+                <button class="drawer-tool-item" id="drawerThemeBtn" title="Themes & Colors" type="button">
+                    <i class="fa-solid fa-palette"></i>
+                    <span>Themes</span>
+                </button>
+                <button class="drawer-tool-item" id="drawerPersonaBtn" title="Personality & Instructions" type="button">
+                    <i class="fa-solid fa-user-pen"></i>
+                    <span>Persona</span>
                 </button>
                 <button class="drawer-tool-item" id="drawerMemoryBtn" title="Memory" type="button">
                     <i class="fa-solid fa-brain"></i>
                     <span>Memory</span>
                 </button>
-                <button class="drawer-tool-item" id="drawerPersonaBtn" title="Persona" type="button">
-                    <i class="fa-solid fa-user-pen"></i>
-                    <span>Persona</span>
-                </button>
-                <button class="drawer-tool-item" id="drawerToolsBtn" title="Tools" type="button">
+                <button class="drawer-tool-item" id="drawerToolsBtn" title="Tools Configuration" type="button">
                     <i class="fa-solid fa-toolbox"></i>
                     <span>Tools</span>
                 </button>
-                <button class="drawer-tool-item" id="drawerThemeBtn" title="Themes" type="button">
-                    <i class="fa-solid fa-palette"></i>
-                    <span>Themes</span>
+                <button class="drawer-tool-item" id="drawerSettingsBtn" title="System & Inference Settings" type="button">
+                    <i class="fa-solid fa-gear"></i>
+                    <span>Settings</span>
+                </button>
+                <button class="drawer-tool-item" id="drawerStatsBtn" title="Performance & System Stats" type="button">
+                    <i class="fa-solid fa-chart-simple"></i>
+                    <span>Stats</span>
+                </button>
+                <button class="drawer-tool-item tool-unload" id="drawerUnloadBtn" title="Free All Models & GPU VRAM" type="button">
+                    <i class="fa-solid fa-bolt-lightning"></i>
+                    <span>Free VRAM</span>
                 </button>
             </div>
             <div class="resize-handle" id="historyResizeHandle"></div>
@@ -319,10 +326,13 @@
                         <span id="voiceModeName">Voice Mode</span>
                     </div>
                     <div class="voice-stage-actions">
-                        <button class="voice-mode-dock-btn" id="toggleVoiceDockBtn" title="Switch between full-screen and collapsed dock">
+                        <button class="voice-mode-dock-btn" id="voiceStageSettingsBtn" title="Voice & Speech Settings" type="button">
+                            <i class="fa-solid fa-sliders"></i> <span id="voiceStageSettingsLabel">Settings</span>
+                        </button>
+                        <button class="voice-mode-dock-btn" id="toggleVoiceDockBtn" title="Switch between full-screen and collapsed dock" type="button">
                             <i class="fa-solid fa-down-left-and-up-right-to-center" id="voiceDockBtnIcon"></i> <span id="voiceDockBtnLabel">Collapse</span>
                         </button>
-                        <button class="voice-mode-exit-btn" id="exitVoiceModeBtn" title="Exit Voice Mode">
+                        <button class="voice-mode-exit-btn" id="exitVoiceModeBtn" title="Exit Voice Mode" type="button">
                             <i class="fa-solid fa-xmark"></i> <span>Exit</span>
                         </button>
                     </div>
@@ -408,7 +418,7 @@
 
                             <button id="forceThinkingToggle" class="thinking-toggle-btn active"
                                 title="Deep Reasoning: Enable deeper planning for complex requests.">
-                                <i class="fa-solid fa-brain"></i> <span class="toggle-btn-label">Deep Reasoning</span>
+                                <i class="fa-solid fa-brain"></i> <span class="toggle-btn-label">Reasoning</span>
                             </button>
                             
                             <button id="visionToggleBtn" class="thinking-toggle-btn" title="Vision: Multimodal input">
@@ -416,7 +426,7 @@
                             </button>
 
                             <button id="voiceModeToggleBtn" class="thinking-toggle-btn" title="Voice Mode: Converse via voice">
-                                <i class="fa-solid fa-microphone-lines"></i> <span class="toggle-btn-label">Voice Mode</span>
+                                <i class="fa-solid fa-microphone-lines"></i> <span class="toggle-btn-label">Voice</span>
                             </button>
                         </div>
 
@@ -554,7 +564,7 @@
             <div class="bleh-speech-bubble">
                 <span class="bleh-bubble-text">Bleh~!</span>
             </div>
-            <div class="bleh-pixel-avatar" style="border-color: #8b5cf6;">
+            <div class="bleh-pixel-avatar" style="border-color: var(--accent-purple, #8b5cf6);">
                 <!-- Human Form Reze -->
                 <svg id="rezeHumanSvg" viewBox="0 0 32 32" class="pixel-art-svg reze-human-svg" shape-rendering="crispEdges">
                     <!-- Hair Back / Silhouette -->
@@ -772,9 +782,16 @@
                     <div class="field-group">
                         <label for="userNameInput">What should nivm call you?</label>
                         <input type="text" id="userNameInput" placeholder="Enter your name (optional)">
-                        <button type="button" class="btn-secondary" id="openPersonalityFromSettingsBtn" style="margin-top: 8px; width: 100%; justify-content: center; gap: 8px; display: flex; align-items: center;">
-                            <i class="fa-solid fa-user-gear"></i> Customize Personality & System Instructions
-                        </button>
+                        <div class="pref-quick-grid">
+                            <button type="button" class="pref-quick-btn" id="openPersonalityFromSettingsBtn" title="Customize Personality & Instructions">
+                                <i class="fa-solid fa-user-pen"></i>
+                                <span>Personality</span>
+                            </button>
+                            <button type="button" class="pref-quick-btn" id="openVoiceFromSettingsBtn" title="Customize Voice & Speech Profile">
+                                <i class="fa-solid fa-microphone-lines"></i>
+                                <span>Voice Profile</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -786,7 +803,7 @@
                     <div class="mode-selector">
                         <button class="mode-btn active" id="singleModeBtn" data-mode="single" title="One model handles everything">
                             <i class="fa-solid fa-microchip"></i>
-                            <span class="mode-btn-label">Single Model</span>
+                            <span class="mode-btn-label">Single</span>
                         </button>
                         <button class="mode-btn" id="routingModeBtn" data-mode="routing" title="Auto-route specialists">
                             <i class="fa-solid fa-route"></i>
@@ -1174,7 +1191,7 @@
                                     <i class="fa-solid fa-server" style="color: #60a5fa;"></i> Ollama
                                 </button>
                                 <button type="button" class="api-preset-chip" data-preset="local" title="nivm Localhost Port">
-                                    <i class="fa-solid fa-laptop-code" style="color: #c084fc;"></i> nivm Local
+                                    <i class="fa-solid fa-laptop-code" style="color: var(--accent-purple, #c084fc);"></i> nivm Local
                                 </button>
                             </div>
                         </div>
@@ -1283,16 +1300,16 @@
                                 <button type="button" id="autoSetupComfyBtn" class="btn-secondary" style="width: 100%; justify-content: center; gap: 6px; display: flex; align-items: center; font-size: 0.78rem; padding: 6px;">
                                     <i class="fa-solid fa-cloud-arrow-down"></i> Auto-Install ComfyUI to nivm/engine/
                                 </button>
-                                <div id="comfySetupProgressBox" style="display: none; background: rgba(0,0,0,0.4); border: 1px solid rgba(139,92,246,0.3); border-radius: 6px; padding: 10px; font-size: 0.72rem;">
+                                <div id="comfySetupProgressBox" style="display: none; background: rgba(0,0,0,0.4); border: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.3); border-radius: 6px; padding: 10px; font-size: 0.72rem;">
                                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                        <div id="comfySetupStepText" style="color: #c084fc; font-weight: 600;">[Step 1/3] Cloning ComfyUI...</div>
+                                        <div id="comfySetupStepText" style="color: var(--accent-purple); font-weight: 600;">[Step 1/3] Cloning ComfyUI...</div>
                                         <span id="comfySetupPct" style="color: var(--text-muted); font-size: 0.7rem;">0%</span>
                                     </div>
                                     <div id="comfySetupTargetDir" style="color: #94a3b8; font-size: 0.68rem; margin-bottom: 6px; word-break: break-all; font-family: monospace;">
                                         Target: nivm/engine/ComfyUI
                                     </div>
                                     <div style="background: rgba(255,255,255,0.08); height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 8px;">
-                                        <div id="comfySetupProgressBar" style="width: 0%; height: 100%; background: #8b5cf6; transition: width 0.3s ease;"></div>
+                                        <div id="comfySetupProgressBar" style="width: 0%; height: 100%; background: var(--accent-purple); transition: width 0.3s ease;"></div>
                                     </div>
                                     <div id="comfySetupLogText" style="font-family: monospace; color: #cbd5e1; font-size: 0.68rem; max-height: 90px; overflow-y: auto; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: 4px; padding: 6px; white-space: pre-wrap; line-height: 1.35;"></div>
                                 </div>
@@ -1304,7 +1321,7 @@
                     <div class="role-config-card" style="background: rgba(0,0,0,0.25);">
                         <div style="padding: 12px;">
                             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-                                <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);"><i class="fa-solid fa-cubes" style="color: #c084fc; margin-right: 6px;"></i>Qwen-Rapid Diffusion Models</span>
+                                <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);"><i class="fa-solid fa-cubes" style="color: var(--accent-purple); margin-right: 6px;"></i>Qwen-Rapid Diffusion Models</span>
                                 <span id="imageModelsBadge" class="role-card-badge">—</span>
                             </div>
                             <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 10px;">
@@ -1329,16 +1346,16 @@
                                 <i class="fa-solid fa-download"></i> <span id="downloadBtnLabel">Download Image Models (aria2)</span>
                             </button>
 
-                            <div id="imageDownloadProgressBox" style="display: none; margin-top: 8px; background: rgba(0,0,0,0.4); border: 1px solid rgba(139,92,246,0.3); border-radius: 6px; padding: 10px; font-size: 0.72rem;">
+                            <div id="imageDownloadProgressBox" style="display: none; margin-top: 8px; background: rgba(0,0,0,0.4); border: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.3); border-radius: 6px; padding: 10px; font-size: 0.72rem;">
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <span id="imageDownloadModelName" style="color: #c084fc; font-weight: 600;">Downloading UNet...</span>
+                                    <span id="imageDownloadModelName" style="color: var(--accent-purple); font-weight: 600;">Downloading UNet...</span>
                                     <span id="imageDownloadPct" style="color: var(--text-muted);">0%</span>
                                 </div>
                                 <div id="imageDownloadTargetPath" style="color: #94a3b8; font-size: 0.68rem; margin-bottom: 6px; word-break: break-all; font-family: monospace;">
                                     Saving to: nivm/models/image/
                                 </div>
                                 <div style="background: rgba(255,255,255,0.08); height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
-                                    <div id="imageDownloadProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #8b5cf6, #d946ef); transition: width 0.3s ease;"></div>
+                                    <div id="imageDownloadProgressBar" style="width: 0%; height: 100%; background: var(--accent-purple); transition: width 0.3s ease;"></div>
                                 </div>
                                 <div style="display: flex; justify-content: space-between; color: #94a3b8; font-size: 0.68rem; font-family: monospace;">
                                     <span id="imageDownloadBytes">0 MB / 0 MB</span>
@@ -1350,7 +1367,7 @@
                     </div>
                 </div>
 
-                <!-- Smart Engine Toggle -->
+                <!-- Smart Engine Toggle & Unload All -->
                 <div class="settings-section" id="smartEngineSection" style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
                     <button class="smart-toggle-btn" id="smartToggleBtn">
                         <i class="fa-solid fa-bolt"></i>
@@ -1359,6 +1376,10 @@
                     <div id="engineStatusText" style="font-size: 0.8rem; text-align: center; color: var(--text-muted);">
                         Status: Not Loaded
                     </div>
+                    <button type="button" class="btn-secondary" id="unloadAllModelsBtn" title="Unload all models (LLM, Voice TTS, STT, Diffusion) and completely free GPU VRAM" style="width: 100%; border-color: rgba(239, 68, 68, 0.25); color: #f87171; justify-content: center; gap: 8px; display: flex; align-items: center; font-size: 0.82rem; padding: 9px 14px; margin-top: 2px;">
+                        <i class="fa-solid fa-broom"></i>
+                        <span>Unload All Models (Free VRAM)</span>
+                    </button>
                 </div>
             </div>
             <div class="window-footer">
@@ -1658,18 +1679,30 @@
                 <!-- Complete Custom Color Freedom Pickers -->
                 <div class="settings-section">
                     <div class="section-title">Site Palette</div>
-                    <div class="color-picker-item" style="justify-content: space-around; flex-wrap: wrap;">
-                        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-                            <label style="font-size: 0.8rem;">Main Background</label>
-                            <input type="color" id="bgTonePicker">
+                    <div class="color-picker-item site-palette-container">
+                        <div class="site-palette-row row-2">
+                            <div class="palette-picker-col">
+                                <input type="color" id="bgTonePicker">
+                                <label>Main Background</label>
+                            </div>
+                            <div class="palette-picker-col">
+                                <input type="color" id="sidebarTonePicker">
+                                <label>Sidebar & Prompt</label>
+                            </div>
                         </div>
-                        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-                            <label style="font-size: 0.8rem;">Sidebar & Prompt</label>
-                            <input type="color" id="sidebarTonePicker">
-                        </div>
-                        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-                            <label style="font-size: 0.8rem;">Text & Highlights</label>
-                            <input type="color" id="accentColorPicker">
+                        <div class="site-palette-row row-3">
+                            <div class="palette-picker-col">
+                                <input type="color" id="accentColorPicker" title="Primary text and highlights">
+                                <label>Main Text</label>
+                            </div>
+                            <div class="palette-picker-col">
+                                <input type="color" id="mutedColorPicker" title="Muted text, hints, placeholders, and inactive icons">
+                                <label>Muted Text</label>
+                            </div>
+                            <div class="palette-picker-col">
+                                <input type="color" id="brandColorPicker" value="#a855f7" title="Custom accent color (replaces default purple)">
+                                <label>Accent</label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1813,9 +1846,16 @@
                     </div>
                 </div>
             </div>
-            <div class="window-footer" style="padding: 12px 20px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
-                <button class="btn-secondary" id="resetVoiceBtn">Reset Defaults</button>
-                <button class="btn-primary" id="saveVoiceBtn">Done</button>
+            <div class="window-footer voice-modal-footer">
+                <div class="voice-footer-left">
+                    <button type="button" class="btn-voice-action btn-voice-unload" id="unloadVoiceBtn" title="Unload Kokoro TTS engine to free GPU VRAM">
+                        <i class="fa-solid fa-power-off"></i> <span>Unload</span>
+                    </button>
+                    <button type="button" class="btn-voice-action btn-voice-reset" id="resetVoiceBtn" title="Reset voice sliders and settings to default">
+                        <i class="fa-solid fa-rotate-left"></i> <span>Reset</span>
+                    </button>
+                </div>
+                <button type="button" class="btn-primary" id="saveVoiceBtn">Done</button>
             </div>
         </div>
     </div>
@@ -1866,6 +1906,10 @@
                 </div>
             </div>
             <div class="settings-group">
+                <button class="btn-secondary" id="statsUnloadAllBtn"
+                    style="width: 100%; border-color: rgba(239, 68, 68, 0.25); color: #f87171; margin-bottom: 8px; justify-content: center; gap: 8px; display: flex; align-items: center; font-size: 0.82rem; padding: 8px 12px;">
+                    <i class="fa-solid fa-broom"></i> Unload All Models (Free VRAM)
+                </button>
                 <button class="btn-secondary" id="resetStatsBtn"
                     style="width: 100%; border-color: rgba(239, 68, 68, 0.2); color: #ef4444;">
                     <i class="fa-solid fa-trash-can"></i> Reset Statistics
@@ -2087,7 +2131,7 @@
     </div>
 
     <!-- Application Logic -->
-    <script type="module" src="/static/js/app.js?v=5.6"></script>
+    <script type="module" src="/static/js/app.js?v=7.2"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {

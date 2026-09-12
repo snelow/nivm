@@ -1,5 +1,5 @@
 // Service Worker for nivm PWA
-const CACHE_NAME = 'nivm-shell-v6';
+const CACHE_NAME = 'nivm-shell-v20';
 const STATIC_ASSETS = [
     '/',
     '/static/index.html',

@@ -234,7 +234,7 @@
     border-radius: 4px;
 }
 .thinking-content::-webkit-scrollbar-thumb:hover {
-    background: rgba(168, 85, 247, 0.4);
+    background: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.4);
 }
 
 .thinking-content p {

@@ -1040,6 +1040,8 @@ export async function setupVoiceUI() {
 
         const shouldEnable = forceState !== null ? forceState : !chatViewport.classList.contains('voice-mode-active');
         if (shouldEnable) {
+            // Unlock audio playback during user gesture for mobile browsers
+            try { getSharedAudio(); } catch (e) {}
             applyVoiceAccent();
             document.body.classList.add('voice-mode-active');
             chatViewport.classList.add('voice-mode-active');
@@ -1260,6 +1262,18 @@ export async function setupVoiceUI() {
         if (voiceModeIsRecording || state.isGenerating || isSpeaking()) return;
 
         try {
+            if (!navigator?.mediaDevices?.getUserMedia) {
+                const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+                const msg = isLocal
+                    ? 'Microphone API unavailable. Click Reset permissions in browser settings.'
+                    : `Microphone is blocked on IP origins. Please open http://localhost:${location.port || '8000'}`;
+                console.error('navigator.mediaDevices unavailable:', msg);
+                const statusEl = document.getElementById('voiceStageStatus');
+                if (statusEl) statusEl.textContent = 'Microphone blocked by browser';
+                if (window.showNotification) window.showNotification(msg, 'error');
+                return;
+            }
+
             voiceModeStream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     echoCancellation: true,
@@ -1466,15 +1480,22 @@ export async function setupVoiceUI() {
             if (dom.voiceConversationOrb) {
                 dom.voiceConversationOrb.classList.remove('listening');
             }
+            const statusEl = document.getElementById('voiceStageStatus');
             if (statusEl) statusEl.textContent = 'Microphone access denied';
+            const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+            const hint = isLocal
+                ? 'Microphone access denied. Please allow microphone in your browser settings.'
+                : 'Microphone blocked. Chrome restricts audio on IP addresses: use HTTPS or enable "unsafely-treat-insecure-origin-as-secure" in chrome://flags.';
             if (window.showNotification) {
-                window.showNotification('Microphone access denied. Please allow microphone in browser settings.', 'error');
+                window.showNotification(hint, 'error');
             }
         }
     }
 
     if (dom.voiceConversationOrb) {
         dom.voiceConversationOrb.addEventListener('click', () => {
+            // Unlock mobile audio context synchronously during touch/click gesture
+            try { getSharedAudio(); } catch (e) {}
             if (isSpeaking()) {
                 stopSpeaking();
                 return;

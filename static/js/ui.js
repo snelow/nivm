@@ -1,6 +1,7 @@
 import { state, saveConversations, saveEnabledTools, saveTerminalSecurityMode } from './state.js';
 import { dom } from './dom.js';
 import { tools, parseToolCall, stripToolCallFromText } from './tools.js';
+import { createSingleImageCard, createBeforeAfterSlider } from './image_editor.js';
 
 export function makeDraggable(windowEl, headerEl) {
     if (!windowEl || !headerEl) return;
@@ -55,54 +56,54 @@ export function setupDynamicGreeting() {
     if (hour >= 5 && hour < 12) {
         timeGreetings = [
             'Good morning',
-            'Morning focus',
-            'Ready to build',
-            'Early start',
-            'System online',
-            'New day, clean slate'
+            'Start fresh',
+            'Ready when you are',
+            'Bright and early',
+            'What’s on your mind?',
+            'A brand new day'
         ];
     } else if (hour >= 12 && hour < 17) {
         timeGreetings = [
             'Good afternoon',
-            'In the zone',
-            'System active',
+            'How can I help?',
+            'Here to help',
             'Ready when you are',
-            'Full steam ahead',
-            'Back to building'
+            'Let’s get things done',
+            'Take a breath'
         ];
     } else if (hour >= 17 && hour < 22) {
         timeGreetings = [
             'Good evening',
-            'Evening session',
-            'Deep work hours',
-            'Locked in',
-            'Night compute',
-            'Focused session'
+            'Evening thoughts',
+            'Here with you',
+            'Still curious?',
+            'What are we working on?',
+            'Unwinding'
         ];
     } else {
         timeGreetings = [
-            'Midnight session',
+            'Late night inspiration',
             'Quiet hours',
-            'Late night build',
-            'Deep in the code',
-            'Into the night',
-            'System awake'
+            'Midnight thoughts',
+            'Still awake?',
+            'Here when you need me',
+            'Into the night'
         ];
     }
 
     const subtitles = [
-        'What are we cookin today?',
-        'Local hardware, zero telemetry, pure inference.',
-        'Drop a problem, paste a log, or architect from scratch.',
-        'Ready to reason through whatever you are building.',
-        'Draft architecture, refactor code, or unpack an idea.',
-        'Give me a goal, a file, or a tough problem.',
-        'Your local intelligence engine is standing by.',
-        'Ask a question, trace an edge case, or write something new.'
+        'How can I help you today?',
+        'Ask anything, brainstorm an idea, or draft something new.',
+        'Explore a topic, polish your writing, or solve a problem.',
+        'Ready to help you write, learn, think, and create.',
+        'Got a question, an idea, or just curious? Let’s chat.',
+        'What would you like to explore today?',
+        'From quick answers to deep conversations, I’m here.',
+        'Share a thought, plan your day, or learn something new.'
     ];
 
-    const chosenGreeting = 'Good evening';
-    const chosenSub = 'What are we cookin today?';
+    const chosenGreeting = timeGreetings[Math.floor(Math.random() * timeGreetings.length)];
+    const chosenSub = subtitles[Math.floor(Math.random() * subtitles.length)];
 
     if (dom.heroGreeting) {
         const name = state.userName ? state.userName.trim() : '';
@@ -122,6 +123,16 @@ export function scrollToBottom() {
 }
 
 export function createNewChat() {
+    if (state.isGenerating) {
+        if (typeof window.stopGeneration === 'function') {
+            window.stopGeneration();
+        } else if (state.abortController) {
+            state.abortController.abort();
+            state.isGenerating = false;
+        }
+        toggleSendStopButtons(false);
+    }
+
     const activeChat = state.conversations.find(c => c.id === state.activeChatId);
     
     if (activeChat && activeChat.messages.length === 0) {
@@ -145,9 +156,27 @@ export function createNewChat() {
 }
 
 export function switchChat(id) {
+    if (id === state.activeChatId) return;
+    if (state.isGenerating) {
+        if (typeof window.stopGeneration === 'function') {
+            window.stopGeneration();
+        } else if (state.abortController) {
+            state.abortController.abort();
+            state.isGenerating = false;
+        }
+        toggleSendStopButtons(false);
+    }
     state.activeChatId = id;
+    if (window.innerWidth <= 768) {
+        if (dom.historyDrawer) dom.historyDrawer.classList.add('hidden');
+        const backdrop = dom.mobileDrawerBackdrop || document.getElementById('mobileDrawerBackdrop');
+        if (backdrop) backdrop.classList.remove('active');
+    }
     renderChatHistory();
     renderActiveChat();
+    if (typeof window.checkAndResumeActiveGeneration === 'function') {
+        window.checkAndResumeActiveGeneration(id);
+    }
 }
 window.switchChat = switchChat;
 
@@ -170,7 +199,10 @@ export function extractMediaUrlsFromChat(chat) {
 }
 
 export function deleteChat(id, e) {
-    if (e) e.stopPropagation();
+    if (e) {
+        e.stopPropagation();
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+    }
     const chatToDelete = state.conversations.find(c => c.id === id);
     if (chatToDelete) {
         const urls = extractMediaUrlsFromChat(chatToDelete);
@@ -190,10 +222,19 @@ export function deleteChat(id, e) {
     saveConversations();
     renderChatHistory();
     renderActiveChat();
+    if (window.showNotification) {
+        window.showNotification('Conversation deleted', 'info');
+    }
 }
 
 export function renderChatHistory() {
+    if (!dom.chatHistoryList) return;
     dom.chatHistoryList.innerHTML = '';
+    
+    // Reset scroll to top so the latest conversation is always visible first
+    dom.chatHistoryList.scrollTop = 0;
+    const drawerBody = dom.historyDrawer ? dom.historyDrawer.querySelector('.drawer-body') : null;
+    if (drawerBody) drawerBody.scrollTop = 0;
     
     const query = dom.chatSearchInput ? dom.chatSearchInput.value.toLowerCase().trim() : '';
     
@@ -213,9 +254,17 @@ export function renderChatHistory() {
         }
         item.className = classes;
         item.style.animationDelay = `${index * 40}ms`;
-        item.onclick = () => {
+        item.onclick = (e) => {
+            // Do not switch or close drawer if delete button was clicked
+            if (e && e.target && (e.target.closest('.chat-action-btn') || e.target.closest('.chat-item-actions'))) {
+                return;
+            }
             switchChat(chat.id);
-            dom.historyDrawer.classList.add('hidden');
+            if (window.innerWidth <= 768) {
+                if (dom.historyDrawer) dom.historyDrawer.classList.add('hidden');
+                const backdrop = dom.mobileDrawerBackdrop || document.getElementById('mobileDrawerBackdrop');
+                if (backdrop) backdrop.classList.remove('active');
+            }
         };
 
         const title = document.createElement('span');
@@ -232,8 +281,22 @@ export function renderChatHistory() {
 
         const delBtn = document.createElement('button');
         delBtn.className = 'chat-action-btn';
-        delBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
-        delBtn.onclick = (e) => deleteChat(chat.id, e);
+        delBtn.setAttribute('type', 'button');
+        delBtn.setAttribute('title', 'Delete conversation');
+        delBtn.setAttribute('aria-label', 'Delete conversation');
+        delBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+
+        const handleDelete = (e) => {
+            if (e) {
+                e.stopPropagation();
+                e.preventDefault();
+            }
+            deleteChat(chat.id, e);
+        };
+        delBtn.onclick = handleDelete;
+        delBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+        delBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+        delBtn.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
 
         actions.appendChild(delBtn);
         item.appendChild(title);
@@ -751,12 +814,19 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
     const isFollowedByNotification = allMessages && typeof msgIndex === 'number' && allMessages[msgIndex + 1]?.content?.startsWith?.('[SYSTEM NOTIFICATION]');
 
     if (role === 'assistant' && (hasToolCall || isFollowedByNotification)) {
-        const textWithoutTool = stripToolCallFromText(content, tools).trim();
+        const cleanContent = typeof content === 'string' ? content.replace(/<(think|thought|reasoning)>\s*<\/\1>/gi, '') : '';
+        const textWithoutTool = stripToolCallFromText(cleanContent, tools).trim();
         const textOutsideThoughts = textWithoutTool
             .replace(/<(think|thought|reasoning)>[\s\S]*?<\/\1>/gi, '')
             .replace(/<(think|thought|reasoning)>[\s\S]*$/gi, '')
             .trim();
-        const hasCompletedThought = textWithoutTool.includes('</think>') || textWithoutTool.includes('</thought>') || textWithoutTool.includes('</reasoning>');
+        
+        let completedThoughtContent = '';
+        const mThought = textWithoutTool.match(/<(think|thought|reasoning)>([\s\S]*?)<\/\1>/i);
+        if (mThought && mThought[2].trim()) {
+            completedThoughtContent = mThought[2].trim();
+        }
+        const hasCompletedThought = Boolean(completedThoughtContent);
         
         let toolCommand = msg.toolExecution?.command || detectedTool?.command || null;
         let argsStr = msg.toolExecution?.argsStr || detectedTool?.argsStr || null;
@@ -796,6 +866,59 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
         }
 
         if (toolCommand) {
+            // Restore rich image card in history for generate_image and edit_image
+            if (toolCommand === 'generate_image' || toolCommand === 'edit_image') {
+                let imgUrl = null;
+                if (resultStr) {
+                    const match = resultStr.match(/(?:\/images\/|\/uploads\/)[a-zA-Z0-9_\-\./]+/i) || resultStr.match(/(?:\/images\/|\/uploads\/)[^\s,)"';:]+/i);
+                    if (match) imgUrl = match[0].replace(/[.,:;]+$/, '');
+                }
+                if (!imgUrl && msg.toolExecution?.imageUrl) {
+                    imgUrl = String(msg.toolExecution.imageUrl).replace(/[.,:;]+$/, '');
+                }
+
+                if (imgUrl) {
+                    let promptText = '';
+                    try {
+                        const parsed = JSON.parse(argsStr);
+                        promptText = parsed.prompt || '';
+                    } catch (_) {
+                        const parts = (argsStr || '').match(/(?:[^\s,"']+|"[^"]*"|'[^']*')+/g) || [];
+                        if (toolCommand === 'edit_image' && parts.length > 1) {
+                            promptText = (parts[1] || '').replace(/^['"]|['"]$/g, '');
+                        } else if (parts.length > 0) {
+                            promptText = (parts[0] || '').replace(/^['"]|['"]$/g, '');
+                        }
+                    }
+
+                    let imgCard;
+                    let beforeUrl = null;
+                    if (toolCommand === 'edit_image' && resultStr) {
+                        const matches = Array.from(resultStr.matchAll(/(?:\/images\/|\/uploads\/)[a-zA-Z0-9_\-\./]+/gi));
+                        if (matches.length > 1) {
+                            beforeUrl = matches[1][0].replace(/[.,:;]+$/, '');
+                        }
+                    }
+
+                    if (toolCommand === 'edit_image' && beforeUrl && imgUrl) {
+                        imgCard = createBeforeAfterSlider(beforeUrl, imgUrl, promptText);
+                    } else {
+                        imgCard = createSingleImageCard(imgUrl, promptText);
+                    }
+                    imgCard.style.margin = '6px 0 8px 0';
+
+                    if (textOutsideThoughts === '' && !hasCompletedThought) {
+                        wrapper.remove();
+                        row.appendChild(imgCard);
+                    } else {
+                        actions.style.display = 'none';
+                        bubble.insertAdjacentElement('afterend', imgCard);
+                    }
+                    dom.messagesContainer.appendChild(row);
+                    return { bubble, actions };
+                }
+            }
+
             const sysBubbleHtml = buildToolTraceHtml(toolCommand, argsStr, resultStr);
             
             if (textOutsideThoughts === '' && !hasCompletedThought) {
@@ -1046,6 +1169,8 @@ export function updateAssistantBubble(bubbleElement, rawText, isGenerating = fal
     // Normalize alternative thinking tags to <think>
     processedText = processedText.replace(/<thought>/gi, '<think>').replace(/<\/thought>/gi, '</think>');
     processedText = processedText.replace(/<reasoning>/gi, '<think>').replace(/<\/reasoning>/gi, '</think>');
+    // Strip empty thought tags so they never create ghost thinking elements or break answer splitting
+    processedText = processedText.replace(/<think>\s*<\/think>/gi, '');
 
     // If model closed </think> without an explicit opening <think> tag (common with prefilled prompt templates like Qwen), prepend <think>
     if (processedText.includes('</think>') && !processedText.includes('<think>')) {
@@ -1152,7 +1277,7 @@ function deduplicateConsecutiveParagraphs(text) {
         stopThinkingPhraseRotation();
         const parts = processedText.split('<think>');
         answerText = deduplicateConsecutiveParagraphs(parts[0].trim());
-        const thinkContent = (parts[1] || '').trim();
+        const thinkContent = (parts[1] || '').replace(/<\/think>/gi, '').trim();
         if (thinkContent) {
             const thinkDuration = resolveThinkDuration(thinkStartTimeOrDuration, isGenerating);
             const durationLabel = thinkDuration !== null ? getCreativeDuration(thinkDuration) : 'Thought for a moment';
@@ -1234,7 +1359,11 @@ function deduplicateConsecutiveParagraphs(text) {
         bubbleElement.style.display = '';
         const actionsEl = bubbleElement.closest('.message-wrapper')?.querySelector('.message-actions');
         if (actionsEl) {
-            actionsEl.style.display = isGenerating ? 'none' : '';
+            if (!parsedAnswer.trim() || isGenerating) {
+                actionsEl.style.display = 'none';
+            } else {
+                actionsEl.style.display = '';
+            }
         }
     }
 
@@ -1566,16 +1695,32 @@ INSTRUCTIONS:
     });
 }
 
-export function renderToolsSettings() {
+export async function renderToolsSettings() {
     dom.toolsConfigContainer.innerHTML = '';
     
     if (tools.length === 0) {
         dom.toolsConfigContainer.innerHTML = '<div style="color: var(--text-tertiary); font-size: 0.9em; font-style: italic;">No tools registered.</div>';
         return;
     }
+
+    // Check image models & engine prerequisites
+    let imageModelsReady = false;
+    let comfyReady = false;
+    try {
+        const [modelsRes, comfyRes] = await Promise.all([
+            fetch('/api/image/models/status').then(r => r.json()).catch(() => null),
+            fetch('/api/image/comfy/status').then(r => r.json()).catch(() => null),
+        ]);
+        imageModelsReady = modelsRes?.all_installed === true;
+        comfyReady = comfyRes?.comfyui?.detected === true;
+    } catch (e) {
+        console.warn('Could not check image studio status:', e);
+    }
     
     tools.forEach(tool => {
-        const isEnabled = state.enabledTools[tool.name] === true;
+        const isEnabled = state.enabledTools[tool.name] !== false;
+        const isImageTool = (tool.name === 'generate_image' || tool.name === 'edit_image');
+        const isBlocked = isImageTool && (!imageModelsReady || !comfyReady);
         
         const cardContainer = document.createElement('div');
         cardContainer.className = 'tool-setting-card';
@@ -1593,30 +1738,90 @@ export function renderToolsSettings() {
         wrap.style.padding = '10px 12px';
         
         const infoWrap = document.createElement('div');
+        infoWrap.style.flex = '1';
+        infoWrap.style.paddingRight = '12px';
         
         const title = document.createElement('div');
         title.style.fontWeight = '500';
         title.style.color = 'var(--text-primary)';
-        title.innerHTML = `<i class="fa-solid fa-screwdriver-wrench" style="font-size: 0.8em; margin-right: 6px; color: var(--accent-purple);"></i>${escapeHtml(tool.name)}`;
+        title.style.display = 'flex';
+        title.style.alignItems = 'center';
+        title.style.gap = '6px';
+
+        const iconClass = isImageTool ? 'fa-solid fa-paintbrush' : 'fa-solid fa-screwdriver-wrench';
+        const iconColor = isImageTool ? '#c084fc' : 'var(--accent-purple)';
+        title.innerHTML = `<i class="${iconClass}" style="font-size: 0.8em; color: ${iconColor};"></i><span>${escapeHtml(tool.name)}</span>`;
+
+        if (isBlocked) {
+            const blockedBadge = document.createElement('span');
+            blockedBadge.style.cssText = 'background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.68rem; padding: 1px 6px; border-radius: 4px; font-weight: 500;';
+            blockedBadge.textContent = 'Setup Required';
+            title.appendChild(blockedBadge);
+        }
         
         const desc = document.createElement('div');
-        desc.style.fontSize = '0.85em';
+        desc.style.fontSize = '0.82em';
         desc.style.color = 'var(--text-tertiary)';
         desc.style.marginTop = '4px';
+        desc.style.lineHeight = '1.35';
         desc.textContent = tool.description;
         
         infoWrap.appendChild(title);
         infoWrap.appendChild(desc);
         
         const toggleBtn = document.createElement('button');
-        toggleBtn.className = isEnabled ? 'btn-primary' : 'btn-secondary';
-        toggleBtn.style.padding = '6px 12px';
-        toggleBtn.style.fontSize = '0.85em';
-        toggleBtn.textContent = isEnabled ? 'Enabled' : 'Disabled';
+        if (isBlocked) {
+            toggleBtn.className = 'btn-secondary';
+            toggleBtn.style.padding = '6px 12px';
+            toggleBtn.style.fontSize = '0.82em';
+            toggleBtn.style.opacity = '0.5';
+            toggleBtn.style.cursor = 'not-allowed';
+            toggleBtn.textContent = 'Disabled';
+            toggleBtn.title = 'Image models and ComfyUI backend required. Download in Model Settings.';
+            toggleBtn.disabled = true;
+        } else {
+            toggleBtn.className = isEnabled ? 'btn-primary' : 'btn-secondary';
+            toggleBtn.style.padding = '6px 12px';
+            toggleBtn.style.fontSize = '0.85em';
+            toggleBtn.textContent = isEnabled ? 'Enabled' : 'Disabled';
+        }
         
         wrap.appendChild(infoWrap);
         wrap.appendChild(toggleBtn);
         cardContainer.appendChild(wrap);
+
+        // If image tool is missing prerequisites, display direct redirect action
+        if (isBlocked) {
+            const redirectRow = document.createElement('div');
+            redirectRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: rgba(245, 158, 11, 0.06); border-top: 1px solid rgba(245, 158, 11, 0.15); font-size: 0.76rem;';
+            
+            const reasonText = !imageModelsReady && !comfyReady ? 'Requires ComfyUI engine & 18 GB image models' : (!imageModelsReady ? 'Requires Qwen-Rapid diffusion models (18 GB)' : 'Requires ComfyUI backend engine');
+            redirectRow.innerHTML = `
+                <span style="color: #fbbf24; display: flex; align-items: center; gap: 5px;">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>${reasonText}</span>
+                </span>
+                <button type="button" class="btn-secondary redirect-to-model-settings" style="padding: 3px 8px; font-size: 0.72rem; color: #c084fc; border-color: rgba(139, 92, 246, 0.4); display: flex; align-items: center; gap: 4px; white-space: nowrap;">
+                    <span>Download in Model Settings</span> <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            `;
+
+            const redirectBtn = redirectRow.querySelector('.redirect-to-model-settings');
+            redirectBtn.onclick = () => {
+                if (dom.toolsModal) dom.toolsModal.classList.add('hidden');
+                if (dom.settingsModal) dom.settingsModal.classList.remove('hidden');
+                initImageStudioSettings();
+                const studioSection = document.getElementById('imageStudioSection');
+                if (studioSection) {
+                    studioSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    studioSection.style.transition = 'box-shadow 0.4s ease';
+                    studioSection.style.boxShadow = '0 0 20px rgba(139, 92, 246, 0.6)';
+                    setTimeout(() => { studioSection.style.boxShadow = ''; }, 2500);
+                }
+            };
+
+            cardContainer.appendChild(redirectRow);
+        }
 
         if (tool.name === 'execute_terminal') {
             const secWrap = document.createElement('div');
@@ -1651,7 +1856,7 @@ export function renderToolsSettings() {
             };
 
             toggleBtn.onclick = () => {
-                const newState = !(state.enabledTools[tool.name] === true);
+                const newState = !(state.enabledTools[tool.name] !== false);
                 state.enabledTools[tool.name] = newState;
                 saveEnabledTools();
                 
@@ -1661,9 +1866,9 @@ export function renderToolsSettings() {
             };
 
             cardContainer.appendChild(secWrap);
-        } else {
+        } else if (!isBlocked) {
             toggleBtn.onclick = () => {
-                const newState = !(state.enabledTools[tool.name] === true);
+                const newState = !(state.enabledTools[tool.name] !== false);
                 state.enabledTools[tool.name] = newState;
                 saveEnabledTools();
                 
@@ -1674,6 +1879,300 @@ export function renderToolsSettings() {
 
         dom.toolsConfigContainer.appendChild(cardContainer);
     });
+}
+
+// ── Image Studio Settings Wiring & Progress Polling ──
+let _imageStudioPollInterval = null;
+let _imageStudioEventsBound = false;
+
+export async function initImageStudioSettings() {
+    const masterBadge = document.getElementById('imageStudioMasterBadge');
+    const comfyBadge = document.getElementById('comfyStatusBadge');
+    const comfyPathDisplay = document.getElementById('comfyPathDisplay');
+    const customComfyInput = document.getElementById('customComfyPathInput');
+    const setComfyBtn = document.getElementById('setComfyPathBtn');
+    const autoSetupBtn = document.getElementById('autoSetupComfyBtn');
+    const comfyProgressBox = document.getElementById('comfySetupProgressBox');
+    const comfyStepText = document.getElementById('comfySetupStepText');
+    const comfyTargetDir = document.getElementById('comfySetupTargetDir');
+    const comfyPct = document.getElementById('comfySetupPct');
+    const comfyProgressBar = document.getElementById('comfySetupProgressBar');
+    const comfyLogText = document.getElementById('comfySetupLogText');
+
+    const modelsBadge = document.getElementById('imageModelsBadge');
+    const verifiedBox = document.getElementById('imageModelsVerifiedBox');
+    const unetCheck = document.getElementById('unetModelCheck');
+    const clipCheck = document.getElementById('clipModelCheck');
+    const vaeCheck = document.getElementById('vaeModelCheck');
+    const downloadBtn = document.getElementById('downloadImageModelsBtn');
+    const downloadProgressBox = document.getElementById('imageDownloadProgressBox');
+    const dlModelName = document.getElementById('imageDownloadModelName');
+    const dlTargetPath = document.getElementById('imageDownloadTargetPath');
+    const dlPct = document.getElementById('imageDownloadPct');
+    const dlProgressBar = document.getElementById('imageDownloadProgressBar');
+    const dlBytes = document.getElementById('imageDownloadBytes');
+    const dlSpeed = document.getElementById('imageDownloadSpeed');
+    const dlEta = document.getElementById('imageDownloadEta');
+
+    async function pollStatus() {
+        try {
+            const [modelsRes, comfyRes, dlRes] = await Promise.all([
+                fetch('/api/image/models/status').then(r => r.json()).catch(() => null),
+                fetch('/api/image/comfy/status').then(r => r.json()).catch(() => null),
+                fetch('/api/image/models/download/status').then(r => r.json()).catch(() => null),
+            ]);
+
+            const comfyDetected = comfyRes?.comfyui?.detected === true;
+            const modelsInstalled = modelsRes?.all_installed === true;
+
+            // Update Master Badge
+            if (masterBadge) {
+                if (comfyDetected && modelsInstalled) {
+                    masterBadge.textContent = 'Active & Ready';
+                    masterBadge.style.color = '#34d399';
+                    masterBadge.style.background = 'rgba(52, 211, 153, 0.15)';
+                    masterBadge.style.borderColor = 'rgba(52, 211, 153, 0.3)';
+                } else {
+                    masterBadge.textContent = 'Action Required';
+                    masterBadge.style.color = '#f59e0b';
+                    masterBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+                    masterBadge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+                }
+            }
+
+            // Update ComfyUI Backend Engine Display
+            if (comfyBadge && comfyPathDisplay) {
+                if (comfyDetected) {
+                    comfyBadge.textContent = 'Detected & Ready';
+                    comfyBadge.style.color = '#34d399';
+                    comfyBadge.style.background = 'rgba(52, 211, 153, 0.15)';
+                    comfyBadge.style.borderColor = 'rgba(52, 211, 153, 0.3)';
+                    comfyPathDisplay.innerHTML = `<i class="fa-solid fa-folder-check" style="color: #34d399; margin-right: 5px;"></i>${escapeHtml(comfyRes.comfyui.path)}<br><span style="color: var(--text-muted); font-size: 0.7rem;">Python: ${escapeHtml(comfyRes.comfyui.python_bin)} | GGUF Nodes: ${comfyRes.comfyui.has_gguf_nodes ? '<span style="color:#34d399;">Installed</span>' : '<span style="color:#f59e0b;">Missing</span>'}</span>`;
+                    if (autoSetupBtn) {
+                        autoSetupBtn.innerHTML = '<i class="fa-solid fa-check"></i> ComfyUI Engine Ready';
+                        autoSetupBtn.className = 'btn-secondary';
+                    }
+                } else {
+                    comfyBadge.textContent = 'Not Found';
+                    comfyBadge.style.color = '#f59e0b';
+                    comfyBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+                    comfyBadge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+                    comfyPathDisplay.innerHTML = `<span style="color: #f59e0b;"><i class="fa-solid fa-triangle-exclamation" style="margin-right: 5px;"></i>ComfyUI is required to run local diffusion. Click Auto-Install below or specify an existing folder.</span>`;
+                    if (autoSetupBtn && comfyRes?.status !== 'installing') {
+                        autoSetupBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down"></i> Auto-Install ComfyUI to nivm/engine/';
+                        autoSetupBtn.disabled = false;
+                        autoSetupBtn.className = 'btn-primary';
+                    }
+                }
+            }
+
+            // ComfyUI Auto-Setup Progress Tracking
+            let isComfyInstalling = comfyRes?.status === 'installing';
+            if (comfyProgressBox) {
+                if (isComfyInstalling) {
+                    comfyProgressBox.style.display = 'block';
+                    if (autoSetupBtn) {
+                        autoSetupBtn.disabled = true;
+                        autoSetupBtn.textContent = 'Installing ComfyUI Engine...';
+                    }
+                    if (comfyStepText) comfyStepText.textContent = comfyRes.progress_message || `[Step ${comfyRes.step}/3] ${comfyRes.step_name}`;
+                    if (comfyTargetDir) comfyTargetDir.textContent = 'Target: ' + (comfyRes.target_dir || 'nivm/engine/ComfyUI');
+                    if (comfyPct) comfyPct.textContent = (comfyRes.percent || 0) + '%';
+                    if (comfyProgressBar) comfyProgressBar.style.width = (comfyRes.percent || 0) + '%';
+                    if (comfyLogText && comfyRes.log_lines && comfyRes.log_lines.length > 0) {
+                        comfyLogText.textContent = comfyRes.log_lines.join('\n');
+                        comfyLogText.scrollTop = comfyLogText.scrollHeight;
+                    }
+                } else if (comfyRes?.status === 'completed') {
+                    comfyProgressBox.style.display = 'none';
+                    if (autoSetupBtn) {
+                        autoSetupBtn.disabled = false;
+                        autoSetupBtn.innerHTML = '<i class="fa-solid fa-check"></i> ComfyUI Engine Ready';
+                    }
+                } else if (comfyRes?.status === 'error') {
+                    comfyProgressBox.style.display = 'block';
+                    if (autoSetupBtn) {
+                        autoSetupBtn.disabled = false;
+                        autoSetupBtn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Retry Auto-Install';
+                    }
+                    if (comfyStepText) {
+                        comfyStepText.textContent = '❌ ' + (comfyRes.error || 'Setup failed');
+                        comfyStepText.style.color = '#f43f5e';
+                    }
+                } else {
+                    comfyProgressBox.style.display = 'none';
+                }
+            }
+
+            // Update Models Checklist (Shows checkmark if file is already there, indicates missing otherwise)
+            if (unetCheck && modelsRes?.unet) {
+                unetCheck.innerHTML = modelsRes.unet.installed
+                    ? `<span style="color: #34d399; font-weight: 500;"><i class="fa-solid fa-circle-check" style="margin-right: 5px;"></i>UNet (Qwen-Rapid-NSFW-v23_Q4_K.gguf)</span>`
+                    : `<span style="color: #f59e0b;"><i class="fa-regular fa-circle" style="margin-right: 5px;"></i>UNet (Qwen-Rapid-NSFW-v23_Q4_K.gguf)</span>`;
+            }
+            if (clipCheck && modelsRes?.text_encoder) {
+                clipCheck.innerHTML = modelsRes.text_encoder.installed
+                    ? `<span style="color: #34d399; font-weight: 500;"><i class="fa-solid fa-circle-check" style="margin-right: 5px;"></i>Text Encoder (Qwen2.5-VL CLIP)</span>`
+                    : `<span style="color: #f59e0b;"><i class="fa-regular fa-circle" style="margin-right: 5px;"></i>Text Encoder (Qwen2.5-VL CLIP)</span>`;
+            }
+            if (vaeCheck && modelsRes?.vae) {
+                vaeCheck.innerHTML = modelsRes.vae.installed
+                    ? `<span style="color: #34d399; font-weight: 500;"><i class="fa-solid fa-circle-check" style="margin-right: 5px;"></i>VAE (qwen_image_vae.safetensors)</span>`
+                    : `<span style="color: #f59e0b;"><i class="fa-regular fa-circle" style="margin-right: 5px;"></i>VAE (qwen_image_vae.safetensors)</span>`;
+            }
+
+            // Update Models Badge & Download Button:
+            // IF VERIFIED: Remove the download button completely!
+            // IF PARTIAL: Skip existing files, only offer download for missing files!
+            if (modelsBadge) {
+                if (modelsInstalled) {
+                    modelsBadge.textContent = 'Verified (18 GB)';
+                    modelsBadge.style.color = '#34d399';
+                    modelsBadge.style.background = 'rgba(52, 211, 153, 0.15)';
+                    modelsBadge.style.borderColor = 'rgba(52, 211, 153, 0.3)';
+
+                    // Remove download button when verified
+                    if (downloadBtn) downloadBtn.style.display = 'none';
+                    if (verifiedBox) verifiedBox.style.display = 'flex';
+                } else {
+                    modelsBadge.textContent = 'Missing Models';
+                    modelsBadge.style.color = '#f59e0b';
+                    modelsBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+                    modelsBadge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+
+                    if (verifiedBox) verifiedBox.style.display = 'none';
+
+                    if (downloadBtn) {
+                        const missingList = [];
+                        if (!modelsRes?.unet?.installed) missingList.push({ name: 'UNet', size: '13.3 GB' });
+                        if (!modelsRes?.text_encoder?.installed) missingList.push({ name: 'Text Encoder', size: '4.7 GB' });
+                        if (!modelsRes?.vae?.installed) missingList.push({ name: 'VAE', size: '253 MB' });
+
+                        if (dlRes?.status !== 'downloading') {
+                            downloadBtn.style.display = 'flex';
+                            downloadBtn.disabled = false;
+                            downloadBtn.className = 'btn-primary';
+
+                            if (missingList.length === 1) {
+                                downloadBtn.innerHTML = `<i class="fa-solid fa-download"></i> Download Missing ${missingList[0].name} (${missingList[0].size})`;
+                            } else if (missingList.length === 2) {
+                                downloadBtn.innerHTML = `<i class="fa-solid fa-download"></i> Download ${missingList.length} Missing Models (skipping verified)`;
+                            } else {
+                                downloadBtn.innerHTML = `<i class="fa-solid fa-download"></i> Download Image Models (aria2)`;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Model Download Progress Tracking
+            let isDownloading = dlRes?.status === 'downloading';
+            if (downloadProgressBox) {
+                if (isDownloading) {
+                    downloadProgressBox.style.display = 'block';
+                    if (downloadBtn) {
+                        downloadBtn.style.display = 'flex';
+                        downloadBtn.disabled = true;
+                        downloadBtn.textContent = 'Downloading Models in Background...';
+                    }
+                    if (dlModelName) dlModelName.textContent = `[${dlRes.current_index}/${dlRes.total_models}] ${dlRes.current_model}`;
+                    if (dlTargetPath) dlTargetPath.textContent = 'Saving to: ' + (dlRes.target_path || dlRes.target_dir || 'nivm/models/image/');
+                    if (dlPct) dlPct.textContent = (dlRes.percent || 0) + '%';
+                    if (dlProgressBar) dlProgressBar.style.width = (dlRes.percent || 0) + '%';
+                    if (dlBytes) dlBytes.textContent = `${dlRes.downloaded_str || '0 MB'} / ${dlRes.total_str || '0 MB'}`;
+                    if (dlSpeed) dlSpeed.textContent = dlRes.speed_str || '0 MB/s';
+                    if (dlEta) dlEta.textContent = 'ETA: ' + (dlRes.eta_str || '--');
+                } else if (dlRes?.status === 'completed') {
+                    downloadProgressBox.style.display = 'none';
+                } else {
+                    downloadProgressBox.style.display = 'none';
+                }
+            }
+
+            // Clear polling if neither operation is active
+            if (!isComfyInstalling && !isDownloading && _imageStudioPollInterval) {
+                clearInterval(_imageStudioPollInterval);
+                _imageStudioPollInterval = null;
+            }
+        } catch (e) {
+            console.error('Image Studio polling error:', e);
+        }
+    }
+
+    // Kick off initial poll
+    await pollStatus();
+
+    // Bind Action Buttons Once
+    if (!_imageStudioEventsBound) {
+        _imageStudioEventsBound = true;
+
+        if (setComfyBtn && customComfyInput) {
+            setComfyBtn.onclick = async () => {
+                const path = customComfyInput.value.trim();
+                if (!path) {
+                    showNotification('Please enter a valid ComfyUI directory path', 'warning');
+                    return;
+                }
+                setComfyBtn.disabled = true;
+                setComfyBtn.textContent = 'Checking...';
+                try {
+                    const res = await fetch('/api/image/comfy/set_path', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ path })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || 'Could not verify ComfyUI at path');
+                    showNotification('ComfyUI path saved successfully!', 'success');
+                    customComfyInput.value = '';
+                    await pollStatus();
+                } catch (err) {
+                    showNotification(err.message, 'error');
+                } finally {
+                    setComfyBtn.disabled = false;
+                    setComfyBtn.textContent = 'Set Path';
+                }
+            };
+        }
+
+        if (autoSetupBtn) {
+            autoSetupBtn.onclick = async () => {
+                autoSetupBtn.disabled = true;
+                autoSetupBtn.textContent = 'Starting setup...';
+                try {
+                    const res = await fetch('/api/image/comfy/setup', { method: 'POST' });
+                    const data = await res.json();
+                    showNotification('ComfyUI automated installation started in nivm/engine/ComfyUI', 'info');
+                    if (!_imageStudioPollInterval) {
+                        _imageStudioPollInterval = setInterval(pollStatus, 1000);
+                    }
+                    await pollStatus();
+                } catch (err) {
+                    showNotification('Failed to start ComfyUI setup: ' + err.message, 'error');
+                    autoSetupBtn.disabled = false;
+                }
+            };
+        }
+
+        if (downloadBtn) {
+            downloadBtn.onclick = async () => {
+                downloadBtn.disabled = true;
+                downloadBtn.textContent = 'Initializing aria2...';
+                try {
+                    const res = await fetch('/api/image/models/download', { method: 'POST' });
+                    const data = await res.json();
+                    showNotification('Image models background download started with aria2c', 'info');
+                    if (!_imageStudioPollInterval) {
+                        _imageStudioPollInterval = setInterval(pollStatus, 1000);
+                    }
+                    await pollStatus();
+                } catch (err) {
+                    showNotification('Failed to start model download: ' + err.message, 'error');
+                    downloadBtn.disabled = false;
+                }
+            };
+        }
+    }
 }
 
 // --- Dropdown Notification System ---
@@ -2174,6 +2673,169 @@ export function setupHistoryUI() {
     }
 }
 
+export function setupMobileNav() {
+    const historyDrawer = dom.historyDrawer || document.getElementById('historyDrawer');
+    const memoryDrawer = dom.memoryDrawer || document.getElementById('memoryDrawer');
+    const backdrop = dom.mobileDrawerBackdrop || document.getElementById('mobileDrawerBackdrop');
+    const menuBtn = dom.mobileMenuBtn || document.getElementById('mobileMenuBtn');
+    const mobileNewChatBtn = dom.mobileNewChatBtn || document.getElementById('mobileNewChatBtn');
+    const mobileStatsBtn = dom.mobileStatsBtn || document.getElementById('mobileStatsBtn');
+    const statsBtn = dom.statsBtn || document.getElementById('statsBtn');
+
+    function openDrawer(drawer) {
+        if (drawer) {
+            drawer.classList.remove('hidden');
+            const drawerBody = drawer.querySelector('.drawer-body');
+            if (drawerBody) {
+                drawerBody.scrollTop = 0;
+            }
+        }
+        if (backdrop) {
+            backdrop.classList.add('active');
+        }
+    }
+
+    function closeAllDrawers() {
+        if (historyDrawer) historyDrawer.classList.add('hidden');
+        if (memoryDrawer) memoryDrawer.classList.add('hidden');
+        if (backdrop) backdrop.classList.remove('active');
+    }
+
+    if (menuBtn) {
+        menuBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (historyDrawer && !historyDrawer.classList.contains('hidden')) {
+                closeAllDrawers();
+            } else {
+                if (memoryDrawer) memoryDrawer.classList.add('hidden');
+                openDrawer(historyDrawer);
+            }
+        };
+    }
+
+    if (backdrop) {
+        backdrop.onclick = () => {
+            closeAllDrawers();
+        };
+    }
+
+    // Pinned top-right "+" button on mobile bar always creates new chat
+    if (mobileNewChatBtn) {
+        mobileNewChatBtn.onclick = () => {
+            closeAllDrawers();
+            if (window.createNewChat) {
+                window.createNewChat();
+            } else {
+                createNewChat();
+            }
+        };
+    }
+
+    // New Chat button inside drawer
+    const drawerNewChatBtn = document.getElementById('drawerNewChatBtn');
+    if (drawerNewChatBtn) {
+        drawerNewChatBtn.onclick = () => {
+            closeAllDrawers();
+            if (window.createNewChat) {
+                window.createNewChat();
+            } else {
+                createNewChat();
+            }
+        };
+    }
+
+    // Close button inside history drawer
+    const closeHistoryBtn = dom.closeHistoryBtn || document.getElementById('closeHistoryBtn');
+    if (closeHistoryBtn) {
+        closeHistoryBtn.onclick = (e) => {
+            e.stopPropagation();
+            closeAllDrawers();
+        };
+    }
+
+    // Close button inside memory drawer
+    const closeMemoryBtn = dom.closeMemoryBtn || document.getElementById('closeMemoryBtn');
+    if (closeMemoryBtn) {
+        closeMemoryBtn.onclick = (e) => {
+            e.stopPropagation();
+            closeAllDrawers();
+        };
+    }
+
+    // Brand / Status click opens stats modal
+    if (mobileStatsBtn) {
+        mobileStatsBtn.onclick = () => {
+            if (statsBtn) statsBtn.click();
+        };
+    }
+
+    // Drawer footer tool buttons
+    const drawerSettingsBtn = document.getElementById('drawerSettingsBtn');
+    if (drawerSettingsBtn) {
+        drawerSettingsBtn.onclick = () => {
+            closeAllDrawers();
+            const sBtn = document.getElementById('settingsBtn');
+            if (sBtn) sBtn.click();
+        };
+    }
+
+    const drawerMemoryBtn = document.getElementById('drawerMemoryBtn');
+    if (drawerMemoryBtn) {
+        drawerMemoryBtn.onclick = () => {
+            if (historyDrawer) historyDrawer.classList.add('hidden');
+            if (memoryDrawer) {
+                memoryDrawer.classList.remove('hidden');
+                if (typeof renderMemoryDrawer === 'function') renderMemoryDrawer();
+                if (backdrop) backdrop.classList.add('active');
+            }
+        };
+    }
+
+    const drawerPersonaBtn = document.getElementById('drawerPersonaBtn');
+    if (drawerPersonaBtn) {
+        drawerPersonaBtn.onclick = () => {
+            closeAllDrawers();
+            const pBtn = document.getElementById('personalityBtn');
+            if (pBtn) pBtn.click();
+        };
+    }
+
+    const drawerToolsBtn = document.getElementById('drawerToolsBtn');
+    if (drawerToolsBtn) {
+        drawerToolsBtn.onclick = () => {
+            closeAllDrawers();
+            const tBtn = document.getElementById('toolsBtn');
+            if (tBtn) tBtn.click();
+        };
+    }
+
+    const drawerThemeBtn = document.getElementById('drawerThemeBtn');
+    if (drawerThemeBtn) {
+        drawerThemeBtn.onclick = () => {
+            closeAllDrawers();
+            const thBtn = document.getElementById('themeBtn');
+            if (thBtn) thBtn.click();
+        };
+    }
+
+    // Sync status dot between desktop and mobile top bar
+    const syncDot = () => {
+        const desktopDot = document.getElementById('statusDot');
+        const mobileDot = document.getElementById('mobileStatusDot');
+        if (desktopDot && mobileDot) {
+            mobileDot.className = desktopDot.className;
+        }
+    };
+
+    const desktopDot = document.getElementById('statusDot');
+    if (desktopDot) {
+        const observer = new MutationObserver(syncDot);
+        observer.observe(desktopDot, { attributes: true, attributeFilter: ['class'] });
+        syncDot();
+    }
+}
+window.setupMobileNav = setupMobileNav;
+
 export function isMultimodalModel(model = '', endpoint = '') {
     const m = (model || '').toLowerCase();
     const ep = (endpoint || '').toLowerCase();
@@ -2544,7 +3206,8 @@ function buildAudioPreviewPill(imgObj, index) {
     return itemDiv;
 }
 
-function renderImagePreviews() {
+export function renderImagePreviews() {
+    window.renderImagePreviews = renderImagePreviews;
     if (!dom.imagePreviewContainer) return;
     
     if (currentPreviewAudio) {
@@ -2664,6 +3327,15 @@ export function setupAudioRecording() {
         }
         
         try {
+            if (!navigator?.mediaDevices?.getUserMedia) {
+                const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+                const msg = isLocal
+                    ? 'Microphone API unavailable. Click Reset permissions in browser settings.'
+                    : `Microphone is blocked on IP origins. Please open http://localhost:${location.port || '8000'}`;
+                showNotification(msg, 'error');
+                return;
+            }
+
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     echoCancellation: true,

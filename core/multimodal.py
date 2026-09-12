@@ -426,6 +426,11 @@ def _process_image(filepath: str, item: dict, content_list: list):
         logger.warning(f"Animation extraction failed: {e}")
 
     if not is_animated:
+        filename = os.path.basename(filepath)
+        content_list.append({
+            "type": "text",
+            "text": f"[Attached Image: {filename}]"
+        })
         try:
             with Image.open(filepath) as img:
                 buf = io.BytesIO()

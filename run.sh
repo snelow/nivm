@@ -221,6 +221,23 @@ if [ -f "$CMUDICT_PATH" ]; then
     echo -e "  ${GREEN}✓${NC} CMUdict:     ${CYAN}Offline CMU Pronunciation Dataset Loaded (135k words)${NC}"
 fi
 
+# ── Image Studio / Diffusion Verification ─────────────────────
+python - << 'EOF' 2>/dev/null || true
+try:
+    from core.image_engine.model_checker import check_image_models_status
+    from core.image_engine.setup_helper import detect_comfyui
+    m = check_image_models_status()
+    c = detect_comfyui()
+    if m.get("all_installed") and c.get("detected"):
+        print("\033[0;32m  ✓\033[0m Image Studio: \033[0;36mQwen-Rapid Diffusion Ready (ComfyUI + 18GB Models)\033[0m")
+    elif m.get("all_installed"):
+        print("\033[1;33m  ○\033[0m Image Studio: \033[1;33mModels Ready (ComfyUI backend not detected)\033[0m")
+    else:
+        print("\033[1;33m  ○\033[0m Image Studio: \033[1;33mOpt-In Feature Available (Configure in Settings)\033[0m")
+except Exception:
+    pass
+EOF
+
 # ── Vendor / Frontend Assets ──────────────────────────────────
 if [ ! -d "static/vendor" ] || [ "$FORCE_SETUP" = "true" ]; then
     echo -e "${YELLOW}[+] Checking offline frontend assets...${NC}"

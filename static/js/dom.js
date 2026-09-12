@@ -1,4 +1,14 @@
 const rawDom = {
+    // Mobile Top Bar & Responsive Navigation Elements
+    mobileTopBar: document.getElementById('mobileTopBar'),
+    mobileMenuBtn: document.getElementById('mobileMenuBtn'),
+    mobileNewChatBtn: document.getElementById('mobileNewChatBtn'),
+    mobileDrawerBackdrop: document.getElementById('mobileDrawerBackdrop'),
+    appSidebar: document.getElementById('appSidebar'),
+    closeSidebarBtn: document.getElementById('closeSidebarBtn'),
+    mobileStatsBtn: document.getElementById('mobileStatsBtn'),
+    mobileStatusDot: document.getElementById('mobileStatusDot'),
+
     historyToggleBtn: document.getElementById('historyToggleBtn'),
     closeHistoryBtn: document.getElementById('closeHistoryBtn'),
     historyDrawer: document.getElementById('historyDrawer'),

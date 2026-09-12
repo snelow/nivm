@@ -12,6 +12,7 @@ RELOAD = os.getenv("RELOAD", "True").lower() in ("true", "1", "t")
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 USER_FILES_DIR = os.path.join(BASE_DIR, "User files")
 UPLOADS_DIR = os.path.join(USER_FILES_DIR, "uploads")
+IMAGES_DIR = os.path.join(USER_FILES_DIR, "images")
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 SETTINGS_FILE = os.path.join(USER_FILES_DIR, "settings.json")
 CHATS_FILE = os.path.join(USER_FILES_DIR, "chats.json")
@@ -20,6 +21,7 @@ MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB
 
 os.makedirs(USER_FILES_DIR, exist_ok=True)
 os.makedirs(UPLOADS_DIR, exist_ok=True)
+os.makedirs(IMAGES_DIR, exist_ok=True)
 os.makedirs(MODELS_DIR, exist_ok=True)
 
 # Default LLM Parameters

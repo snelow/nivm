@@ -3,8 +3,23 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>nivm</title>
+
+    <!-- PWA & Mobile Web App Meta -->
+    <meta name="theme-color" content="#050508">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="nivm">
+    <link rel="manifest" href="/manifest.json">
+
+    <!-- Favicon & Touch Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16.png">
+    <link rel="icon" type="image/png" href="/static/icons/favicon.png">
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
     <!-- Fonts -->
     <link rel="stylesheet" href="/static/vendor/fira-code.css">
     <!-- FontAwesome Icons -->
@@ -16,7 +31,7 @@
     <script src="/static/vendor/marked.min.js"></script>
     <!-- WebGL Fluid Simulation -->
     <script src="/static/vendor/webgl-fluid.js" defer></script>
-    <link rel="stylesheet" href="/static/css/main.css?v=4.1">
+    <link rel="stylesheet" href="/static/css/main.css?v=5.6">
 </head>
 
 <body>
@@ -141,11 +156,40 @@
     <canvas class="bg-layer flowfield-layer" id="flowFieldBgCanvas"></canvas>
 
     <div class="app-container">
-        <!-- Thin Icon-Only Sidebar -->
-        <aside class="icon-sidebar">
+        <!-- Mobile Drawer Backdrop Scrim -->
+        <div class="mobile-drawer-backdrop" id="mobileDrawerBackdrop"></div>
+
+        <!-- Mobile Top Navigation (Clean, minimal, borderless) -->
+        <header class="mobile-top-bar" id="mobileTopBar">
+            <div class="mobile-left-cluster">
+                <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open Menu" type="button">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <button class="mobile-stats-btn" id="mobileStatsBtn" title="Stats & Usage" type="button">
+                    <span class="status-dot warning" id="mobileStatusDot"></span>
+                </button>
+            </div>
+            <button class="mobile-new-chat-btn" id="mobileNewChatBtn" title="New Chat" type="button">
+                <i class="fa-solid fa-plus"></i>
+            </button>
+        </header>
+
+        <!-- Thin Icon-Only Sidebar (Slides out as drawer on mobile) -->
+        <aside class="icon-sidebar" id="appSidebar">
+            <!-- Mobile Drawer Header -->
+            <div class="sidebar-mobile-header">
+                <div class="sidebar-mobile-brand">
+                    <img src="/static/icons/favicon.png" alt="nivm" class="drawer-brand-img">
+                    <span>nivm</span>
+                </div>
+                <button class="icon-btn-sm" id="closeSidebarBtn" title="Close Menu" type="button">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
             <div class="sidebar-top">
                 <div class="ai-brand-icon" id="statsBtn" title="Stats & Info">
-                    <i class="fa-solid fa-microchip"></i>
+                    <img src="/static/icons/favicon.png" alt="nivm" class="ai-brand-img">
                 </div>
                 <div class="nav-divider"></div>
                 <button class="nav-icon-btn" id="newChatBtn" title="New Chat">
@@ -187,11 +231,20 @@
             </div>
         </aside>
 
-        <!-- Slide-out History Drawer -->
+        <!-- Slide-out Navigation & History Drawer -->
         <div class="history-drawer hidden" id="historyDrawer">
             <div class="drawer-header">
-                <h3>Chat History</h3>
-                <button class="icon-btn-sm" id="closeHistoryBtn"><i class="fa-solid fa-xmark"></i></button>
+                <div class="drawer-brand">
+                    <img src="/static/icons/favicon.png" alt="nivm" class="drawer-brand-img">
+                    <span>nivm</span>
+                </div>
+                <button class="icon-btn-sm" id="closeHistoryBtn" title="Close Drawer"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="drawer-new-chat-container">
+                <button class="drawer-new-chat-btn" id="drawerNewChatBtn" type="button">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>New Chat</span>
+                </button>
             </div>
             <div class="drawer-search">
                 <input type="text" id="chatSearchInput" class="search-input" placeholder="Search conversations...">
@@ -200,6 +253,29 @@
                 <div class="chat-history-list" id="chatHistoryList">
                     <!-- Chat items populated by JS -->
                 </div>
+            </div>
+            <!-- Quick Tools Footer for Mobile -->
+            <div class="drawer-tools-footer" id="drawerToolsFooter">
+                <button class="drawer-tool-item" id="drawerSettingsBtn" title="Settings" type="button">
+                    <i class="fa-solid fa-gear"></i>
+                    <span>Settings</span>
+                </button>
+                <button class="drawer-tool-item" id="drawerMemoryBtn" title="Memory" type="button">
+                    <i class="fa-solid fa-brain"></i>
+                    <span>Memory</span>
+                </button>
+                <button class="drawer-tool-item" id="drawerPersonaBtn" title="Persona" type="button">
+                    <i class="fa-solid fa-user-pen"></i>
+                    <span>Persona</span>
+                </button>
+                <button class="drawer-tool-item" id="drawerToolsBtn" title="Tools" type="button">
+                    <i class="fa-solid fa-toolbox"></i>
+                    <span>Tools</span>
+                </button>
+                <button class="drawer-tool-item" id="drawerThemeBtn" title="Themes" type="button">
+                    <i class="fa-solid fa-palette"></i>
+                    <span>Themes</span>
+                </button>
             </div>
             <div class="resize-handle" id="historyResizeHandle"></div>
         </div>
@@ -225,7 +301,7 @@
                 <div class="gemini-hero" id="welcomeHero">
                     <div class="hero-greeting">
                         <h1 id="heroGreeting"><span class="gradient-text">Good evening</span></h1>
-                        <p class="hero-subtitle" id="heroSubtitle">What are we cookin today?</p>
+                        <p class="hero-subtitle" id="heroSubtitle">How can I help you today?</p>
                     </div>
                 </div>
 
@@ -327,28 +403,28 @@
                     <textarea id="userPrompt" placeholder="Ask nivm anything..." rows="1"></textarea>
 
                     <div class="input-controls">
-                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;">
+                        <div class="input-controls-left">
                             <span class="shortcut-hint"><kbd>Shift</kbd> + <kbd>Enter</kbd> newline</span>
 
                             <button id="forceThinkingToggle" class="thinking-toggle-btn active"
-                                title="Enable deeper planning for complex requests." style="margin: 0;">
-                                <i class="fa-solid fa-brain"></i> Deep Reasoning
+                                title="Deep Reasoning: Enable deeper planning for complex requests.">
+                                <i class="fa-solid fa-brain"></i> <span class="toggle-btn-label">Deep Reasoning</span>
                             </button>
                             
-                            <button id="visionToggleBtn" class="thinking-toggle-btn" title="Enable Vision (Multimodal)" style="margin: 0;">
-                                <i class="fa-solid fa-eye"></i> Vision
+                            <button id="visionToggleBtn" class="thinking-toggle-btn" title="Vision: Multimodal input">
+                                <i class="fa-solid fa-eye"></i> <span class="toggle-btn-label">Vision</span>
                             </button>
 
-                            <button id="voiceModeToggleBtn" class="thinking-toggle-btn" title="Pure Voice Mode (Hide text & converse via voice)" style="margin: 0;">
-                                <i class="fa-solid fa-microphone-lines"></i> Voice Mode
+                            <button id="voiceModeToggleBtn" class="thinking-toggle-btn" title="Voice Mode: Converse via voice">
+                                <i class="fa-solid fa-microphone-lines"></i> <span class="toggle-btn-label">Voice Mode</span>
                             </button>
                         </div>
 
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <button id="micRecordBtn" class="icon-btn-sm hidden" title="Record Audio" style="width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.05);">
+                        <div class="input-controls-right">
+                            <button id="micRecordBtn" class="icon-btn-sm hidden" title="Record Audio">
                                 <i class="fa-solid fa-microphone"></i>
                             </button>
-                            <button id="attachImgBtn" class="icon-btn-sm hidden" title="Attach Image, PDF, Video, or Audio" style="width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.05);">
+                            <button id="attachImgBtn" class="icon-btn-sm hidden" title="Attach Image, PDF, Video, or Audio">
                                 <i class="fa-solid fa-paperclip"></i>
                             </button>
                             <input type="file" id="imageUploadInput" accept="image/*,application/pdf,video/*,audio/*,.wav,.mp3,.m4a,.ogg,.flac,.aac,.webm" multiple class="hidden">
@@ -370,8 +446,8 @@
                                     <i class="fa-solid fa-bolt"></i>
                                 </div>
                                 <div class="chatbox-load-text">
-                                    <span class="chatbox-load-title">No Model Active &bull; Click to Load</span>
-                                    <span class="chatbox-load-sub" id="chatBoxDraftHint">Configure and load a model in Settings to continue</span>
+                                    <span class="chatbox-load-title">No Model Active</span>
+                                    <span class="chatbox-load-sub" id="chatBoxDraftHint">Tap Settings to load a model</span>
                                 </div>
                             </div>
                             <div class="chatbox-load-badge">
@@ -403,7 +479,7 @@
                     </div>
                 </div>
                 <div class="footer-caption">
-                    nivm may make mistakes. &bull; <a href="#" id="openCreatorBtn" class="credits-link" title="Meet the creator">crafted with <i class="fa-solid fa-heart dynamic-footer-heart" id="footerHeartIcon"></i> by snelow</a> &bull; <a href="https://github.com/snelow/nivm" target="_blank" rel="noopener noreferrer" class="credits-link" title="GitHub Repository"><i class="fa-brands fa-github"></i> repo</a>
+                    <span class="footer-desktop-only">nivm may make mistakes. &bull; </span><span class="footer-mobile-only">nivm might make mistakes &bull; </span><a href="#" id="openCreatorBtn" class="credits-link" title="Meet the creator"><span class="footer-desktop-only">crafted with <i class="fa-solid fa-heart dynamic-footer-heart" id="footerHeartIcon"></i> </span>by snelow</a><span class="footer-desktop-only"> &bull; <a href="https://github.com/snelow/nivm" target="_blank" rel="noopener noreferrer" class="credits-link" title="GitHub Repository"><i class="fa-brands fa-github"></i> repo</a></span>
                 </div>
             </div>
         </main>
@@ -1178,6 +1254,102 @@
                     </div>
                 </div>
 
+                <div class="divider"></div>
+
+                <!-- Image Studio Configuration (Qwen-Rapid Engine) -->
+                <div class="settings-section" id="imageStudioSection">
+                    <div class="section-title" style="display: flex; align-items: center; justify-content: space-between;">
+                        <span><i class="fa-solid fa-paintbrush" style="color: var(--accent-purple); margin-right: 6px;"></i>Image Studio (Qwen-Rapid)</span>
+                        <span id="imageStudioMasterBadge" class="role-card-badge" style="background: rgba(139,92,246,0.15); color: var(--accent-purple); border: 1px solid rgba(139,92,246,0.3);">Checking...</span>
+                    </div>
+
+                    <!-- ComfyUI Backend Detection Card -->
+                    <div class="role-config-card" style="margin-bottom: 12px; background: rgba(0,0,0,0.25);">
+                        <div style="padding: 12px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                                <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);"><i class="fa-solid fa-server" style="color: #38bdf8; margin-right: 6px;"></i>ComfyUI Backend Engine</span>
+                                <span id="comfyStatusBadge" class="role-card-badge">—</span>
+                            </div>
+                            <div id="comfyPathDisplay" style="font-size: 0.75rem; color: var(--text-tertiary); word-break: break-all; margin-bottom: 8px;">
+                                Path: Detecting...
+                            </div>
+                            
+                            <!-- Custom Path or Install Helper -->
+                            <div id="comfyActionControls" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+                                <div style="display: flex; gap: 6px;">
+                                    <input type="text" id="customComfyPathInput" placeholder="/path/to/ComfyUI" style="flex: 1; font-size: 0.78rem; padding: 6px 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 6px; color: var(--text-primary);">
+                                    <button type="button" id="setComfyPathBtn" class="btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; white-space: nowrap;">Set Path</button>
+                                </div>
+                                <button type="button" id="autoSetupComfyBtn" class="btn-secondary" style="width: 100%; justify-content: center; gap: 6px; display: flex; align-items: center; font-size: 0.78rem; padding: 6px;">
+                                    <i class="fa-solid fa-cloud-arrow-down"></i> Auto-Install ComfyUI to nivm/engine/
+                                </button>
+                                <div id="comfySetupProgressBox" style="display: none; background: rgba(0,0,0,0.4); border: 1px solid rgba(139,92,246,0.3); border-radius: 6px; padding: 10px; font-size: 0.72rem;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                        <div id="comfySetupStepText" style="color: #c084fc; font-weight: 600;">[Step 1/3] Cloning ComfyUI...</div>
+                                        <span id="comfySetupPct" style="color: var(--text-muted); font-size: 0.7rem;">0%</span>
+                                    </div>
+                                    <div id="comfySetupTargetDir" style="color: #94a3b8; font-size: 0.68rem; margin-bottom: 6px; word-break: break-all; font-family: monospace;">
+                                        Target: nivm/engine/ComfyUI
+                                    </div>
+                                    <div style="background: rgba(255,255,255,0.08); height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 8px;">
+                                        <div id="comfySetupProgressBar" style="width: 0%; height: 100%; background: #8b5cf6; transition: width 0.3s ease;"></div>
+                                    </div>
+                                    <div id="comfySetupLogText" style="font-family: monospace; color: #cbd5e1; font-size: 0.68rem; max-height: 90px; overflow-y: auto; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: 4px; padding: 6px; white-space: pre-wrap; line-height: 1.35;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Image Models Card -->
+                    <div class="role-config-card" style="background: rgba(0,0,0,0.25);">
+                        <div style="padding: 12px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                                <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);"><i class="fa-solid fa-cubes" style="color: #c084fc; margin-right: 6px;"></i>Qwen-Rapid Diffusion Models</span>
+                                <span id="imageModelsBadge" class="role-card-badge">—</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 10px;">
+                                Verified models: Qwen-Rapid UNet (13.3 GB), Qwen2.5-VL CLIP (4.7 GB), VAE (253 MB)
+                            </div>
+                            
+                            <!-- Model Checklist -->
+                            <div style="display: flex; flex-direction: column; gap: 4px; font-size: 0.73rem; margin-bottom: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px;">
+                                <div style="display: flex; justify-content: space-between;"><span id="unetModelCheck">○ UNet (Qwen-Rapid-NSFW-v23_Q4_K.gguf)</span><span style="color: var(--text-muted);">13.3 GB</span></div>
+                                <div style="display: flex; justify-content: space-between;"><span id="clipModelCheck">○ Text Encoder (Qwen2.5-VL-7B-Instruct-abliterated.Q4_K_M.gguf)</span><span style="color: var(--text-muted);">4.7 GB</span></div>
+                                <div style="display: flex; justify-content: space-between;"><span id="vaeModelCheck">○ VAE (qwen_image_vae.safetensors)</span><span style="color: var(--text-muted);">253 MB</span></div>
+                            </div>
+
+                            <!-- Verified Banner (Shown when verified, replaces download button) -->
+                            <div id="imageModelsVerifiedBox" style="display: none; align-items: center; justify-content: center; gap: 8px; font-size: 0.78rem; color: #34d399; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.25); border-radius: 6px; padding: 8px; font-weight: 500;">
+                                <i class="fa-solid fa-circle-check"></i>
+                                <span>All Models Verified & Ready</span>
+                            </div>
+
+                            <!-- Download Button & Progress (Hidden when all verified, skips existing files) -->
+                            <button type="button" id="downloadImageModelsBtn" class="btn-primary" style="width: 100%; justify-content: center; gap: 6px; display: none; align-items: center; font-size: 0.78rem; padding: 7px;">
+                                <i class="fa-solid fa-download"></i> <span id="downloadBtnLabel">Download Image Models (aria2)</span>
+                            </button>
+
+                            <div id="imageDownloadProgressBox" style="display: none; margin-top: 8px; background: rgba(0,0,0,0.4); border: 1px solid rgba(139,92,246,0.3); border-radius: 6px; padding: 10px; font-size: 0.72rem;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                    <span id="imageDownloadModelName" style="color: #c084fc; font-weight: 600;">Downloading UNet...</span>
+                                    <span id="imageDownloadPct" style="color: var(--text-muted);">0%</span>
+                                </div>
+                                <div id="imageDownloadTargetPath" style="color: #94a3b8; font-size: 0.68rem; margin-bottom: 6px; word-break: break-all; font-family: monospace;">
+                                    Saving to: nivm/models/image/
+                                </div>
+                                <div style="background: rgba(255,255,255,0.08); height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
+                                    <div id="imageDownloadProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #8b5cf6, #d946ef); transition: width 0.3s ease;"></div>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; color: #94a3b8; font-size: 0.68rem; font-family: monospace;">
+                                    <span id="imageDownloadBytes">0 MB / 0 MB</span>
+                                    <span id="imageDownloadSpeed">0 MB/s</span>
+                                    <span id="imageDownloadEta">ETA: --</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Smart Engine Toggle -->
                 <div class="settings-section" id="smartEngineSection" style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
                     <button class="smart-toggle-btn" id="smartToggleBtn">
@@ -1915,7 +2087,18 @@
     </div>
 
     <!-- Application Logic -->
-    <script type="module" src="/static/js/app.js?v=4.9"></script>
+    <script type="module" src="/static/js/app.js?v=5.6"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then((reg) => {
+                    console.log('PWA Service Worker registered:', reg.scope);
+                }).catch((err) => {
+                    console.log('PWA Service Worker registration error:', err);
+                });
+            });
+        }
+    </script>
 </body>
 
 </html>

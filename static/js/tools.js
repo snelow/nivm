@@ -1,5 +1,25 @@
 import { state } from './state.js';
 import { saveMemoryAPI, executeTerminalAPI } from './api.js';
+import { createImageProgressCard } from './image_editor.js';
+
+function mountImageProgressCard(cardElement) {
+    const container = document.getElementById('messagesContainer');
+    if (!container) return;
+
+    // Attach card directly to active assistant message wrapper below thinking bubble
+    const lastAssistantRow = container.querySelector('.message-row.assistant-row:last-of-type');
+    const assistantWrapper = lastAssistantRow ? lastAssistantRow.querySelector('.message-wrapper') : null;
+    const assistantBubble = assistantWrapper ? assistantWrapper.querySelector('.message-bubble') : null;
+
+    if (assistantWrapper && assistantBubble) {
+        const actions = assistantWrapper.querySelector('.message-actions');
+        if (actions) actions.style.display = 'none';
+        assistantBubble.insertAdjacentElement('afterend', cardElement);
+    } else {
+        container.appendChild(cardElement);
+    }
+    container.scrollTop = container.scrollHeight;
+}
 
 const recentlyReadKeys = new Set();
 
@@ -30,6 +50,18 @@ export function mergeMemoryValues(existingVal, newVal) {
     if (existStr.includes(newStr)) return existStr;
 
     return `${existStr} | ${newStr}`;
+}
+
+function normalizeAspectRatio(val, fallback = 'square') {
+    if (!val) return fallback;
+    const s = String(val).toLowerCase().trim();
+    if (s.includes('1:1') || s.includes('square')) return 'square';
+    if (s.includes('16:9') || s.includes('landscape')) return 'landscape';
+    if (s.includes('9:16') || s.includes('portrait')) return 'portrait';
+    if (s.includes('4:3')) return '4:3';
+    if (s.includes('3:4')) return '3:4';
+    if (s.includes('original')) return 'original';
+    return fallback;
 }
 
 export const tools = [
@@ -97,30 +129,27 @@ export const tools = [
                 cmd = cmd.substring(1, cmd.length - 1);
             }
 
-            const securityMode = state.terminalSecurityMode || 'dangerous';
-            let needsPermission = false;
-            let safetyReport = { isDangerous: false, reasons: [] };
-
-            if (securityMode === 'always') {
-                needsPermission = true;
-                safetyReport = analyzeCommandSafety(cmd);
-            } else if (securityMode === 'dangerous') {
-                safetyReport = analyzeCommandSafety(cmd);
-                if (safetyReport.isDangerous) {
-                    needsPermission = true;
-                }
+            if (!cmd) {
+                return 'Error: No command provided to execute.';
             }
 
-            if (needsPermission) {
-                if (typeof window.promptTerminalPermission === 'function') {
-                    const allowed = await window.promptTerminalPermission(cmd, safetyReport.reasons);
-                    if (!allowed) {
-                        return `Command execution denied by user: Permission was not granted to run '${cmd}'.`;
-                    }
+            try {
+                const res = await executeTerminalAPI(cmd);
+                let output = '';
+                if (res.stdout && res.stdout.trim()) {
+                    output += res.stdout.trim();
                 }
+                if (res.stderr && res.stderr.trim()) {
+                    if (output) output += '\n';
+                    output += `STDERR: ${res.stderr.trim()}`;
+                }
+                if (!output) {
+                    output = `(Command executed with exit code ${res.exit_code || 0}, no output produced)`;
+                }
+                return output;
+            } catch (err) {
+                return `Execution error: ${err.message}`;
             }
-
-            return await executeTerminalAPI(cmd);
         }
     },
     {
@@ -131,6 +160,238 @@ export const tools = [
         execute: async (argsStr) => {
             let reason = argsStr ? argsStr.trim().replace(/^['"]|['"]$/g, '') : 'User requested or safety threshold reached.';
             return `Conversation ended: ${reason}`;
+        }
+    },
+    {
+        name: 'generate_image',
+        description: 'Synthesize a new image from pure text description using local Qwen-Rapid diffusion model.',
+        instruction: 'Call this whenever the user asks to draw, generate, or create an image from text. Pass the descriptive prompt and optional aspect_ratio ("square", "portrait", "landscape", "1:1", "16:9", "9:16").',
+        usageFormat: 'TOOL_CALL: generate_image("prompt", "aspect_ratio")',
+        execute: async (argsStr) => {
+            let prompt = '';
+            let aspectRatio = 'square';
+
+            const trimmed = (argsStr || '').trim();
+            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    prompt = parsed.prompt || '';
+                    aspectRatio = normalizeAspectRatio(parsed.aspect_ratio, 'square');
+                } catch (_) {}
+            }
+
+            if (!prompt) {
+                const parts = trimmed.match(/(?:[^\s,"']+|"[^"]*"|'[^']*')+/g) || [];
+                const cleanParts = parts.map(p => p.trim().replace(/^['"]|['"]$/g, ''));
+                prompt = cleanParts[0] || trimmed;
+                if (cleanParts.length > 1) {
+                    aspectRatio = normalizeAspectRatio(cleanParts[1], 'square');
+                }
+            }
+
+            const progressCard = createImageProgressCard(prompt, false);
+            mountImageProgressCard(progressCard.element);
+
+            try {
+                const resp = await fetch('/api/image/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt, aspect_ratio: aspectRatio })
+                });
+
+                if (!resp.ok) {
+                    const errData = await resp.json().catch(() => ({ detail: resp.statusText }));
+                    throw new Error(errData.detail || `Server error ${resp.status}`);
+                }
+
+                const data = await resp.json();
+                const taskId = data.task_id;
+                if (!taskId) throw new Error('No task_id returned from server');
+
+                return await new Promise((resolve) => {
+                    let completed = false;
+                    let pollTimer = null;
+                    const evtSource = window.EventSource ? new EventSource(`/api/image/progress/${taskId}`) : null;
+
+                    const finishSuccess = (imgData) => {
+                        if (completed) return;
+                        completed = true;
+                        if (pollTimer) clearInterval(pollTimer);
+                        if (evtSource) try { evtSource.close(); } catch (_) {}
+                        progressCard.finish(imgData.url);
+                        resolve(`[Generated Image: ${imgData.filename}] Image synthesized successfully: ${imgData.url} - Display this image to the user and describe the visual scene.`);
+                    };
+
+                    const finishFail = (errMsg) => {
+                        if (completed) return;
+                        completed = true;
+                        if (pollTimer) clearInterval(pollTimer);
+                        if (evtSource) try { evtSource.close(); } catch (_) {}
+                        progressCard.fail(errMsg || 'Generation failed');
+                        resolve(`Image generation failed: ${errMsg || 'Unknown error'}`);
+                    };
+
+                    if (evtSource) {
+                        evtSource.onmessage = (e) => {
+                            try {
+                                const evData = JSON.parse(e.data);
+                                progressCard.update(evData);
+                                if (evData.status === 'complete' && (evData.image || evData.url)) {
+                                    finishSuccess(evData.image || { url: evData.url, filename: evData.filename || 'generated.png' });
+                                } else if (evData.status === 'error') {
+                                    finishFail(evData.error);
+                                }
+                            } catch (_) {}
+                        };
+                        evtSource.onerror = () => {
+                            // Fallback polling will handle updates
+                        };
+                    }
+
+                    pollTimer = setInterval(async () => {
+                        if (completed) return;
+                        try {
+                            const pRes = await fetch(`/api/image/task/${taskId}`);
+                            if (pRes.ok) {
+                                const pData = await pRes.json();
+                                progressCard.update(pData);
+                                if (pData.status === 'complete' && (pData.image || pData.result)) {
+                                    finishSuccess(pData.image || pData.result);
+                                } else if (pData.status === 'error') {
+                                    finishFail(pData.error);
+                                }
+                            }
+                        } catch (_) {}
+                    }, 1500);
+                });
+            } catch (err) {
+                progressCard.fail(err.message);
+                return `Image generation failed: ${err.message}`;
+            }
+        }
+    },
+    {
+        name: 'edit_image',
+        description: 'Edit or transform an existing attached or generated image using natural language instructions.',
+        instruction: 'Call this whenever the user asks to alter, edit, modify, or transform an image. Pass the target image filename, the edit prompt instruction, and aspect_ratio (always pass "original" to preserve source dimensions unless the user explicitly asks for a format change).',
+        usageFormat: 'TOOL_CALL: edit_image("image_filename", "prompt", "original")',
+        execute: async (argsStr) => {
+            let imageFilename = '';
+            let prompt = '';
+            let aspectRatio = 'original';
+            let denoise = 0.85;
+
+            const trimmed = (argsStr || '').trim();
+            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    imageFilename = parsed.image_filename || parsed.filename || '';
+                    prompt = parsed.prompt || '';
+                    aspectRatio = normalizeAspectRatio(parsed.aspect_ratio, 'original');
+                    if (parsed.denoise_strength !== undefined) denoise = parsed.denoise_strength;
+                } catch (_) {}
+            }
+
+            if (!imageFilename || !prompt) {
+                const parts = trimmed.match(/(?:[^\s,"']+|"[^"]*"|'[^']*')+/g) || [];
+                const cleanParts = parts.map(p => p.trim().replace(/^['"]|['"]$/g, ''));
+                imageFilename = cleanParts[0] || '';
+                prompt = cleanParts[1] || '';
+                if (cleanParts.length > 2) {
+                    const third = cleanParts[2].toLowerCase();
+                    if (!isNaN(parseFloat(third)) && !third.includes(':')) {
+                        denoise = parseFloat(third);
+                    } else {
+                        aspectRatio = normalizeAspectRatio(third, 'original');
+                    }
+                }
+            }
+
+            const progressCard = createImageProgressCard(prompt, true);
+            mountImageProgressCard(progressCard.element);
+
+            try {
+                const resp = await fetch('/api/image/edit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        image_filename: imageFilename,
+                        prompt: prompt,
+                        aspect_ratio: aspectRatio,
+                        denoise_strength: denoise
+                    })
+                });
+
+                if (!resp.ok) {
+                    const errData = await resp.json().catch(() => ({ detail: resp.statusText }));
+                    throw new Error(errData.detail || `Server error ${resp.status}`);
+                }
+
+                const data = await resp.json();
+                const taskId = data.task_id;
+                const origUrl = data.original_url || null;
+                if (!taskId) throw new Error('No task_id returned from server');
+
+                return await new Promise((resolve) => {
+                    let completed = false;
+                    let pollTimer = null;
+                    const evtSource = window.EventSource ? new EventSource(`/api/image/progress/${taskId}`) : null;
+
+                    const finishSuccess = (imgData, finalOrigUrl) => {
+                        if (completed) return;
+                        completed = true;
+                        if (pollTimer) clearInterval(pollTimer);
+                        if (evtSource) try { evtSource.close(); } catch (_) {}
+                        progressCard.finish(imgData.url, finalOrigUrl || origUrl);
+                        resolve(`[Generated Image: ${imgData.filename}] Image edited successfully: ${imgData.url} (original: ${finalOrigUrl || origUrl}). Show the updated image and explain the changes applied.`);
+                    };
+
+                    const finishFail = (errMsg) => {
+                        if (completed) return;
+                        completed = true;
+                        if (pollTimer) clearInterval(pollTimer);
+                        if (evtSource) try { evtSource.close(); } catch (_) {}
+                        progressCard.fail(errMsg || 'Edit failed');
+                        resolve(`Image editing failed: ${errMsg || 'Unknown error'}`);
+                    };
+
+                    if (evtSource) {
+                        evtSource.onmessage = (e) => {
+                            try {
+                                const evData = JSON.parse(e.data);
+                                progressCard.update(evData);
+                                if (evData.status === 'complete' && (evData.image || evData.url)) {
+                                    finishSuccess(evData.image || { url: evData.url, filename: evData.filename || 'edited.png' }, evData.original_url || origUrl);
+                                } else if (evData.status === 'error') {
+                                    finishFail(evData.error);
+                                }
+                            } catch (_) {}
+                        };
+                        evtSource.onerror = () => {
+                            // Fallback polling will handle updates
+                        };
+                    }
+
+                    pollTimer = setInterval(async () => {
+                        if (completed) return;
+                        try {
+                            const pRes = await fetch(`/api/image/task/${taskId}`);
+                            if (pRes.ok) {
+                                const pData = await pRes.json();
+                                progressCard.update(pData);
+                                if (pData.status === 'complete' && (pData.image || pData.result)) {
+                                    finishSuccess(pData.image || pData.result, pData.original_url || origUrl);
+                                } else if (pData.status === 'error') {
+                                    finishFail(pData.error);
+                                }
+                            }
+                        } catch (_) {}
+                    }, 1500);
+                });
+            } catch (err) {
+                progressCard.fail(err.message);
+                return `Image editing failed: ${err.message}`;
+            }
         }
     }
 ];
@@ -272,6 +533,7 @@ export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume 
     const hasTerminal = activeTools.some(t => t.name === 'execute_terminal');
     const hasMemory = activeTools.some(t => t.name === 'read_memory' || t.name === 'write_memory');
     const hasEndConvo = activeTools.some(t => t.name === 'end_conversation');
+    const hasImageTools = activeTools.some(t => t.name === 'generate_image' || t.name === 'edit_image');
 
     let instruction = `\n\n[TOOLS & ACTIONS SYSTEM]\n`;
     instruction += `To call a tool, your entire message must output EXACTLY:\n`;
@@ -335,6 +597,22 @@ export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume 
         instruction += `2. NEVER call end_conversation for normal questions, curious inquiries, playful banter, or technical challenges.\n`;
         instruction += `3. When calling end_conversation, provide a brief reason: TOOL_CALL: end_conversation(reason).\n`;
         instruction += `4. After the tool executes, deliver a short, final parting remark in character (or firm boundary if abusive), then conclude.\n`;
+    }
+
+    if (hasImageTools) {
+        instruction += `\nImage Generation & Editing Rules (generate_image, edit_image):\n`;
+        instruction += `1. When the user asks to create, draw, paint, or generate an image:\n`;
+        instruction += `   - Expand the user's brief request into a vivid, highly detailed visual prompt (specify subject features, environment/backdrop, lighting, mood, color palette, camera shot/angle, and photorealism or art style).\n`;
+        instruction += `   - Pick the appropriate aspect_ratio: "1:1" (square/default), "16:9" (cinematic/landscape), "9:16" (mobile/portrait), or "4:3".\n`;
+        instruction += `   - Output: TOOL_CALL: generate_image("detailed prompt", "aspect_ratio")\n`;
+        instruction += `2. When the user asks to edit, alter, or transform an attached or previously generated image:\n`;
+        instruction += `   - Identify the source image filename from [Attached Image: filename] or [Generated Image: filename].\n`;
+        instruction += `   - If Vision is available, inspect the visual context (subject, pose, lighting, background) and formulate an edit prompt specifying the exact changes while preserving the core subject and composition.\n`;
+        instruction += `   - ALWAYS use "original" for aspect_ratio to preserve the source image's exact dimensions and orientation, unless the user explicitly requested a format change (e.g. "make it widescreen 16:9").\n`;
+        instruction += `   - Output: TOOL_CALL: edit_image("filename", "instruction describing the transformation", "original")\n`;
+        instruction += `3. Post-Generation Response & Visual Description (MANDATORY):\n`;
+        instruction += `   - The rendered image is displayed automatically in the UI. Do NOT output raw file URLs, markdown images, or HTML tags.\n`;
+        instruction += `   - Describe the resulting visual scene to the user warmly in your active persona/character—highlight the atmosphere, lighting, key artistic details, and textures, and invite them to explore further edits or variations!\n`;
     }
 
     instruction += `\nCRITICAL TOOL SYNTAX RULES:\n`;

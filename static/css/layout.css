@@ -64,6 +64,22 @@
     border-color: var(--accent-purple);
 }
 
+.ai-brand-img {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    border-radius: 50%;
+    filter: drop-shadow(0 0 6px rgba(168, 85, 247, 0.45));
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), filter 0.25s ease;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+.ai-brand-icon:hover .ai-brand-img {
+    transform: scale(1.12);
+    filter: drop-shadow(0 0 12px rgba(168, 85, 247, 0.8));
+}
+
 .nav-divider {
     width: 28px;
     height: 1px;
@@ -126,6 +142,232 @@
 .status-dot.offline {
     color: var(--accent-rose);
     background-color: currentColor;
+}
+
+/* -----------------------------------------
+   Mobile Responsive Navigation & Header
+----------------------------------------- */
+.mobile-top-bar {
+    display: none;
+}
+
+.mobile-drawer-backdrop {
+    display: none;
+}
+
+.sidebar-mobile-header {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .app-container {
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        height: 100dvh;
+        min-height: 0;
+        overflow: hidden;
+        overscroll-behavior: none;
+    }
+
+    /* Floating Navigation Buttons - fixed overlay, zero layout impact */
+    .mobile-top-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: auto !important;
+        min-height: 0 !important;
+        padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px 8px 16px;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 70;
+        pointer-events: none;
+    }
+
+    body.voice-mode-active .mobile-top-bar,
+    body.voice-mode-active #mobileTopBar,
+    body.voice-mode-active .mobile-left-cluster,
+    body.voice-mode-active .mobile-menu-btn,
+    body.voice-mode-active .mobile-new-chat-btn,
+    body.voice-mode-active .mobile-stats-btn {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+
+    .mobile-left-cluster {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        pointer-events: auto;
+    }
+
+    .mobile-menu-btn,
+    .mobile-new-chat-btn {
+        width: 38px;
+        height: 38px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--glass-border);
+        background: rgba(18, 18, 24, 0.65);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.05rem;
+        cursor: pointer;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+        pointer-events: auto;
+        transition: all 0.2s ease;
+    }
+
+    .mobile-menu-btn:active,
+    .mobile-new-chat-btn:active {
+        background: rgba(255, 255, 255, 0.15);
+        transform: scale(0.94);
+    }
+
+    .mobile-stats-btn {
+        width: 38px;
+        height: 38px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--glass-border);
+        background: rgba(18, 18, 24, 0.65);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+        pointer-events: auto;
+        transition: all 0.2s ease;
+    }
+
+    .mobile-stats-btn:active {
+        background: rgba(255, 255, 255, 0.15);
+        transform: scale(0.94);
+    }
+
+    .mobile-brand-title {
+        display: none !important;
+    }
+
+    /* Backdrop for sliding drawer: Clean dark scrim without any blur */
+    .mobile-drawer-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        z-index: 90;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease;
+    }
+
+    .mobile-drawer-backdrop.active {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    /* Desktop icon sidebar is hidden on mobile; historyDrawer handles mobile navigation */
+    .icon-sidebar {
+        display: none !important;
+    }
+
+    .sidebar-mobile-header {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        padding-bottom: 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        margin-bottom: 8px;
+    }
+
+    .sidebar-mobile-brand {
+        display: none !important;
+    }
+
+    #closeSidebarBtn {
+        width: 38px;
+        height: 38px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.06);
+        color: #cbd5e1;
+        cursor: pointer;
+    }
+
+    .icon-sidebar .sidebar-top,
+    .icon-sidebar .sidebar-bottom {
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+    }
+
+    .icon-sidebar .ai-brand-icon {
+        display: none;
+    }
+
+    .icon-sidebar .nav-icon-btn {
+        width: 44px;
+        height: 44px;
+        justify-content: center;
+        align-items: center;
+        padding: 0;
+        border-radius: var(--radius-md);
+        font-size: 1.15rem;
+        background: transparent;
+        color: var(--text-secondary);
+        transition: all 0.2s ease;
+    }
+
+    .icon-sidebar .nav-icon-btn i {
+        width: auto;
+        text-align: center;
+        color: inherit;
+        font-size: 1.15rem;
+    }
+
+    .icon-sidebar .nav-icon-btn::after {
+        display: none !important;
+        content: none !important;
+    }
+
+    .icon-sidebar .nav-icon-btn:hover,
+    .icon-sidebar .nav-icon-btn:active {
+        background: rgba(255, 255, 255, 0.08);
+        color: #ffffff;
+    }
+
+    .icon-sidebar .nav-divider {
+        width: 28px;
+        margin: 4px 0;
+        background-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .icon-sidebar .status-indicator-wrapper {
+        width: 44px;
+        height: 44px;
+        justify-content: center;
+        align-items: center;
+        padding: 0;
+    }
 }
 
 

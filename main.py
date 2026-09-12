@@ -26,17 +26,20 @@ import httpx
 
 # ── Core Engine & Config ──────────────────────────────────────────
 from core import config
-from core.config import UPLOADS_DIR, BASE_DIR
+from core.config import UPLOADS_DIR, IMAGES_DIR, BASE_DIR
 from core.engine import model_manager, HAS_LLAMA_CPP, MODEL_REGISTRY
 from core.router import classify_intent, get_resident_role
 from core.network_monitor import record_api_start, record_api_end, get_network_status
 from core.multimodal import process_media_in_messages
+from core.chat_manager import chat_manager
 
 # ── Sub-Routers & Storage ─────────────────────────────────────────
 from core.api_v1 import router as api_v1_router
 from core.storage import router as storage_router, get_user_settings, _apply_all_overrides
 from core.models_router import router as models_router
 from core.file_services import router as file_services_router
+from core.image_router import router as image_router
+from core.image_engine.daemon import stop_daemon
 
 # ── Logging ───────────────────────────────────────────────────────
 logging.basicConfig(level=logging.WARNING)
@@ -76,6 +79,13 @@ app.include_router(api_v1_router)
 app.include_router(storage_router)
 app.include_router(models_router)
 app.include_router(file_services_router)
+app.include_router(image_router)
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Ensure background daemons are cleanly stopped on shutdown."""
+    stop_daemon()
 
 
 # ── Diagnostics & Health Endpoints ────────────────────────────────
@@ -242,6 +252,7 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
     messages = body.get("messages", [])
+    chat_id = body.get("chat_id") or f"chat_{int(time.time() * 1000)}"
     temperature = body.get("temperature", config.DEFAULT_TEMPERATURE)
     top_p = body.get("top_p", config.DEFAULT_TOP_P)
     repeat_penalty = body.get("repeat_penalty", 1.1)
@@ -358,94 +369,15 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
             payload["max_tokens"] = effective_max_tokens
 
         if stream:
-            async def external_api_generator():
-                record_api_start()
-                start_time = time.time()
-                full_text = ""
-                token_count = 0
-                try:
-                    meta_chunk = {
-                        "object": "chat.completion.chunk",
-                        "choices": [{"delta": {"content": ""}, "index": 0, "finish_reason": None}],
-                        "model_info": {
-                            "role": "api",
-                            "name": f"API: {api_model}",
-                            "swap_time_s": 0.0,
-                        }
-                    }
-                    yield f"data: {json.dumps(meta_chunk)}\n\n"
-
-                    async with httpx.AsyncClient(timeout=120.0) as client:
-                        async with client.stream("POST", api_chat_url, headers=headers, json=payload) as resp:
-                            if resp.status_code != 200:
-                                err_body = await resp.aread()
-                                err_text = err_body.decode("utf-8", errors="replace")
-                                logger.error(f"External API error {resp.status_code}: {err_text}")
-                                yield f"data: {json.dumps({'error': f'API Error {resp.status_code}: {err_text}'})}\n\n"
-                                return
-
-                            async for line in resp.aiter_lines():
-                                if not line:
-                                    continue
-                                line = line.strip()
-                                if line.startswith("data:"):
-                                    data_str = line[5:].strip()
-                                    if data_str == "[DONE]":
-                                        break
-                                    try:
-                                        chunk = json.loads(data_str)
-                                        yield f"data: {json.dumps(chunk)}\n\n"
-                                        if "choices" in chunk and len(chunk["choices"]) > 0:
-                                            delta = chunk["choices"][0].get("delta", {})
-                                            if "content" in delta and delta["content"]:
-                                                full_text += delta["content"]
-                                                token_count += 1
-                                    except Exception:
-                                        yield f"{line}\n\n"
-
-                    elapsed = time.time() - start_time
-                    tk_s = token_count / elapsed if elapsed > 0 else 0
-                    def _calc_tokens(c):
-                        if isinstance(c, str):
-                            return len(c.split())
-                        if isinstance(c, list):
-                            count = 0
-                            for p in c:
-                                if isinstance(p, dict):
-                                    if p.get("type") == "text":
-                                        count += len(p.get("text", "").split())
-                                    elif p.get("type") == "image_url":
-                                        count += 256
-                                elif isinstance(p, str):
-                                    count += len(p.split())
-                            return count
-                        return 0
-
-                    prompt_len = sum(_calc_tokens(m.get("content")) for m in clean_messages)
-                    usage_chunk = {
-                        "object": "chat.completion.chunk",
-                        "choices": [{"delta": {"content": ""}, "index": 0, "finish_reason": "stop"}],
-                        "usage": {
-                            "prompt_tokens": prompt_len,
-                            "completion_tokens": token_count,
-                            "total_tokens": prompt_len + token_count,
-                            "total_time_s": round(elapsed, 2),
-                            "tk_s": round(tk_s, 1),
-                            "raw_tokens": [],
-                        },
-                        "model_info": {
-                            "role": "api",
-                            "name": f"API: {api_model}",
-                        }
-                    }
-                    yield f"data: {json.dumps(usage_chunk)}\n\n"
-                except Exception as e:
-                    logger.error(f"External API stream error: {e}")
-                    yield f"data: {json.dumps({'error': f'External API connection failed: {str(e)}'})}\n\n"
-                finally:
-                    record_api_end()
-
-            return StreamingResponse(external_api_generator(), media_type="text/event-stream")
+            job = chat_manager.start_api_job(
+                chat_id=chat_id,
+                api_chat_url=api_chat_url,
+                headers=headers,
+                payload=payload,
+                api_model=api_model,
+                clean_messages=clean_messages
+            )
+            return StreamingResponse(chat_manager.stream_job(job), media_type="text/event-stream")
         else:
             record_api_start()
             try:
@@ -508,82 +440,19 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
     model_info = model_manager.get_active_info()
 
     if stream:
-        def sync_generator():
-            try:
-                meta_chunk = {
-                    "object": "chat.completion.chunk",
-                    "choices": [{"delta": {"content": ""}, "index": 0, "finish_reason": None}],
-                    "model_info": {
-                        "role": routed_to,
-                        "name": model_info["name"],
-                        "swap_time_s": round(swap_time, 1),
-                    }
-                }
-                yield f"data: {json.dumps(meta_chunk)}\n\n"
-
-                start_time = time.time()
-                token_count = 0
-                full_text = ""
-
-                for chunk in model_manager.generate(messages, max_tokens, temperature, top_p, stream=True, repeat_penalty=repeat_penalty):
-                    yield f"data: {json.dumps(chunk)}\n\n"
-                    try:
-                        if "choices" in chunk and len(chunk["choices"]) > 0:
-                            delta = chunk["choices"][0].get("delta", {})
-                            if "content" in delta and delta["content"]:
-                                full_text += delta["content"]
-                                token_count += 1
-                    except Exception:
-                        pass
-
-                elapsed = time.time() - start_time
-
-                raw_tokens = []
-                completion_tokens = token_count
-                prompt_tokens = 0
-                try:
-                    raw_tokens = model_manager.tokenize(full_text, role=routed_to)
-                    if raw_tokens:
-                        completion_tokens = len(raw_tokens)
-
-                    prompt_text = " ".join(
-                        m.get("content", "") if isinstance(m.get("content"), str) else " ".join(
-                            part.get("text", "") for part in m.get("content", []) if isinstance(part, dict)
-                        )
-                        for m in messages
-                    )
-                    raw_prompt_tokens = model_manager.tokenize(prompt_text, role=routed_to)
-                    if raw_prompt_tokens:
-                        prompt_tokens = len(raw_prompt_tokens)
-                except Exception as tok_err:
-                    logger.warning(f"Post-stream token counting error: {tok_err}")
-
-                tk_s = completion_tokens / elapsed if elapsed > 0 else 0
-
-                usage_chunk = {
-                    "object": "chat.completion.chunk",
-                    "choices": [{"delta": {"content": ""}, "index": 0, "finish_reason": "stop"}],
-                    "usage": {
-                        "prompt_tokens": prompt_tokens,
-                        "completion_tokens": completion_tokens,
-                        "total_tokens": prompt_tokens + completion_tokens,
-                        "total_time_s": round(elapsed, 2),
-                        "tk_s": round(tk_s, 1),
-                        "raw_tokens": raw_tokens[:2000] if raw_tokens else [],
-                    },
-                    "model_info": {
-                        "role": routed_to,
-                        "name": model_info["name"],
-                    }
-                }
-                yield f"data: {json.dumps(usage_chunk)}\n\n"
-            except Exception as e:
-                logger.error(f"Streaming error in sync_generator: {e}", exc_info=True)
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
-
-        if inference_mode == "routing":
-            background_tasks.add_task(model_manager.activate, get_resident_role())
-        return StreamingResponse(sync_generator(), media_type="text/event-stream", background=background_tasks)
+        job = chat_manager.start_local_job(
+            chat_id=chat_id,
+            routed_to=routed_to,
+            model_info=model_info,
+            swap_time=swap_time,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            repeat_penalty=repeat_penalty,
+            inference_mode=inference_mode
+        )
+        return StreamingResponse(chat_manager.stream_job(job), media_type="text/event-stream")
     else:
         try:
             response = await asyncio.to_thread(
@@ -608,8 +477,38 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
             raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/chat/status")
+async def get_chat_status(chat_id: str):
+    """Check background generation status for a given chat."""
+    if not chat_id:
+        return {"status": "idle"}
+    return chat_manager.get_status(chat_id)
+
+
+@app.get("/api/chat/stream")
+async def reconnect_chat_stream(chat_id: str):
+    """Reconnect to an active or buffered background stream."""
+    job = chat_manager.get_job(chat_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="No active generation for this chat")
+    return StreamingResponse(chat_manager.stream_job(job), media_type="text/event-stream")
+
+
+@app.post("/api/chat/stop")
+async def stop_chat_generation(request: Request):
+    """Explicitly stops an in-progress background generation job."""
+    try:
+        body = await request.json()
+        chat_id = body.get("chat_id", "")
+    except Exception:
+        chat_id = ""
+    if not chat_id:
+        raise HTTPException(status_code=400, detail="chat_id is required")
+    return chat_manager.stop_chat(chat_id)
+
+
 # ══════════════════════════════════════════════════════════════════
-# Static Asset Serving & Root
+# Static Asset Serving, PWA Manifest, Service Worker & Root
 # ══════════════════════════════════════════════════════════════════
 
 static_dir = os.path.join(BASE_DIR, "static")
@@ -631,6 +530,42 @@ class NoCacheStaticFiles(StaticFiles):
 
 app.mount("/static", NoCacheStaticFiles(directory=static_dir), name="static")
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+app.mount("/images", StaticFiles(directory=IMAGES_DIR), name="images")
+
+
+@app.get("/sw.js")
+async def service_worker():
+    sw_path = os.path.join(static_dir, "sw.js")
+    if os.path.exists(sw_path):
+        return FileResponse(
+            sw_path,
+            media_type="application/javascript",
+            headers={
+                "Service-Worker-Allowed": "/",
+                "Cache-Control": "no-cache, no-store, must-revalidate"
+            }
+        )
+    raise HTTPException(status_code=404, detail="Service worker not found")
+
+
+@app.get("/manifest.json")
+async def web_manifest():
+    manifest_path = os.path.join(static_dir, "manifest.json")
+    if os.path.exists(manifest_path):
+        return FileResponse(
+            manifest_path,
+            media_type="application/manifest+json",
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+        )
+    raise HTTPException(status_code=404, detail="Manifest not found")
+
+
+@app.get("/favicon.ico")
+async def favicon_ico():
+    fav_path = os.path.join(static_dir, "favicon.ico")
+    if os.path.exists(fav_path):
+        return FileResponse(fav_path, media_type="image/x-icon")
+    raise HTTPException(status_code=404, detail="Favicon not found")
 
 
 @app.get("/")

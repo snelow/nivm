@@ -490,9 +490,11 @@ export function initExtras() {
 
     const newChatBtn = document.getElementById('newChatBtn');
     const convoEndedNewChatBtn = document.getElementById('convoEndedNewChatBtn');
+    const mobileNewChatBtn = document.getElementById('mobileNewChatBtn');
 
     if (newChatBtn) newChatBtn.addEventListener('click', handleNewChatClick);
     if (convoEndedNewChatBtn) convoEndedNewChatBtn.addEventListener('click', handleNewChatClick);
+    if (mobileNewChatBtn) mobileNewChatBtn.addEventListener('click', handleNewChatClick);
 
     // 2. Pixel art container click handlers
     const blehContainer = document.getElementById('blehEasterEgg');

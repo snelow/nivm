@@ -2,10 +2,10 @@ import { state, themeState, saveConversations, saveUsageStats } from './state.js
 import { dom } from './dom.js';
 import { fetchApiSettings, saveApiSettings, smartToggleEngine, scanLocalGgufs, startModelDownload, pollDownloadStatus, cancelModelDownload, fetchBackendConfig, checkBackendHealth, fetchEngineStatus, loadAvailableModels, fetchChats, fetchMemoryAPI, saveMemoryAPI, generateChatTitle, uploadImage, openNativeFileDialog, listDirectory, verifyFile, locateFile } from './api.js';
 import { setupNodesCanvas, setupMatrixCanvas, setupFluidCanvas, setupFlowFieldCanvas, applyThemeState, colorCycleLoop, saveThemeConfig } from './theme.js';
-import { makeDraggable, setupDynamicGreeting, renderChatHistory, renderActiveChat, switchChat, createNewChat, appendMessageToDOM, scrollToBottom, toggleSendStopButtons, updateAssistantBubble, updateMessageActionIcons, renderMemoryDrawer, renderToolsSettings, showAlert, showConfirm, showNotification, setupHistoryUI, setupVisionUI, setupAudioRecording, clearAttachedImage, updateVisionAvailabilityUI, setVisionEnabled, buildToolTraceHtml, populateStatsModal, updateChatInputState } from './ui.js';
+import { makeDraggable, setupDynamicGreeting, renderChatHistory, renderActiveChat, switchChat, createNewChat, appendMessageToDOM, scrollToBottom, toggleSendStopButtons, updateAssistantBubble, updateMessageActionIcons, renderMemoryDrawer, renderToolsSettings, initImageStudioSettings, showAlert, showConfirm, showNotification, setupHistoryUI, setupMobileNav, setupVisionUI, setupAudioRecording, clearAttachedImage, updateVisionAvailabilityUI, setVisionEnabled, buildToolTraceHtml, populateStatsModal, updateChatInputState } from './ui.js?v=5.5';
 import { tools, buildToolsInstruction, parseToolCall, stripToolCallFromText } from './tools.js';
-import { setupVoiceUI, voiceConfig, speakText, stopSpeaking, setVoiceOrbGeneratingState } from './voice.js';
-import { initExtras, openCreatorModal } from './extras.js';
+import { setupVoiceUI, voiceConfig, speakText, stopSpeaking, setVoiceOrbGeneratingState } from './voice.js?v=5.5';
+import { initExtras, openCreatorModal } from './extras.js?v=5.5';
 
 // Export state for UI modules that need direct access
 window.__nivm_state = state;
@@ -17,6 +17,7 @@ const startApp = async () => {
         let cleaned = stripToolCallFromText(text, tools);
         cleaned = cleaned.replace(/<thought>/gi, '<think>').replace(/<\/thought>/gi, '</think>');
         cleaned = cleaned.replace(/<reasoning>/gi, '<think>').replace(/<\/reasoning>/gi, '</think>');
+        cleaned = cleaned.replace(/<think>\s*<\/think>/gi, '');
         if (cleaned.includes('</think>') && !cleaned.includes('<think>')) {
             cleaned = '<think>' + cleaned;
         }
@@ -95,6 +96,26 @@ const startApp = async () => {
             initExtras();
             renderToolsSettings();
             setupHistoryUI();
+            setupMobileNav();
+
+            // 1. Instant Cache Hydration: Render cached conversations immediately (0ms delay)
+            try {
+                const cachedChats = localStorage.getItem('nivm_saved_chats');
+                if (cachedChats) {
+                    const parsed = JSON.parse(cachedChats);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        state.conversations = parsed;
+                        if (!state.activeChatId) {
+                            state.activeChatId = parsed[0].id;
+                        }
+                        renderChatHistory();
+                        renderActiveChat();
+                    }
+                }
+            } catch (e) {
+                console.warn('Instant chat cache hydration:', e);
+            }
+
             setupVisionUI();
             setupAudioRecording();
             if (window.updateModelAvailabilityUI) {
@@ -106,15 +127,28 @@ const startApp = async () => {
             await fetchEngineStatus();
             await loadAvailableModels();
             updateVisionAvailabilityUI();
+            initImageStudioSettings();
 
-            // Load Server-Side Chats
-            state.conversations = await fetchChats();
+            // Sync with Server-Side Chats
+            try {
+                const serverChats = await fetchChats();
+                if (Array.isArray(serverChats) && serverChats.length > 0) {
+                    state.conversations = serverChats;
+                }
+            } catch (err) {
+                console.warn('Server chats fetch warning:', err);
+            }
 
             // 5. Fetch Memory
             state.memory = await fetchMemoryAPI();
 
             if (state.conversations.length > 0) {
-                switchChat(state.conversations[0].id);
+                if (!state.activeChatId || !state.conversations.some(c => c.id === state.activeChatId)) {
+                    state.activeChatId = state.conversations[0].id;
+                    switchChat(state.activeChatId);
+                }
+                renderChatHistory();
+                checkAndResumeActiveGeneration(state.activeChatId);
             } else {
                 renderChatHistory();
             }
@@ -316,6 +350,7 @@ RESPONSE REQUIREMENTS (MANDATORY):
 
         const assistantMsg = { role: 'assistant', content: '' };
         activeChat.messages.push(assistantMsg);
+        const turnChatId = activeChat.id;
 
         const { bubble: assistantBubble, actions: actionsContainer } = appendMessageToDOM(assistantMsg, true);
 
@@ -352,6 +387,7 @@ RESPONSE REQUIREMENTS (MANDATORY):
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    chat_id: turnChatId,
                     model: state.selectedModel,
                     messages: payloadMessages,
                     temperature: state.temperature,
@@ -466,8 +502,10 @@ RESPONSE REQUIREMENTS (MANDATORY):
                 if (!pendingUpdate) {
                     pendingUpdate = requestAnimationFrame(() => {
                         assistantMsg.content = fullResponse;
-                        updateAssistantBubble(assistantBubble, sanitizeAssistantText(fullResponse), true, thinkStartTime);
-                        scrollToBottom();
+                        if (state.activeChatId === turnChatId) {
+                            updateAssistantBubble(assistantBubble, sanitizeAssistantText(fullResponse), true, thinkStartTime);
+                            scrollToBottom();
+                        }
                         pendingUpdate = false;
                     });
                 }
@@ -532,10 +570,14 @@ RESPONSE REQUIREMENTS (MANDATORY):
                 // Keep the exact content including TOOL_CALL so history preserves it.
                 // If model started thinking but emitted a tool call without closing </think>, seal the thought properly.
                 let preToolText = fullResponse.substring(0, interceptedToolCall.index);
+                preToolText = preToolText.replace(/<thought>/gi, '<think>').replace(/<\/thought>/gi, '</think>');
+                preToolText = preToolText.replace(/<reasoning>/gi, '<think>').replace(/<\/reasoning>/gi, '</think>');
                 if (preToolText.includes('<think>') && !preToolText.includes('</think>')) {
                     preToolText = preToolText.trim() + '\n</think>\n';
                 }
-                assistantMsg.content = preToolText + fullResponse.substring(interceptedToolCall.index, interceptedToolCall.index + interceptedToolCall.fullMatch.length);
+                preToolText = preToolText.replace(/<think>\s*<\/think>/gi, '').trim();
+
+                assistantMsg.content = (preToolText ? preToolText + '\n' : '') + fullResponse.substring(interceptedToolCall.index, interceptedToolCall.index + interceptedToolCall.fullMatch.length);
                 if (thinkDurationSec !== null) {
                     assistantMsg.thinkTime = thinkDurationSec;
                 }
@@ -543,20 +585,28 @@ RESPONSE REQUIREMENTS (MANDATORY):
 
                 const textWithoutTool = stripToolCallFromText(assistantMsg.content, tools).trim();
                 const textOutsideThoughts = textWithoutTool
-                    .replace(/<(think|thought|reasoning)>[\s\S]*?<\/\1>/gi, '')
-                    .replace(/<(think|thought|reasoning)>[\s\S]*$/gi, '')
+                    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+                    .replace(/<think>[\s\S]*$/gi, '')
                     .trim();
-                const hasCompletedThought = textWithoutTool.includes('</think>') || textWithoutTool.includes('</thought>') || textWithoutTool.includes('</reasoning>');
+
+                let completedThoughtContent = '';
+                const mThought = textWithoutTool.match(/<think>([\s\S]*?)<\/think>/i);
+                if (mThought && mThought[1].trim()) {
+                    completedThoughtContent = mThought[1].trim();
+                }
+                const hasCompletedThought = Boolean(completedThoughtContent);
 
                 // Clean up streaming state immediately so "Responding..." placeholder is removed while tool executes
                 if (hasCompletedThought || textOutsideThoughts) {
                     updateAssistantBubble(assistantBubble, assistantMsg.content, false, assistantMsg.thinkTime || thinkDurationSec);
+                } else {
+                    updateAssistantBubble(assistantBubble, '', false);
                 }
 
                 // Handle the tool call
                 let resultStr = "";
                 const matchedTool = tools.find(t => t.name === interceptedToolCall.command);
-                const isEnabled = state.enabledTools[interceptedToolCall.command] === true;
+                const isEnabled = state.enabledTools[interceptedToolCall.command] !== false;
 
                 if (matchedTool && isEnabled) {
                     try {
@@ -576,6 +626,14 @@ RESPONSE REQUIREMENTS (MANDATORY):
                     argsStr: interceptedToolCall.argsStr,
                     resultStr: resultStr
                 };
+
+                // For image tools, extract clean image URL for robust reload without regex hurdles
+                if (interceptedToolCall.command === 'generate_image' || interceptedToolCall.command === 'edit_image') {
+                    const imgMatch = resultStr.match(/(?:\/images\/|\/uploads\/)[^\s,)"';:]+/i);
+                    if (imgMatch) {
+                        assistantMsg.toolExecution.imageUrl = imgMatch[0].replace(/[.,:;]+$/, '');
+                    }
+                }
 
                 const isWriteMem = interceptedToolCall.command === 'write_memory';
                 const isEndConvo = interceptedToolCall.command === 'end_conversation';
@@ -607,23 +665,37 @@ RESPONSE REQUIREMENTS (MANDATORY):
 
                 const sysBubbleHtml = buildToolTraceHtml(interceptedToolCall.command, interceptedToolCall.argsStr, resultStr);
 
-                if (textOutsideThoughts === '' && !hasCompletedThought) {
-                    // Pure tool invocation without dialogue or completed thoughts: remove empty bubble row completely
-                    const row = assistantBubble.closest('.message-row');
-                    if (row) row.remove();
-                    dom.messagesContainer.insertAdjacentHTML('beforeend', sysBubbleHtml);
-                } else {
-                    // Render bubble with sanitized content
-                    updateAssistantBubble(assistantBubble, assistantMsg.content, false, assistantMsg.thinkTime || thinkDurationSec);
-                    actionsContainer.style.display = 'none';
-                    assistantBubble.insertAdjacentHTML('afterend', sysBubbleHtml);
+                const isImageTool = interceptedToolCall.command === 'generate_image' || interceptedToolCall.command === 'edit_image';
+
+                if (state.activeChatId === turnChatId) {
+                    if (isImageTool) {
+                        // Image tools mount their own dedicated visual card; avoid duplicate raw tool trace
+                        if (hasCompletedThought || textOutsideThoughts) {
+                            updateAssistantBubble(assistantBubble, assistantMsg.content, false, assistantMsg.thinkTime || thinkDurationSec);
+                        } else {
+                            updateAssistantBubble(assistantBubble, '', false);
+                        }
+                        if (actionsContainer) actionsContainer.style.display = 'none';
+                    } else if (textOutsideThoughts === '' && !hasCompletedThought) {
+                        // Pure tool invocation without dialogue or completed thoughts: remove empty bubble row completely
+                        const row = assistantBubble.closest('.message-row');
+                        if (row) row.remove();
+                        dom.messagesContainer.insertAdjacentHTML('beforeend', sysBubbleHtml);
+                    } else {
+                        // Render bubble with sanitized content
+                        updateAssistantBubble(assistantBubble, assistantMsg.content, false, assistantMsg.thinkTime || thinkDurationSec);
+                        actionsContainer.style.display = 'none';
+                        assistantBubble.insertAdjacentHTML('afterend', sysBubbleHtml);
+                    }
                 }
 
                 // Save conversations so toolExecution, thinkTime, and sysMsg are saved in history
                 saveConversations();
 
-                // Trigger the assistant again!
-                setTimeout(() => window.sendMessage(null, true), 100);
+                // Trigger the assistant again ONLY if still in the same active chat!
+                if (state.activeChatId === turnChatId) {
+                    setTimeout(() => window.sendMessage(null, true), 100);
+                }
             } else {
                 // Final / non-tool response
                 if (activeChat.isPendingResume) {
@@ -797,13 +869,156 @@ RESPONSE REQUIREMENTS (MANDATORY):
     }
 
     function stopGeneration() {
+        if (state.activeChatId) {
+            fetch('/api/chat/stop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: state.activeChatId })
+            }).catch(() => {});
+        }
         if (state.abortController) {
             state.abortController.abort();
-            state.isGenerating = false;
-            toggleSendStopButtons(false);
         }
+        state.isGenerating = false;
+        toggleSendStopButtons(false);
+        setVoiceOrbGeneratingState(false);
         try { stopSpeaking(); } catch (e) { }
     }
+    window.stopGeneration = stopGeneration;
+
+    async function checkAndResumeActiveGeneration(chatId) {
+        if (!chatId) return;
+        try {
+            const res = await fetch(`/api/chat/status?chat_id=${encodeURIComponent(chatId)}`, { cache: 'no-store' });
+            if (!res.ok) return;
+            const statusData = await res.json();
+            if (statusData.status !== 'generating') return;
+
+            console.log(`[Auto-Resume] Found background generation in progress for chat ${chatId}. Reconnecting...`);
+            const activeChat = state.conversations.find(c => c.id === chatId);
+            if (!activeChat) return;
+
+            let assistantMsg = activeChat.messages.length > 0 && activeChat.messages[activeChat.messages.length - 1].role === 'assistant'
+                ? activeChat.messages[activeChat.messages.length - 1]
+                : null;
+
+            if (!assistantMsg) {
+                assistantMsg = { role: 'assistant', content: statusData.text || '' };
+                activeChat.messages.push(assistantMsg);
+            }
+
+            renderActiveChat();
+
+            const bubbles = dom.messagesContainer.querySelectorAll('.message-bubble.assistant');
+            const assistantBubble = bubbles.length > 0 ? bubbles[bubbles.length - 1] : null;
+            if (!assistantBubble) return;
+
+            state.isGenerating = true;
+            toggleSendStopButtons(true);
+            setVoiceOrbGeneratingState(true, 'Responding…');
+            state.abortController = new AbortController();
+
+            let fullResponse = statusData.text || assistantMsg.content || '';
+            let hasStartedReasoning = fullResponse.includes('<think>') && !fullResponse.includes('</think>');
+            let thinkStartTime = null;
+            let thinkEndTime = null;
+            let serverUsage = null;
+            let modelInfo = null;
+            let pendingUpdate = false;
+
+            const streamRes = await fetch(`/api/chat/stream?chat_id=${encodeURIComponent(chatId)}`, {
+                signal: state.abortController.signal
+            });
+
+            if (!streamRes.ok) {
+                state.isGenerating = false;
+                toggleSendStopButtons(false);
+                setVoiceOrbGeneratingState(false);
+                return;
+            }
+
+            const reader = streamRes.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed || trimmed === 'data: [DONE]') continue;
+
+                    if (trimmed.startsWith('data: ')) {
+                        try {
+                            const json = JSON.parse(trimmed.substring(6));
+                            if (json.model_info && !modelInfo) modelInfo = json.model_info;
+                            const delta = json.choices && json.choices[0] ? json.choices[0].delta : null;
+                            if (json.usage) {
+                                serverUsage = json.usage;
+                            } else if (delta) {
+                                if (delta.reasoning_content) {
+                                    if (!hasStartedReasoning) {
+                                        hasStartedReasoning = true;
+                                        thinkStartTime = performance.now();
+                                        fullResponse += '<think>' + delta.reasoning_content;
+                                    } else {
+                                        fullResponse += delta.reasoning_content;
+                                    }
+                                }
+                                if (delta.content) {
+                                    if (hasStartedReasoning && !fullResponse.includes('</think>')) {
+                                        fullResponse += '</think>';
+                                        hasStartedReasoning = false;
+                                        if (thinkStartTime && !thinkEndTime) thinkEndTime = performance.now();
+                                    }
+                                    fullResponse += delta.content;
+                                }
+                            }
+                        } catch (e) {}
+                    }
+                }
+
+                if (!pendingUpdate) {
+                    pendingUpdate = requestAnimationFrame(() => {
+                        assistantMsg.content = fullResponse;
+                        if (state.activeChatId === chatId) {
+                            updateAssistantBubble(assistantBubble, sanitizeAssistantText(fullResponse), true, thinkStartTime);
+                            scrollToBottom();
+                        }
+                        pendingUpdate = false;
+                    });
+                }
+            }
+
+            if (pendingUpdate) {
+                cancelAnimationFrame(pendingUpdate);
+                pendingUpdate = false;
+            }
+
+            let cleanResponse = sanitizeAssistantText(fullResponse);
+            assistantMsg.content = cleanResponse;
+            updateAssistantBubble(assistantBubble, cleanResponse, false);
+            state.isGenerating = false;
+            toggleSendStopButtons(false);
+            setVoiceOrbGeneratingState(false);
+            saveConversations();
+            renderChatHistory();
+
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                console.warn('[Auto-Resume] Stream error:', err);
+            }
+            state.isGenerating = false;
+            toggleSendStopButtons(false);
+            setVoiceOrbGeneratingState(false);
+        }
+    }
+    window.checkAndResumeActiveGeneration = checkAndResumeActiveGeneration;
 
     function setupEventListeners() {
         if (dom.historyToggleBtn) {
@@ -811,6 +1026,8 @@ RESPONSE REQUIREMENTS (MANDATORY):
                 if (dom.historyDrawer) dom.historyDrawer.classList.toggle('hidden');
                 if (dom.historyDrawer && !dom.historyDrawer.classList.contains('hidden')) {
                     if (dom.memoryDrawer) dom.memoryDrawer.classList.add('hidden');
+                    const drawerBody = dom.historyDrawer.querySelector('.drawer-body');
+                    if (drawerBody) drawerBody.scrollTop = 0;
                 }
             });
         }
@@ -962,9 +1179,9 @@ RESPONSE REQUIREMENTS (MANDATORY):
                 if (state.inferenceMode !== 'api' && !state.isModelLoaded && dom.chatBoxDraftHint) {
                     const text = dom.userPrompt.value.trim();
                     if (text.length > 0) {
-                        dom.chatBoxDraftHint.textContent = `Draft preserved (${text.length} chars) • Load model in Settings to continue`;
+                        dom.chatBoxDraftHint.textContent = `Draft saved (${text.length} chars) • Tap Settings`;
                     } else {
-                        dom.chatBoxDraftHint.textContent = 'Configure and load a model in Settings to continue';
+                        dom.chatBoxDraftHint.textContent = 'Tap Settings to load a model';
                     }
                 }
             });
@@ -983,10 +1200,24 @@ RESPONSE REQUIREMENTS (MANDATORY):
         if (dom.stopBtn) dom.stopBtn.addEventListener('click', stopGeneration);
         if (dom.retryConnBtn) dom.retryConnBtn.addEventListener('click', checkBackendHealth);
 
-        if (dom.settingsBtn) dom.settingsBtn.addEventListener('click', () => dom.settingsModal && dom.settingsModal.classList.toggle('hidden'));
+        if (dom.settingsBtn) dom.settingsBtn.addEventListener('click', () => {
+            if (dom.settingsModal) {
+                dom.settingsModal.classList.toggle('hidden');
+                if (!dom.settingsModal.classList.contains('hidden')) {
+                    initImageStudioSettings();
+                }
+            }
+        });
         if (dom.closeSettingsBtn) dom.closeSettingsBtn.addEventListener('click', () => dom.settingsModal && dom.settingsModal.classList.add('hidden'));
 
-        if (dom.toolsBtn) dom.toolsBtn.addEventListener('click', () => dom.toolsModal && dom.toolsModal.classList.toggle('hidden'));
+        if (dom.toolsBtn) dom.toolsBtn.addEventListener('click', () => {
+            if (dom.toolsModal) {
+                dom.toolsModal.classList.toggle('hidden');
+                if (!dom.toolsModal.classList.contains('hidden')) {
+                    renderToolsSettings();
+                }
+            }
+        });
         if (dom.closeToolsBtn) dom.closeToolsBtn.addEventListener('click', () => dom.toolsModal && dom.toolsModal.classList.add('hidden'));
         if (dom.saveToolsBtn) dom.saveToolsBtn.addEventListener('click', () => dom.toolsModal && dom.toolsModal.classList.add('hidden'));
         if (dom.saveSettingsBtn) dom.saveSettingsBtn.addEventListener('click', async () => {
@@ -2208,6 +2439,13 @@ RESPONSE REQUIREMENTS (MANDATORY):
         }
 
         async function handleBrowseFile(target = 'model') {
+            // On mobile devices or viewports <= 768px, native OS dialog spawns on the host PC monitor which is unreachable from a phone
+            // Directly open the responsive in-browser file explorer
+            if (window.innerWidth <= 768) {
+                openFileBrowserModal(target);
+                return;
+            }
+
             const btn = target === 'mmproj' ? dom.browseMmprojBtn : dom.browseCustomPathBtn;
             const origHtml = btn ? btn.innerHTML : '';
             if (btn) {
@@ -2545,9 +2783,9 @@ RESPONSE REQUIREMENTS (MANDATORY):
                     const text = dom.userPrompt ? dom.userPrompt.value.trim() : '';
                     if (dom.chatBoxDraftHint) {
                         if (text.length > 0) {
-                            dom.chatBoxDraftHint.textContent = `Draft preserved (${text.length} chars) • Load model in Settings to continue`;
+                            dom.chatBoxDraftHint.textContent = `Draft saved (${text.length} chars) • Tap Settings`;
                         } else {
-                            dom.chatBoxDraftHint.textContent = 'Configure and load a model in Settings to continue';
+                            dom.chatBoxDraftHint.textContent = 'Tap Settings to load a model';
                         }
                     }
                 }
@@ -2570,6 +2808,7 @@ RESPONSE REQUIREMENTS (MANDATORY):
                 dom.settingsModal.classList.remove('hidden');
                 refreshEngineStatusUI();
                 refreshScannedModelsList();
+                initImageStudioSettings();
             }
         }
 
@@ -2599,6 +2838,7 @@ RESPONSE REQUIREMENTS (MANDATORY):
                 if (!dom.settingsModal.classList.contains('hidden')) {
                     refreshEngineStatusUI();
                     refreshScannedModelsList();
+                    initImageStudioSettings();
                 }
             }, 50);
         });
@@ -3043,8 +3283,10 @@ RESPONSE REQUIREMENTS (MANDATORY):
 
         if (dom.fontSizeSlider) {
             dom.fontSizeSlider.addEventListener('input', (e) => {
-                themeState.fontSize = e.target.value;
-                if (dom.fontSizeVal) dom.fontSizeVal.textContent = themeState.fontSize + 'px';
+                const val = Number(e.target.value) || 15;
+                themeState.fontSize = val;
+                if (dom.fontSizeVal) dom.fontSizeVal.textContent = val + 'px';
+                document.documentElement.style.setProperty('--font-size-base', `${val}px`);
                 saveThemeConfig();
             });
         }
@@ -3058,9 +3300,16 @@ RESPONSE REQUIREMENTS (MANDATORY):
                     accentColor: '#f4f4f5',
                     cycleAccent: false,
                     cycleBg: false,
-                    cycleSpeed: 50
+                    cycleSpeed: 50,
+                    chatWidth: 'default',
+                    fontSize: 15
                 });
+                document.documentElement.style.setProperty('--font-size-base', '15px');
+                if (dom.fontSizeSlider) dom.fontSizeSlider.value = 15;
+                if (dom.fontSizeVal) dom.fontSizeVal.textContent = '15px';
+                applyThemeState();
                 saveThemeConfig();
+                if (window.showNotification) window.showNotification('Appearance and font size reset to default', 'info');
             });
         }
 

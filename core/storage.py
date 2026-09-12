@@ -212,11 +212,16 @@ async def get_settings_endpoint():
     return get_user_settings()
 
 
+def save_user_settings(data: Dict[str, Any]):
+    """Save settings dictionary to settings.json and apply overrides."""
+    with open(SETTINGS_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+    _apply_all_overrides()
+
+
 @router.post("/api/settings")
 async def save_settings_endpoint(settings: SettingsModel):
-    with open(SETTINGS_FILE, "w") as f:
-        json.dump(settings.model_dump(), f)
-    _apply_all_overrides()
+    save_user_settings(settings.model_dump())
     return {"status": "success"}
 
 

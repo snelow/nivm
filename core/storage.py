@@ -4,6 +4,7 @@ Handles local JSON persistence for chats, memory, settings, and media uploads.
 """
 
 import os
+import re
 import json
 import time
 import logging
@@ -16,6 +17,7 @@ from .config import (
     CHATS_FILE,
     MEMORY_FILE,
     UPLOADS_DIR,
+    IMAGES_DIR,
     MAX_UPLOAD_BYTES,
 )
 from .engine import model_manager
@@ -169,13 +171,14 @@ def _apply_all_overrides():
 
 
 def _cleanup_orphaned_uploads(chats: list):
-    """Scan all chats for referenced upload filenames and remove unreferenced files in UPLOADS_DIR."""
+    """Scan all chats for referenced upload and generated image filenames and remove unreferenced files."""
     try:
         referenced_files = set()
         for chat in chats:
             if not isinstance(chat, dict):
                 continue
             for msg in chat.get("messages", []):
+                # 1. Multimodal array content
                 content = msg.get("content")
                 if isinstance(content, list):
                     for part in content:
@@ -186,14 +189,30 @@ def _cleanup_orphaned_uploads(chats: list):
                                     referenced_files.add(os.path.basename(obj["url"]))
                                 elif isinstance(obj, str):
                                     referenced_files.add(os.path.basename(obj))
+                elif isinstance(content, str):
+                    for match in re.findall(r'[\w\-\.]+\.(?:png|jpg|jpeg|webp|gif|bmp|mp4|webm|mov|wav|mp3|m4a|pdf)', content):
+                        referenced_files.add(match)
 
+                # 2. Tool execution metadata (generate_image, edit_image, generate_anime_image)
+                tool_exec = msg.get("toolExecution")
+                if isinstance(tool_exec, dict):
+                    if tool_exec.get("imageUrl"):
+                        referenced_files.add(os.path.basename(tool_exec["imageUrl"]))
+                    if tool_exec.get("imageFilename"):
+                        referenced_files.add(os.path.basename(tool_exec["imageFilename"]))
+                    if tool_exec.get("resultStr"):
+                        for match in re.findall(r'[\w\-\.]+\.(?:png|jpg|jpeg|webp|gif|bmp|mp4|webm|mov|wav|mp3|m4a|pdf)', tool_exec["resultStr"]):
+                            referenced_files.add(match)
+
+        now = time.time()
+
+        # Clean UPLOADS_DIR
         if os.path.exists(UPLOADS_DIR):
             for fname in os.listdir(UPLOADS_DIR):
                 fpath = os.path.join(UPLOADS_DIR, fname)
-                # Keep newly uploaded files (< 2 mins) to prevent race conditions during message composition
                 if os.path.isfile(fpath):
-                    mtime = os.path.getmtime(fpath)
-                    if time.time() - mtime < 120:
+                    # Keep newly uploaded files (< 2 mins) to prevent race conditions during message composition
+                    if now - os.path.getmtime(fpath) < 120:
                         continue
                     if fname not in referenced_files:
                         try:
@@ -201,8 +220,28 @@ def _cleanup_orphaned_uploads(chats: list):
                             logger.info(f"Cleaned up orphaned upload: {fname}")
                         except Exception as e:
                             logger.warning(f"Failed to remove orphaned upload {fname}: {e}")
+
+        # Clean IMAGES_DIR
+        if os.path.exists(IMAGES_DIR):
+            for fname in os.listdir(IMAGES_DIR):
+                fpath = os.path.join(IMAGES_DIR, fname)
+                if os.path.isfile(fpath):
+                    # Don't check .meta.json directly; it gets deleted alongside its parent image
+                    if fname.endswith(".meta.json"):
+                        continue
+                    if now - os.path.getmtime(fpath) < 120:
+                        continue
+                    if fname not in referenced_files:
+                        try:
+                            os.remove(fpath)
+                            meta_path = f"{fpath}.meta.json"
+                            if os.path.isfile(meta_path):
+                                os.remove(meta_path)
+                            logger.info(f"Cleaned up orphaned generated image: {fname}")
+                        except Exception as e:
+                            logger.warning(f"Failed to remove orphaned generated image {fname}: {e}")
     except Exception as e:
-        logger.warning(f"Error during orphaned uploads cleanup: {e}")
+        logger.warning(f"Error during orphaned files cleanup: {e}")
 
 
 # ── Storage Endpoints ─────────────────────────────────────────────
@@ -248,7 +287,7 @@ async def upload_file_endpoint(file: UploadFile = File(...)):
 
 @router.post("/api/upload/delete")
 async def delete_uploaded_files_endpoint(request: Request):
-    """Deletes uploaded files given a list of file URLs or filenames."""
+    """Deletes uploaded or generated files (and their metadata) given a list of file URLs or filenames."""
     try:
         data = await request.json()
         urls = data.get("urls", [])
@@ -260,13 +299,29 @@ async def delete_uploaded_files_endpoint(request: Request):
             # Security guard: prevent path traversal
             if "/" in filename or "\\" in filename or ".." in filename:
                 continue
-            file_path = os.path.join(UPLOADS_DIR, filename)
-            if os.path.isfile(file_path):
+
+            # 1. Check in UPLOADS_DIR
+            upload_path = os.path.join(UPLOADS_DIR, filename)
+            if os.path.isfile(upload_path):
                 try:
-                    os.remove(file_path)
+                    os.remove(upload_path)
                     deleted.append(filename)
                 except Exception as err:
-                    logger.warning(f"Could not remove {file_path}: {err}")
+                    logger.warning(f"Could not remove upload {upload_path}: {err}")
+
+            # 2. Check in IMAGES_DIR (and corresponding .meta.json)
+            if os.path.exists(IMAGES_DIR):
+                image_path = os.path.join(IMAGES_DIR, filename)
+                if os.path.isfile(image_path):
+                    try:
+                        os.remove(image_path)
+                        deleted.append(filename)
+                        meta_path = f"{image_path}.meta.json"
+                        if os.path.isfile(meta_path):
+                            os.remove(meta_path)
+                    except Exception as err:
+                        logger.warning(f"Could not remove generated image {image_path}: {err}")
+
         return {"status": "success", "deleted": deleted}
     except Exception as e:
         logger.error(f"Error in delete_uploaded_files: {e}")

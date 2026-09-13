@@ -64,22 +64,49 @@ export function switchChat(id) {
 }
 window.switchChat = switchChat;
 
+export function extractMediaUrlsFromMessage(msg) {
+    const urls = [];
+    if (!msg) return urls;
+
+    // 1. Array content parts (uploaded media or generated images)
+    if (Array.isArray(msg.content)) {
+        for (const part of msg.content) {
+            if (part && typeof part === 'object') {
+                const u = part.image_url?.url || part.video_url?.url || part.audio_url?.url || part.document_url?.url;
+                if (u && typeof u === 'string' && (u.includes('/uploads/') || u.includes('/images/'))) {
+                    urls.push(u);
+                }
+            }
+        }
+    } else if (typeof msg.content === 'string') {
+        const matches = msg.content.match(/(?:\/images\/|\/uploads\/)[a-zA-Z0-9_\-\.]+\.(?:png|jpg|jpeg|webp|gif|bmp|mp4|webm|mov|wav|mp3|m4a|pdf)/gi) || [];
+        matches.forEach(m => urls.push(m));
+    }
+
+    // 2. Tool executions (generate_image, edit_image, generate_anime_image)
+    if (msg.toolExecution) {
+        if (msg.toolExecution.imageUrl) {
+            urls.push(msg.toolExecution.imageUrl);
+        }
+        if (msg.toolExecution.imageFilename) {
+            urls.push(`/images/${msg.toolExecution.imageFilename}`);
+        }
+        if (msg.toolExecution.resultStr) {
+            const matches = msg.toolExecution.resultStr.match(/(?:\/images\/|\/uploads\/)[a-zA-Z0-9_\-\.]+\.(?:png|jpg|jpeg|webp|gif|bmp|mp4|webm|mov|wav|mp3|m4a|pdf)/gi) || [];
+            matches.forEach(m => urls.push(m));
+        }
+    }
+
+    return Array.from(new Set(urls.filter(Boolean)));
+}
+
 export function extractMediaUrlsFromChat(chat) {
     const urls = [];
     if (!chat || !chat.messages) return urls;
     for (const msg of chat.messages) {
-        if (Array.isArray(msg.content)) {
-            for (const part of msg.content) {
-                if (part && typeof part === 'object') {
-                    const u = part.image_url?.url || part.video_url?.url || part.audio_url?.url || part.document_url?.url;
-                    if (u && typeof u === 'string' && u.includes('/uploads/')) {
-                        urls.push(u);
-                    }
-                }
-            }
-        }
+        extractMediaUrlsFromMessage(msg).forEach(u => urls.push(u));
     }
-    return urls;
+    return Array.from(new Set(urls));
 }
 
 export function deleteChat(id, e) {

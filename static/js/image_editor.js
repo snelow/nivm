@@ -575,7 +575,11 @@ async function attachImageForChatEdit(imageUrl) {
 /**
  * Creates an interactive Before/After comparison slider card for edited images.
  */
-export function createBeforeAfterSlider(beforeUrl, afterUrl, promptText, durationSec = null) {
+export function createBeforeAfterSlider(beforeUrl, afterUrl, promptText = '', durationSec = null) {
+    if (!beforeUrl || !afterUrl || beforeUrl === 'null' || afterUrl === 'null' || beforeUrl === 'undefined' || afterUrl === 'undefined') {
+        const validUrl = (afterUrl && afterUrl !== 'null' && afterUrl !== 'undefined') ? afterUrl : beforeUrl;
+        return createSingleImageCard(validUrl, promptText, durationSec);
+    }
     const filename = afterUrl.split('/').pop() || 'edited.png';
     state.lastGeneratedImage = filename;
 
@@ -698,7 +702,12 @@ export function createBeforeAfterSlider(beforeUrl, afterUrl, promptText, duratio
  * Creates a single high-res image card for text-to-image generations.
  */
 export function createSingleImageCard(imageUrl, promptText, durationSec = null) {
-    const filename = imageUrl.split('/').pop() || 'generated.png';
+    if (!imageUrl || imageUrl === 'null' || imageUrl === 'undefined') {
+        const placeholder = document.createElement('div');
+        placeholder.style.display = 'none';
+        return placeholder;
+    }
+    const filename = String(imageUrl).split('/').pop() || 'generated.png';
     state.lastGeneratedImage = filename;
 
     if (!durationSec) {

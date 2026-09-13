@@ -210,6 +210,8 @@ RESPONSE REQUIREMENTS (MANDATORY):
    - If rejecting: [DECISION: REJECT_RESUME]
 3. NEVER output only the decision tag without spoken dialogue.
 4. Do NOT call any tools (including end_conversation) during this turn.`;
+    }
+
     const isVoiceMode = Boolean(
         document.body?.classList.contains('voice-mode-active') ||
         dom.chatViewport?.classList.contains('voice-mode-active')

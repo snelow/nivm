@@ -6,7 +6,7 @@ import { tools, parseToolCall, stripToolCallFromText } from '../tools.js';
 import { createSingleImageCard, createBeforeAfterSlider, getImageDuration, saveImageDuration } from '../image_editor.js';
 import { escapeHtml, showNotification } from '../modals/dialogs.js';
 import { openLightbox, openVideoPreview } from '../media/media_manager.js';
-import { switchChat, createNewChat } from './chat_history.js';
+import { switchChat, createNewChat, extractMediaUrlsFromChat, extractMediaUrlsFromMessage } from './chat_history.js';
 
 export function setupDynamicGreeting() {
     const hour = new Date().getHours();
@@ -659,7 +659,7 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
                     imgUrl = String(msg.toolExecution.imageUrl).replace(/[.,:;]+$/, '');
                 }
 
-                if (imgUrl) {
+                if (imgUrl && imgUrl !== 'null' && imgUrl !== 'undefined') {
                     let promptText = '';
                     try {
                         const parsed = JSON.parse(argsStr);
@@ -856,17 +856,7 @@ export function updateMessageActionIcons(actionsContainer, msg, row) {
         deleteBtn.onclick = async () => {
             const activeChat = state.conversations.find(c => c.id === state.activeChatId);
             if (activeChat) {
-                const msgUrls = [];
-                if (Array.isArray(msg.content)) {
-                    for (const part of msg.content) {
-                        if (part && typeof part === 'object') {
-                            const u = part.image_url?.url || part.video_url?.url || part.audio_url?.url || part.document_url?.url;
-                            if (u && typeof u === 'string' && u.includes('/uploads/')) {
-                                msgUrls.push(u);
-                            }
-                        }
-                    }
-                }
+                const msgUrls = extractMediaUrlsFromMessage(msg);
                 activeChat.messages = activeChat.messages.filter(m => m !== msg);
                 row.remove();
                 if (msgUrls.length > 0) {

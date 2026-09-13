@@ -530,37 +530,52 @@ body.voice-mode-active.voice-mode-collapsed .voice-stage-status {
     text-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
 }
 
+/* Live Speech Subtitle Card (Matching Clear Text Highlight Style) */
 .voice-live-transcript {
+    display: inline-block;
     max-width: 580px;
-    width: 90%;
-    margin: 12px auto 0 auto;
-    padding: 8px 16px;
+    width: auto;
+    min-width: min(90%, 280px);
+    margin: 8px auto 0 auto;
+    padding: 7px 16px;
+    box-sizing: border-box;
     font-size: 0.92rem;
     font-weight: 500;
-    line-height: 1.5;
-    color: #f8fafc;
+    line-height: 1.65;
+    color: var(--text-primary, #f8fafc);
     text-align: center;
-    background: rgba(15, 18, 28, 0.65);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    animation: fadeInTranscript 0.2s ease-out;
-    transition: all 0.2s ease;
+    background: rgba(var(--bg-surface-rgb, 18, 18, 21), 0.85);
+    background: color-mix(in srgb, var(--bg-black, #09090b) 84%, transparent);
+    backdrop-filter: blur(14px) saturate(150%);
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+    border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.08));
+    border-radius: 10px;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.35);
     word-break: break-word;
+    overflow-wrap: break-word;
+    animation: fadeInTranscript 0.2s ease-out;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
 }
 
 .voice-live-transcript.interim {
-    color: #cbd5e1;
+    color: var(--text-secondary, #cbd5e1);
     font-style: italic;
-    border-color: rgba(56, 189, 248, 0.25);
+    border-color: rgba(56, 189, 248, 0.3);
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.35), 0 0 14px -3px rgba(56, 189, 248, 0.2);
 }
 
 .voice-live-transcript.final {
-    color: #f1f5f9;
+    color: var(--text-primary, #f1f5f9);
     font-style: normal;
-    border-color: rgba(34, 197, 94, 0.35);
+    border-color: rgba(var(--voice-accent-rgb, 34, 197, 94), 0.38);
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.35), 0 0 14px -3px rgba(var(--voice-accent-rgb, 34, 197, 94), 0.22);
+}
+
+body.voice-mode-active.voice-mode-collapsed .voice-live-transcript {
+    font-size: 0.82rem;
+    padding: 5px 12px;
+    margin-top: 4px;
+    max-width: 95%;
 }
 
 @keyframes fadeInTranscript {

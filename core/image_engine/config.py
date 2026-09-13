@@ -17,6 +17,9 @@ UNET_DIR = os.path.join(IMAGE_MODELS_DIR, "unet")
 CLIP_DIR = os.path.join(IMAGE_MODELS_DIR, "text_encoders")
 VAE_DIR = os.path.join(IMAGE_MODELS_DIR, "vae")
 
+CHECKPOINTS_DIR = os.path.join(IMAGE_MODELS_DIR, "checkpoints")
+LORAS_DIR = os.path.join(IMAGE_MODELS_DIR, "loras")
+
 USER_FILES_DIR = os.path.join(BASE_DIR, "User files")
 IMAGES_OUTPUT_DIR = os.path.join(USER_FILES_DIR, "images")
 UPLOADS_DIR = os.path.join(USER_FILES_DIR, "uploads")
@@ -25,12 +28,19 @@ os.makedirs(IMAGE_MODELS_DIR, exist_ok=True)
 os.makedirs(UNET_DIR, exist_ok=True)
 os.makedirs(CLIP_DIR, exist_ok=True)
 os.makedirs(VAE_DIR, exist_ok=True)
+os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
+os.makedirs(LORAS_DIR, exist_ok=True)
 os.makedirs(IMAGES_OUTPUT_DIR, exist_ok=True)
 
 # Target Model Filenames
 UNET_FILENAME = "Qwen-Rapid-NSFW-v23_Q4_K.gguf"
 CLIP_FILENAME = "Qwen2.5-VL-7B-Instruct-abliterated.Q4_K_M.gguf"
 VAE_FILENAME = "qwen_image_vae.safetensors"
+
+# Illustrious Anime Engine Target Filenames
+ILLUSTRIOUS_V170_FILENAME = "waiIllustriousSDXL_v170.safetensors"
+ILLUSTRIOUS_V150_FILENAME = "waiIllustriousSDXL_v150.safetensors"
+LCM_LORA_FILENAME = "turbo_lcm_sdxl.safetensors"
 
 # Model Download URLs (Direct HuggingFace resolve links for aria2)
 MODEL_DOWNLOAD_URLS = {
@@ -51,6 +61,21 @@ MODEL_DOWNLOAD_URLS = {
         "target_dir": VAE_DIR,
         "size_label": "253 MB",
         "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit-GGUF/resolve/main/qwen_image_vae.safetensors"
+    }
+}
+
+ANIME_DOWNLOAD_URLS = {
+    "checkpoint": {
+        "filename": ILLUSTRIOUS_V170_FILENAME,
+        "target_dir": CHECKPOINTS_DIR,
+        "size_label": "6.5 GB",
+        "url": "https://huggingface.co/LyliaEngine/waiIllustriousSDXL_v170/resolve/main/waiIllustriousSDXL_v170.safetensors"
+    },
+    "lcm_lora": {
+        "filename": LCM_LORA_FILENAME,
+        "target_dir": LORAS_DIR,
+        "size_label": "376 MB",
+        "url": "https://huggingface.co/latent-consistency/lcm-lora-sdxl/resolve/main/pytorch_lora_weights.safetensors"
     }
 }
 

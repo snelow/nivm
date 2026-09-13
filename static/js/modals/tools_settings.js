@@ -186,6 +186,7 @@ export async function renderToolsSettings() {
 
     // Check image models & engine prerequisites
     let imageModelsReady = false;
+    let animeModelsReady = false;
     let comfyReady = false;
     try {
         const [modelsRes, comfyRes] = await Promise.all([
@@ -193,6 +194,7 @@ export async function renderToolsSettings() {
             fetch('/api/image/comfy/status').then(r => r.json()).catch(() => null),
         ]);
         imageModelsReady = modelsRes?.all_installed === true;
+        animeModelsReady = modelsRes?.anime?.installed === true;
         comfyReady = comfyRes?.comfyui?.detected === true;
     } catch (e) {
         console.warn('Could not check image studio status:', e);
@@ -200,8 +202,16 @@ export async function renderToolsSettings() {
     
     tools.forEach(tool => {
         const isEnabled = state.enabledTools[tool.name] !== false;
-        const isImageTool = (tool.name === 'generate_image' || tool.name === 'edit_image' || tool.name === 'generate_anime_image');
-        const isBlocked = isImageTool && (!imageModelsReady || !comfyReady);
+        const isStandardImageTool = (tool.name === 'generate_image' || tool.name === 'edit_image');
+        const isAnimeTool = (tool.name === 'generate_anime_image');
+        const isImageTool = isStandardImageTool || isAnimeTool;
+        
+        let isBlocked = false;
+        if (isStandardImageTool) {
+            isBlocked = !imageModelsReady || !comfyReady;
+        } else if (isAnimeTool) {
+            isBlocked = !animeModelsReady || !comfyReady;
+        }
         
         const cardContainer = document.createElement('div');
         cardContainer.className = 'tool-setting-card';
@@ -395,6 +405,24 @@ export async function initImageStudioSettings() {
     const dlSpeed = document.getElementById('imageDownloadSpeed');
     const dlEta = document.getElementById('imageDownloadEta');
 
+    // Anime Engine Elements
+    const animeModelsBadge = document.getElementById('animeModelsBadge');
+    const animeCkptCheck = document.getElementById('animeCkptCheck');
+    const animeCkptNameLabel = document.getElementById('animeCkptNameLabel');
+    const animeCkptSizeLabel = document.getElementById('animeCkptSizeLabel');
+    const animeLcmCheck = document.getElementById('animeLcmCheck');
+    const animeLcmSizeLabel = document.getElementById('animeLcmSizeLabel');
+    const animeVerifiedBox = document.getElementById('animeModelsVerifiedBox');
+    const downloadAnimeBtn = document.getElementById('downloadAnimeModelsBtn');
+    const animeDownloadProgressBox = document.getElementById('animeDownloadProgressBox');
+    const animeDlModelName = document.getElementById('animeDownloadModelName');
+    const animeDlTargetPath = document.getElementById('animeDownloadTargetPath');
+    const animeDlPct = document.getElementById('animeDownloadPct');
+    const animeDlProgressBar = document.getElementById('animeDownloadProgressBar');
+    const animeDlBytes = document.getElementById('animeDownloadBytes');
+    const animeDlSpeed = document.getElementById('animeDownloadSpeed');
+    const animeDlEta = document.getElementById('animeDownloadEta');
+
     async function pollStatus() {
         try {
             const [modelsRes, comfyRes, dlRes] = await Promise.all([
@@ -546,10 +574,70 @@ export async function initImageStudioSettings() {
                 }
             }
 
-            // Model Download Progress Tracking
+            // Update Anime Engine Card Display:
+            const animeInfo = modelsRes?.anime;
+            const animeInstalled = animeInfo?.installed === true;
+
+            if (animeCkptCheck && animeInfo?.checkpoint) {
+                if (animeCkptNameLabel) animeCkptNameLabel.textContent = animeInfo.checkpoint.name;
+                if (animeCkptSizeLabel) animeCkptSizeLabel.textContent = animeInfo.checkpoint.size_str || '6.5 GB';
+                animeCkptCheck.innerHTML = animeInfo.checkpoint.installed
+                    ? `<span style="color: #34d399; font-weight: 500;"><i class="fa-solid fa-circle-check" style="margin-right: 5px;"></i>Checkpoint (${escapeHtml(animeInfo.checkpoint.name)})</span>`
+                    : `<span style="color: #f59e0b;"><i class="fa-regular fa-circle" style="margin-right: 5px;"></i>Checkpoint (${escapeHtml(animeInfo.checkpoint.name)})</span>`;
+            }
+            if (animeLcmCheck && animeInfo?.lcm_lora) {
+                if (animeLcmSizeLabel) animeLcmSizeLabel.textContent = animeInfo.lcm_lora.size_str || '376 MB';
+                animeLcmCheck.innerHTML = animeInfo.lcm_lora.installed
+                    ? `<span style="color: #34d399; font-weight: 500;"><i class="fa-solid fa-circle-check" style="margin-right: 5px;"></i>Fast Turbo LCM (${escapeHtml(animeInfo.lcm_lora.name)})</span>`
+                    : `<span style="color: #f59e0b;"><i class="fa-regular fa-circle" style="margin-right: 5px;"></i>Fast Turbo LCM (${escapeHtml(animeInfo.lcm_lora.name)})</span>`;
+            }
+
+            if (animeModelsBadge) {
+                const isV170 = animeInfo?.v170_installed || animeInfo?.checkpoint?.is_v170;
+                if (animeInstalled) {
+                    const ckptName = animeInfo?.checkpoint?.name || '';
+                    const verLabel = ckptName.includes('v170') ? 'v1.70' : (ckptName.includes('v150') ? 'v1.50' : 'Verified');
+                    animeModelsBadge.textContent = `Verified (${verLabel})`;
+                    animeModelsBadge.style.color = '#34d399';
+                    animeModelsBadge.style.background = 'rgba(52, 211, 153, 0.15)';
+                    animeModelsBadge.style.borderColor = 'rgba(52, 211, 153, 0.3)';
+
+                    if (animeVerifiedBox) animeVerifiedBox.style.display = 'flex';
+
+                    // If user has v150 (or another checkpoint) but not v170, offer upgrade/download button
+                    if (!isV170 && downloadAnimeBtn && dlRes?.status !== 'downloading') {
+                        downloadAnimeBtn.style.display = 'flex';
+                        downloadAnimeBtn.disabled = false;
+                        downloadAnimeBtn.className = 'btn-secondary';
+                        downloadAnimeBtn.style.marginTop = '8px';
+                        downloadAnimeBtn.innerHTML = `<i class="fa-solid fa-download"></i> Download / Upgrade to v1.70 (6.5 GB)`;
+                    } else if (downloadAnimeBtn && dlRes?.status !== 'downloading') {
+                        downloadAnimeBtn.style.display = 'none';
+                    }
+                } else {
+                    animeModelsBadge.textContent = 'Optional / Missing';
+                    animeModelsBadge.style.color = '#f59e0b';
+                    animeModelsBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+                    animeModelsBadge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+
+                    if (animeVerifiedBox) animeVerifiedBox.style.display = 'none';
+
+                    if (downloadAnimeBtn && dlRes?.status !== 'downloading') {
+                        downloadAnimeBtn.style.display = 'flex';
+                        downloadAnimeBtn.disabled = false;
+                        downloadAnimeBtn.className = 'btn-primary';
+                        downloadAnimeBtn.style.marginTop = '0px';
+                        downloadAnimeBtn.innerHTML = `<i class="fa-solid fa-download"></i> Download Anime Checkpoint (v170, 6.5 GB)`;
+                    }
+                }
+            }
+
+            // Model Download Progress Tracking (Standard vs Anime)
             let isDownloading = dlRes?.status === 'downloading';
+            const isAnimeDownload = dlRes?.category === 'anime';
+
             if (downloadProgressBox) {
-                if (isDownloading) {
+                if (isDownloading && !isAnimeDownload) {
                     downloadProgressBox.style.display = 'block';
                     if (downloadBtn) {
                         downloadBtn.style.display = 'flex';
@@ -563,10 +651,28 @@ export async function initImageStudioSettings() {
                     if (dlBytes) dlBytes.textContent = `${dlRes.downloaded_str || '0 MB'} / ${dlRes.total_str || '0 MB'}`;
                     if (dlSpeed) dlSpeed.textContent = dlRes.speed_str || '0 MB/s';
                     if (dlEta) dlEta.textContent = 'ETA: ' + (dlRes.eta_str || '--');
-                } else if (dlRes?.status === 'completed') {
-                    downloadProgressBox.style.display = 'none';
                 } else {
                     downloadProgressBox.style.display = 'none';
+                }
+            }
+
+            if (animeDownloadProgressBox) {
+                if (isDownloading && isAnimeDownload) {
+                    animeDownloadProgressBox.style.display = 'block';
+                    if (downloadAnimeBtn) {
+                        downloadAnimeBtn.style.display = 'flex';
+                        downloadAnimeBtn.disabled = true;
+                        downloadAnimeBtn.textContent = 'Downloading Anime Checkpoint...';
+                    }
+                    if (animeDlModelName) animeDlModelName.textContent = `[${dlRes.current_index}/${dlRes.total_models}] ${dlRes.current_model}`;
+                    if (animeDlTargetPath) animeDlTargetPath.textContent = 'Saving to: ' + (dlRes.target_path || dlRes.target_dir || 'nivm/models/image/checkpoints/');
+                    if (animeDlPct) animeDlPct.textContent = (dlRes.percent || 0) + '%';
+                    if (animeDlProgressBar) animeDlProgressBar.style.width = (dlRes.percent || 0) + '%';
+                    if (animeDlBytes) animeDlBytes.textContent = `${dlRes.downloaded_str || '0 MB'} / ${dlRes.total_str || '0 MB'}`;
+                    if (animeDlSpeed) animeDlSpeed.textContent = dlRes.speed_str || '0 MB/s';
+                    if (animeDlEta) animeDlEta.textContent = 'ETA: ' + (dlRes.eta_str || '--');
+                } else {
+                    animeDownloadProgressBox.style.display = 'none';
                 }
             }
 
@@ -640,7 +746,7 @@ export async function initImageStudioSettings() {
                 downloadBtn.disabled = true;
                 downloadBtn.textContent = 'Initializing aria2...';
                 try {
-                    const res = await fetch('/api/image/models/download', { method: 'POST' });
+                    const res = await fetch('/api/image/models/download?category=standard', { method: 'POST' });
                     const data = await res.json();
                     showNotification('Image models background download started with aria2c', 'info');
                     if (!_imageStudioPollInterval) {
@@ -650,6 +756,29 @@ export async function initImageStudioSettings() {
                 } catch (err) {
                     showNotification('Failed to start model download: ' + err.message, 'error');
                     downloadBtn.disabled = false;
+                }
+            };
+        }
+
+        if (downloadAnimeBtn) {
+            downloadAnimeBtn.onclick = async () => {
+                downloadAnimeBtn.disabled = true;
+                downloadAnimeBtn.textContent = 'Initializing aria2...';
+                try {
+                    const res = await fetch('/api/image/models/download?category=anime', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ category: 'anime' })
+                    });
+                    const data = await res.json();
+                    showNotification('Anime engine models download started with aria2c', 'info');
+                    if (!_imageStudioPollInterval) {
+                        _imageStudioPollInterval = setInterval(pollStatus, 1000);
+                    }
+                    await pollStatus();
+                } catch (err) {
+                    showNotification('Failed to start anime download: ' + err.message, 'error');
+                    downloadAnimeBtn.disabled = false;
                 }
             };
         }

@@ -3,24 +3,68 @@ Illustrious SDXL anime pipeline — config, model paths, sampling defaults.
 """
 
 import os
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
+
+from ..config import (
+    BASE_DIR,
+    CHECKPOINTS_DIR,
+    LORAS_DIR,
+    UNET_DIR,
+    CLIP_DIR,
+    VAE_DIR,
+    ILLUSTRIOUS_V170_FILENAME,
+    ILLUSTRIOUS_V150_FILENAME,
+    LCM_LORA_FILENAME,
+)
 
 _ENGINE_DIR = os.path.dirname(os.path.abspath(__file__))
-IMAGE_ENGINE_DIR = os.path.dirname(_ENGINE_DIR)
-CORE_DIR = os.path.dirname(IMAGE_ENGINE_DIR)
-BASE_DIR = os.path.dirname(CORE_DIR)
-
 WORKFLOW_TEMPLATE_PATH = os.path.join(_ENGINE_DIR, "workflow_template.json")
 
-# LoRAs live here — ComfyUI is told to look in this dir via extra_model_paths
-LORAS_DIR = os.path.join(BASE_DIR, "models", "image", "loras")
-os.makedirs(LORAS_DIR, exist_ok=True)
-
-# Extra model paths YAML that tells ComfyUI where nivm keeps its LoRAs/checkpoints
+# LoRAs and Checkpoints live here inside this project
 EXTRA_MODEL_PATHS_YAML = os.path.join(BASE_DIR, "models", "image", "nivm_model_paths.yaml")
+os.makedirs(LORAS_DIR, exist_ok=True)
+os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
 
-# Full FP16 checkpoint — faster than GGUF Q8 on this hardware
-ILLUSTRIOUS_CHECKPOINT = "waiIllustriousSDXL_v150.safetensors"
+
+def find_illustrious_checkpoint() -> Tuple[Optional[str], Optional[str]]:
+    """
+    Finds the active Illustrious checkpoint inside this project's checkpoints directory
+    (models/image/checkpoints/), following the same pattern as Qwen.
+    Prefers v170 if available, then v150, then any illustrious checkpoint.
+    Returns (checkpoint_filename, absolute_path) or (None, None).
+    """
+    # Auto-link from ComfyUI to project directory if present externally
+    try:
+        from ..model_checker import auto_link_from_comfyui
+        auto_link_from_comfyui()
+    except Exception:
+        pass
+
+    preferred_names = [
+        ILLUSTRIOUS_V170_FILENAME,
+        ILLUSTRIOUS_V150_FILENAME,
+    ]
+
+    for name in preferred_names:
+        p = os.path.join(CHECKPOINTS_DIR, name)
+        if os.path.isfile(p) and os.path.getsize(p) > 100 * 1024 * 1024:
+            return name, p
+
+    if os.path.isdir(CHECKPOINTS_DIR):
+        for fname in sorted(os.listdir(CHECKPOINTS_DIR)):
+            if "illustrious" in fname.lower() and fname.lower().endswith(".safetensors"):
+                p = os.path.join(CHECKPOINTS_DIR, fname)
+                if os.path.isfile(p) and os.path.getsize(p) > 100 * 1024 * 1024:
+                    return fname, p
+
+    return None, None
+
+def get_active_checkpoint_name() -> str:
+    name, _ = find_illustrious_checkpoint()
+    return name or "waiIllustriousSDXL_v170.safetensors"
+
+# Full FP16 checkpoint — resolves dynamically, falling back to default
+ILLUSTRIOUS_CHECKPOINT = get_active_checkpoint_name()
 
 # LCM turbo (fast 6-step generation)
 LCM_LORA_FILE = "turbo_lcm_sdxl.safetensors"
@@ -62,11 +106,15 @@ RESOLUTION_LABELS: Dict[str, str] = {
 
 def ensure_extra_model_paths():
     """
-    Writes a nivm_model_paths.yaml so ComfyUI picks up LoRAs
-    from nivm/models/image/loras/ without needing symlinks.
+    Writes a nivm_model_paths.yaml so ComfyUI picks up checkpoints, LoRAs,
+    unet, clip, and vae from nivm/models/image/.
     """
     yaml_content = f"""nivm:
+    checkpoints: {CHECKPOINTS_DIR}/
     loras: {LORAS_DIR}/
+    unet: {UNET_DIR}/
+    clip: {CLIP_DIR}/
+    vae: {VAE_DIR}/
 """
     os.makedirs(os.path.dirname(EXTRA_MODEL_PATHS_YAML), exist_ok=True)
     with open(EXTRA_MODEL_PATHS_YAML, "w") as f:

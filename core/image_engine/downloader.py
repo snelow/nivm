@@ -57,7 +57,7 @@ def get_download_status() -> Dict[str, Any]:
     return status_copy
 
 
-def _run_downloads():
+def _run_downloads(category: str = "standard"):
     global _download_state, _current_proc
 
     aria2c_bin = find_aria2c()
@@ -66,20 +66,32 @@ def _run_downloads():
         _download_state["error"] = "aria2c executable not found on host machine."
         return
 
+    _download_state["category"] = category
+
     # Check which models are missing
     model_status = check_image_models_status()
     queue = []
-    if not model_status["unet"]["installed"]:
-        queue.append(MODEL_DOWNLOAD_URLS["unet"])
-    if not model_status["text_encoder"]["installed"]:
-        queue.append(MODEL_DOWNLOAD_URLS["text_encoder"])
-    if not model_status["vae"]["installed"]:
-        queue.append(MODEL_DOWNLOAD_URLS["vae"])
+
+    if category in ("standard", "all"):
+        if not model_status.get("unet", {}).get("installed"):
+            queue.append(MODEL_DOWNLOAD_URLS["unet"])
+        if not model_status.get("text_encoder", {}).get("installed"):
+            queue.append(MODEL_DOWNLOAD_URLS["text_encoder"])
+        if not model_status.get("vae", {}).get("installed"):
+            queue.append(MODEL_DOWNLOAD_URLS["vae"])
+
+    if category in ("anime", "all"):
+        from .config import ANIME_DOWNLOAD_URLS
+        anime_info = model_status.get("anime", {})
+        if not anime_info.get("v170_installed"):
+            queue.append(ANIME_DOWNLOAD_URLS["checkpoint"])
+        if not anime_info.get("lcm_lora", {}).get("installed"):
+            queue.append(ANIME_DOWNLOAD_URLS["lcm_lora"])
 
     if not queue:
         _download_state["status"] = "completed"
         _download_state["percent"] = 100.0
-        _download_state["current_model"] = "All models already installed"
+        _download_state["current_model"] = "All requested models already installed"
         return
 
     _download_state["status"] = "downloading"
@@ -168,11 +180,11 @@ def _run_downloads():
     _download_state["eta_str"] = "0s"
 
 
-def start_models_download() -> Dict[str, Any]:
+def start_models_download(category: str = "standard") -> Dict[str, Any]:
     global _download_thread
     if _download_state.get("status") == "downloading":
         return get_download_status()
 
-    _download_thread = threading.Thread(target=_run_downloads, daemon=True)
+    _download_thread = threading.Thread(target=_run_downloads, args=(category,), daemon=True)
     _download_thread.start()
     return get_download_status()

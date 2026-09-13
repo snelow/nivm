@@ -55,15 +55,16 @@ From parsing multi-page technical PDFs and natural bidirectional voice conversat
 
 ### 3. Sovereign Image Studio & VRAM Coordinator (ComfyUI Bridge)
 - **Local Diffusion Engine**: Integrated local [ComfyUI](https://github.com/comfyanonymous/ComfyUI) bridge supporting Qwen-Rapid, Stable Diffusion, and Flux workflows without external cloud APIs.
+- **Dedicated Anime Pipeline (Illustrious SDXL)**: Optional character synthesis engine with LoRA management (characters, outfits, hairstyles, poses), Danbooru tag compiler, and 6-step LCM Turbo mode for rapid generation on consumer GPUs (4GB+ VRAM).
+- **In-Browser Image Studio**: Interactive prompt and character manager, live generation progress cards with action pills, host disk LoRA import, and conversational multi-turn follow-up editing.
 - **Dynamic VRAM Coordinator (`vram_coordinator.py`)**: Seamlessly arbitrates GPU memory between `llama.cpp` and ComfyUI. Automatically signals `/free`, flushes CUDA cache, releases diffusion weights, and restores the active LLM without manual restarts or OOM crashes on consumer hardware.
-- **In-Browser Image Studio**: Interactive prompt generation, aspect ratio selection, live generation progress cards, auto-setup installer (`nivm/engine/ComfyUI`), and custom directory detection.
 
 ### 4. Integrated In-Browser File Explorer
-- Browse workstation disks, drives, and directory shortcuts (`Desktop`, `Downloads`, `Home`, `Workspace`, `Models`) directly inside the UI.
-- Filter `.gguf` files with instant model activation and automatic companion `mmproj` pairing.
+- Browse workstation disks, drives, and directory shortcuts (`Desktop`, `Downloads`, `Home`, `Workspace`, `Models`, `LoRAs`) directly inside the UI.
+- Filter `.gguf` and `.safetensors` LoRA files with instant model activation and automatic companion `mmproj` pairing.
 
 ### 5. Reasoning Engine & Anti-Redundancy Pipeline
-- Deep reasoning block (`<think>`) extraction and collapsible thinking accordion blocks with rotation indicators and duration counters.
+- Deep reasoning block (`<think>`) extraction, unclosed thought recovery (`sealUnclosedThoughts`), and collapsible thinking accordion blocks with rotation indicators and duration counters.
 - **Consecutive Paragraph Deduplication**: Automatic detection and elimination of redundant model output loops.
 - **Thought-Isolated Tool Parsing**: Private internal reasoning inside `<think>` tags is strictly isolated from tool dispatchers, ensuring thoughts never accidentally trigger false tool calls.
 - Audio text sanitization: strips escaped characters (`\n`, `/n`, markdown tags) to prevent verbal clutter in TTS playback.
@@ -88,7 +89,7 @@ From parsing multi-page technical PDFs and natural bidirectional voice conversat
 | **Data Privacy & Air-Gap** | None (Data leaves premises) | Partial (Silent telemetry/pings) | **100% Air-Gapped & Audited** |
 | **Bidirectional Voice (TTS & STT)** | Cloud Stream Only | None / Plugin dependent | **Built-In (Kokoro + Faster-Whisper)** |
 | **Hands-Free Spacebar Voice** | Push-to-talk plugin | None | **Tap/Hold to Talk + Tap to Interrupt** |
-| **Local Diffusion Image Studio** | Cloud hosted only | Separate tool required | **Integrated (ComfyUI + VRAM Coordinator)** |
+| **Local Diffusion & Anime Studio** | Cloud hosted only | Separate tool required | **Integrated (Qwen-Rapid + Illustrious SDXL + VRAM Coordinator)** |
 | **Dynamic VRAM Arbitration** | N/A | Manual app close/open | **Automatic LLM ↔ Diffusion Swap** |
 | **Pronunciation Dictionary** | None | None | **Interactive UI + Live Preview Audio** |
 | **Forensic Socket Sentinel** | None | None | **Live Dual-Channel Oscilloscope** |

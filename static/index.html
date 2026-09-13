@@ -1599,12 +1599,78 @@
                                     <span id="imageDownloadEta">ETA: --</span>
                                 </div>
                             </div>
+                        </div>
+                    </div>
 
+                    <!-- Anime Engine Card (Illustrious SDXL — Optional) -->
+                    <div class="role-config-card" style="background: rgba(0,0,0,0.25); margin-top: 10px;">
+                        <div style="padding: 12px;">
+                            <div
+                                style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                                <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);"><i
+                                        class="fa-solid fa-wand-magic-sparkles"
+                                        style="color: var(--accent-purple); margin-right: 6px;"></i>Anime Engine (Illustrious SDXL)</span>
+                                <span id="animeModelsBadge" class="role-card-badge">—</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 10px;">
+                                Dedicated anime pipeline: Illustrious SDXL Checkpoint (6.5 GB), Fast Turbo LCM (376 MB)
+                            </div>
+
+                            <!-- Anime Model Checklist -->
+                            <div
+                                style="display: flex; flex-direction: column; gap: 4px; font-size: 0.73rem; margin-bottom: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px;">
+                                <div style="display: flex; justify-content: space-between;"><span id="animeCkptCheck">○
+                                        Checkpoint (<span id="animeCkptNameLabel">waiIllustriousSDXL_v170.safetensors</span>)</span><span
+                                        id="animeCkptSizeLabel" style="color: var(--text-muted);">6.5 GB</span></div>
+                                <div style="display: flex; justify-content: space-between;"><span id="animeLcmCheck">○
+                                        Fast Turbo LCM (turbo_lcm_sdxl.safetensors)</span><span
+                                        id="animeLcmSizeLabel" style="color: var(--text-muted);">376 MB</span></div>
+                            </div>
+
+                            <!-- Verified Banner (Shown when checkpoint verified) -->
+                            <div id="animeModelsVerifiedBox"
+                                style="display: none; align-items: center; justify-content: center; gap: 8px; font-size: 0.78rem; color: #34d399; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.25); border-radius: 6px; padding: 8px; font-weight: 500;">
+                                <i class="fa-solid fa-circle-check"></i>
+                                <span id="animeVerifiedLabel">Anime Engine Verified & Ready</span>
+                            </div>
+
+                            <!-- Open Image Studio Button (moved to Anime Engine card) -->
                             <button type="button" id="openImageStudioFromSettingsBtn" class="btn-secondary"
                                 style="width: 100%; justify-content: center; gap: 6px; display: flex; align-items: center; font-size: 0.78rem; padding: 7px; margin-top: 8px;">
-                                <i class="fa-solid fa-paintbrush" style="color: var(--accent-purple);"></i> Open Image
-                                Studio
+                                <i class="fa-solid fa-paintbrush" style="color: var(--accent-purple);"></i> Open Image Studio
                             </button>
+
+                            <!-- Download Button -->
+                            <button type="button" id="downloadAnimeModelsBtn" class="btn-primary"
+                                style="width: 100%; justify-content: center; gap: 6px; display: none; align-items: center; font-size: 0.78rem; padding: 7px;">
+                                <i class="fa-solid fa-download"></i> <span id="downloadAnimeBtnLabel">Download Anime Models (aria2)</span>
+                            </button>
+
+                            <!-- Download Progress Box for Anime -->
+                            <div id="animeDownloadProgressBox"
+                                style="display: none; margin-top: 8px; background: rgba(0,0,0,0.4); border: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.3); border-radius: 6px; padding: 10px; font-size: 0.72rem;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                    <span id="animeDownloadModelName"
+                                        style="color: var(--accent-purple); font-weight: 600;">Downloading Anime Model...</span>
+                                    <span id="animeDownloadPct" style="color: var(--text-muted);">0%</span>
+                                </div>
+                                <div id="animeDownloadTargetPath"
+                                    style="color: #94a3b8; font-size: 0.68rem; margin-bottom: 6px; word-break: break-all; font-family: monospace;">
+                                    Saving to: nivm/models/image/
+                                </div>
+                                <div
+                                    style="background: rgba(255,255,255,0.08); height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
+                                    <div id="animeDownloadProgressBar"
+                                        style="width: 0%; height: 100%; background: var(--accent-purple); transition: width 0.3s ease;">
+                                    </div>
+                                </div>
+                                <div
+                                    style="display: flex; justify-content: space-between; color: #94a3b8; font-size: 0.68rem; font-family: monospace;">
+                                    <span id="animeDownloadBytes">0 MB / 0 MB</span>
+                                    <span id="animeDownloadSpeed">0 MB/s</span>
+                                    <span id="animeDownloadEta">ETA: --</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

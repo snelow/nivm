@@ -101,10 +101,19 @@ async def get_models_status():
     return check_image_models_status()
 
 
+class ModelDownloadRequest(BaseModel):
+    category: str = "standard"
+
+
 @router.post("/models/download")
-async def trigger_models_download():
-    """Starts background aria2c download for any missing image models."""
-    status = start_models_download()
+async def trigger_models_download(category: Optional[str] = "standard", req: Optional[ModelDownloadRequest] = None):
+    """Starts background aria2c download for missing image models (standard, anime, or all)."""
+    cat = "standard"
+    if req and req.category:
+        cat = req.category.strip().lower()
+    elif category:
+        cat = category.strip().lower()
+    status = start_models_download(category=cat)
     return status
 
 
@@ -154,11 +163,10 @@ async def generate_image_endpoint(req: GenerateRequest):
     # Auto-detect if request targets a registered anime character
     try:
         from .image_engine.illustrious.characters import get_characters
-        from .image_engine.illustrious.config import ILLUSTRIOUS_CHECKPOINT
-        from .image_engine.config import get_comfy_dir
+        from .image_engine.illustrious.config import find_illustrious_checkpoint
 
-        ckpt_path = os.path.join(get_comfy_dir(), "models", "checkpoints", ILLUSTRIOUS_CHECKPOINT)
-        if os.path.isfile(ckpt_path):
+        ckpt_name, ckpt_path = find_illustrious_checkpoint()
+        if ckpt_path and os.path.isfile(ckpt_path):
             chars = get_characters(nsfw_enabled=True)
             prompt_l = req.prompt.lower()
             matched_char = None
@@ -645,23 +653,22 @@ async def generate_anime_endpoint(req: AnimeGenerateRequest):
         build_lcm_workflow,
     )
     from .image_engine.illustrious.config import (
-        ILLUSTRIOUS_CHECKPOINT,
+        find_illustrious_checkpoint,
         DEFAULT_STEPS,
         DEFAULT_CFG,
         LCM_STEPS,
         LCM_CFG,
     )
-    from .image_engine.config import get_comfy_dir
 
     chars = get_characters(nsfw_enabled=True)
     if req.character and req.character not in ("none", "base", "prompt_only") and req.character not in chars:
         raise HTTPException(status_code=400, detail=f"Character '{req.character}' not found.")
 
-    ckpt_path = os.path.join(get_comfy_dir(), "models", "checkpoints", ILLUSTRIOUS_CHECKPOINT)
-    if not os.path.isfile(ckpt_path):
+    ckpt_name, ckpt_path = find_illustrious_checkpoint()
+    if not ckpt_path or not os.path.isfile(ckpt_path):
         raise HTTPException(
-            status_code=400,
-            detail=f"Illustrious checkpoint '{ILLUSTRIOUS_CHECKPOINT}' not found in ComfyUI models/checkpoints."
+            status_code=503,
+            detail="Illustrious SDXL checkpoint not found. Please install waiIllustriousSDXL_v170.safetensors or download it via Settings."
         )
 
     task_id = str(uuid.uuid4())

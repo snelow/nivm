@@ -25,6 +25,7 @@ from .config import (
     LORAS_DIR,
     RESOLUTIONS,
     WORKFLOW_TEMPLATE_PATH,
+    get_active_checkpoint_name,
 )
 from .characters import (
     CHARACTERS,
@@ -58,6 +59,7 @@ def build_illustrious_workflow(
 ):
     """Build the standard Illustrious workflow. Returns (workflow, positive_prompt)."""
     wf = copy.deepcopy(_get_template())
+    wf["1"]["inputs"]["ckpt_name"] = get_active_checkpoint_name()
     char = CHARACTERS.get(char_key, {}) if char_key else {}
 
     if width is None or height is None:

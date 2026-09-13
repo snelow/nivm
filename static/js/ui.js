@@ -9,4 +9,6 @@ export * from './modals/settings_modal.js';
 export * from './modals/personality_modal.js';
 export * from './modals/file_browser.js';
 export * from './modals/sentinel_modal.js';
+export * from './modals/image_studio_modal.js';
 export * from './media/media_manager.js';
+

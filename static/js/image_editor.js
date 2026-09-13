@@ -7,20 +7,126 @@
 import { state } from './state.js';
 import { renderImagePreviews } from './ui.js';
 
-// Inject voice orb 5-color rainbow flow animation keyframes once
-if (typeof document !== 'undefined' && !document.getElementById('voiceOrbRainbowKeyframes')) {
+// Inject image studio keyframes and pill styles
+if (typeof document !== 'undefined' && !document.getElementById('imageStudioKeyframes')) {
     const style = document.createElement('style');
-    style.id = 'voiceOrbRainbowKeyframes';
+    style.id = 'imageStudioKeyframes';
     style.textContent = `
         @keyframes voiceOrbRainbowFlow {
             0% { background-position: 0% 50%; }
             100% { background-position: 200% 50%; }
         }
+        @keyframes liveDotPulse {
+            0%, 20% { opacity: 0.15; transform: scale(0.85); }
+            50% { opacity: 1; transform: scale(1.15); }
+            80%, 100% { opacity: 0.15; transform: scale(0.85); }
+        }
+        .live-dots {
+            display: inline-flex;
+            align-items: baseline;
+            gap: 1.5px;
+            margin-left: 2px;
+        }
+        .live-dots span {
+            animation: liveDotPulse 1.4s infinite ease-in-out both;
+            font-weight: bold;
+        }
+        .live-dots span:nth-child(1) { animation-delay: 0s; }
+        .live-dots span:nth-child(2) { animation-delay: 0.22s; }
+        .live-dots span:nth-child(3) { animation-delay: 0.44s; }
+
+        .img-pill-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.73rem;
+            color: #cbd5e1;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: inherit;
+            line-height: 1.2;
+        }
+        .img-pill-btn:hover:not(.img-pill-static) {
+            background: rgba(255, 255, 255, 0.14);
+            border-color: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.45);
+            color: #fff;
+            transform: translateY(-1px);
+        }
+        .img-pill-btn:active:not(.img-pill-static) {
+            transform: translateY(0);
+        }
+        .img-pill-static {
+            background: rgba(0, 0, 0, 0.5);
+            color: #94a3b8;
+            border-color: rgba(255, 255, 255, 0.08);
+            cursor: default;
+        }
     `;
     document.head.appendChild(style);
 }
 
-export function createImageProgressCard(promptText, isEdit = false) {
+export function getImageDuration(imageUrl) {
+    if (!imageUrl) return null;
+    try {
+        const stored = JSON.parse(localStorage.getItem('nivm_image_durations') || '{}');
+        const filename = imageUrl.split('/').pop();
+        return stored[imageUrl] || (filename ? stored[filename] : null) || null;
+    } catch (_) {
+        return null;
+    }
+}
+
+export function saveImageDuration(imageUrl, duration) {
+    if (!imageUrl || !duration) return;
+    try {
+        const stored = JSON.parse(localStorage.getItem('nivm_image_durations') || '{}');
+        const filename = imageUrl.split('/').pop();
+        stored[imageUrl] = duration;
+        if (filename) stored[filename] = duration;
+        localStorage.setItem('nivm_image_durations', JSON.stringify(stored));
+    } catch (_) {}
+}
+
+function formatStatusWithDots(text) {
+    if (!text) return '';
+    const base = text.replace(/[\.…]+$/, '').trim();
+    return `${escapeHtml(base)}<span class="live-dots"><span>.</span><span>.</span><span>.</span></span>`;
+}
+
+export function resolveAspectConfig(aspectStr) {
+    const s = String(aspectStr || '').toLowerCase().trim();
+    if (s === 'portrait' || s === '9:16' || s === 'tall') {
+        return { cssAspect: '832 / 1216', isPortrait: true, height: '380px', maxHeight: '420px' };
+    }
+    if (s === 'landscape' || s === '16:9' || s === 'wide') {
+        return { cssAspect: '1216 / 832', isPortrait: false, height: 'auto', maxHeight: '360px' };
+    }
+    if (s === '3:4') {
+        return { cssAspect: '864 / 1152', isPortrait: true, height: '380px', maxHeight: '420px' };
+    }
+    if (s === '4:3') {
+        return { cssAspect: '1152 / 864', isPortrait: false, height: 'auto', maxHeight: '360px' };
+    }
+    if (s === 'square' || s === '1:1') {
+        return { cssAspect: '1 / 1', isPortrait: false, height: '320px', maxHeight: '340px' };
+    }
+    const m = s.match(/^(\d+)[x:](\d+)$/);
+    if (m) {
+        const w = parseInt(m[1]), h = parseInt(m[2]);
+        const isPort = h > w;
+        return { cssAspect: `${w} / ${h}`, isPortrait: isPort, height: isPort ? '380px' : 'auto', maxHeight: '420px' };
+    }
+    return { cssAspect: '832 / 1216', isPortrait: true, height: '380px', maxHeight: '420px' };
+}
+
+export function createImageProgressCard(promptText, isEdit = false, requestedAspect = null) {
     const cardId = 'progress_card_' + Math.random().toString(36).substring(2, 9);
     const card = document.createElement('div');
     card.id = cardId;
@@ -40,24 +146,30 @@ export function createImageProgressCard(promptText, isEdit = false) {
         animation: fadeInCard 0.3s ease-out;
     `;
 
+    const isAnimePrompt = promptText.toLowerCase().includes('anime:') || promptText.toLowerCase().includes('anime');
+    const aspectCfg = resolveAspectConfig(requestedAspect || (isAnimePrompt ? 'portrait' : 'square'));
+
     card.innerHTML = `
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
             <div style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; color: var(--accent-purple, #c084fc);">
                 <i class="fa-solid fa-wand-magic-sparkles fa-spin" style="--fa-animation-duration: 3s;"></i>
-                <span>${isEdit ? 'Refining Image (Qwen-Rapid)' : 'Synthesizing Image (Qwen-Rapid)'}</span>
+                <span>${isEdit ? 'Refining Image' : 'Synthesizing Image'}</span>
             </div>
             <span class="gen-timer" style="font-size: 0.75rem; color: #94a3b8; font-variant-numeric: tabular-nums;">0.0s</span>
         </div>
 
-        <div class="gen-prompt-preview" style="font-size: 0.8rem; color: #cbd5e1; margin-bottom: 12px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
-            "${escapeHtml(promptText)}"
+        <div class="gen-prompt-wrapper" style="margin-bottom: 12px; cursor: pointer; user-select: none;" title="Click to expand/collapse full prompt">
+            <div class="gen-prompt-inner" style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; font-size: 0.78rem; color: #cbd5e1; line-height: 1.4; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 6px; padding: 6px 10px;">
+                <span class="gen-prompt-text" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">"${escapeHtml(promptText)}"</span>
+                <i class="fa-solid fa-chevron-down prompt-expand-chevron" style="font-size: 0.7rem; color: #94a3b8; margin-top: 3px; transition: transform 0.2s ease; flex-shrink: 0;"></i>
+            </div>
         </div>
 
         <!-- Live Latent Preview Image -->
-        <div class="preview-container" style="position: relative; width: 100%; height: 220px; background: rgba(0,0,0,0.3); border-radius: 8px; overflow: hidden; margin-bottom: 12px; display: flex; align-items: center; justify-content: center;">
+        <div class="preview-container" style="position: relative; ${aspectCfg.isPortrait ? `width: auto; height: ${aspectCfg.height}; max-height: ${aspectCfg.maxHeight}; max-width: 100%;` : `width: 100%; height: ${aspectCfg.height}; max-height: ${aspectCfg.maxHeight};`} aspect-ratio: ${aspectCfg.cssAspect}; margin: 0 auto 12px auto; background: rgba(0,0,0,0.3); border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;">
             <div class="preview-placeholder" style="display: flex; flex-direction: column; align-items: center; gap: 8px; color: #64748b; font-size: 0.8rem;">
                 <i class="fa-solid fa-spinner fa-spin" style="font-size: 1.5rem; color: var(--accent-purple, #8b5cf6);"></i>
-                <span>Awaiting live preview…</span>
+                <span>Awaiting live preview<span class="live-dots"><span>.</span><span>.</span><span>.</span></span></span>
             </div>
             <img class="preview-img" style="display: none; width: 100%; height: 100%; object-fit: contain; border-radius: 8px;" alt="Live Preview" />
             <div class="preview-badge" style="position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.65); padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; color: var(--accent-purple, #a855f7); display: none;">
@@ -71,7 +183,7 @@ export function createImageProgressCard(promptText, isEdit = false) {
         </div>
 
         <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: #94a3b8;">
-            <span class="gen-step-text">Step 0 / 5</span>
+            <span class="gen-step-text">Starting diffusion engine<span class="live-dots"><span>.</span><span>.</span><span>.</span></span></span>
             <span class="gen-percent-text">0%</span>
         </div>
     `;
@@ -85,8 +197,35 @@ export function createImageProgressCard(promptText, isEdit = false) {
     const stepText = card.querySelector('.gen-step-text');
     const percentText = card.querySelector('.gen-percent-text');
 
+    const promptWrapper = card.querySelector('.gen-prompt-wrapper');
+    const promptTextEl = card.querySelector('.gen-prompt-text');
+    const promptChevron = card.querySelector('.prompt-expand-chevron');
+    if (promptWrapper && promptTextEl && promptChevron) {
+        let isPromptExpanded = false;
+        promptWrapper.onclick = () => {
+            isPromptExpanded = !isPromptExpanded;
+            if (isPromptExpanded) {
+                promptTextEl.style.whiteSpace = 'normal';
+                promptChevron.style.transform = 'rotate(180deg)';
+            } else {
+                promptTextEl.style.whiteSpace = 'nowrap';
+                promptChevron.style.transform = 'rotate(0deg)';
+            }
+        };
+    }
+
     let currentStage = '';
     let currentStep = 0;
+    let maxSteps = (typeof promptText === 'string' && /\b(lcm|turbo|fast)\b/i.test(promptText)) ? 6 : 0;
+    let isSamplerActive = false;
+
+    function renderStepDisplay(step, max) {
+        const total = max || maxSteps || 6;
+        const current = step !== undefined ? step : currentStep;
+        if (stepText) {
+            stepText.textContent = `Step ${current} / ${total}`;
+        }
+    }
 
     const startTime = Date.now();
     const timerInterval = setInterval(() => {
@@ -95,22 +234,40 @@ export function createImageProgressCard(promptText, isEdit = false) {
         if (timerEl) timerEl.textContent = `${elapsed}s`;
 
         // Provide dynamic stage guidance during text-encoding and weights streaming
-        if (currentStep === 0 && !previewImg.src) {
-            let stageNotice = 'Starting diffusion engine…';
+        if (currentStep === 0 && !previewImg.src && !isSamplerActive) {
+            const isAnime = typeof promptText === 'string' && (promptText.startsWith('Anime') || promptText.toLowerCase().includes('illustrious'));
+            let stageNotice = 'Starting diffusion engine';
             let simPct = 3;
-            if (elapsedSec > 10 && elapsedSec <= 45) {
-                stageNotice = 'Encoding text prompt with Qwen2.5-VL (CPU RAM)…';
-                simPct = Math.min(12, Math.round(3 + ((elapsedSec - 10) / 35) * 9));
-            } else if (elapsedSec > 45 && elapsedSec <= 65) {
-                stageNotice = 'Offloading text encoder & streaming weights to RTX 3050…';
-                simPct = Math.min(18, Math.round(12 + ((elapsedSec - 45) / 20) * 6));
-            } else if (elapsedSec > 65) {
-                stageNotice = 'Entering CUDA diffusion sampler…';
-                simPct = 20;
+
+            if (elapsedSec <= 15) {
+                stageNotice = 'Booting image engine in background (cold start ~15s)';
+                simPct = Math.min(8, Math.round(2 + (elapsedSec / 15) * 6));
+            } else if (isAnime) {
+                if (elapsedSec <= 32) {
+                    stageNotice = 'Loading Illustrious SDXL checkpoint & character LoRA';
+                    simPct = Math.min(15, Math.round(8 + ((elapsedSec - 15) / 17) * 7));
+                } else if (elapsedSec <= 50) {
+                    stageNotice = 'Encoding CLIP prompt & wiring LoRA chains';
+                    simPct = Math.min(22, Math.round(15 + ((elapsedSec - 32) / 18) * 7));
+                } else {
+                    stageNotice = maxSteps ? `Diffusion sampling (${maxSteps} steps)` : 'Entering CUDA diffusion sampler';
+                    simPct = 25;
+                }
+            } else {
+                if (elapsedSec <= 40) {
+                    stageNotice = 'Encoding text prompt with Qwen2.5-VL (CPU RAM)';
+                    simPct = Math.min(14, Math.round(8 + ((elapsedSec - 15) / 25) * 6));
+                } else if (elapsedSec <= 65) {
+                    stageNotice = 'Offloading text encoder & streaming weights to RTX 3050';
+                    simPct = Math.min(20, Math.round(14 + ((elapsedSec - 40) / 25) * 6));
+                } else {
+                    stageNotice = maxSteps ? `Diffusion sampling (${maxSteps} steps)` : 'Entering CUDA diffusion sampler';
+                    simPct = 22;
+                }
             }
 
-            if (!currentStage) {
-                if (stepText) stepText.textContent = stageNotice;
+            if (!currentStage && !isSamplerActive) {
+                if (stepText) stepText.innerHTML = formatStatusWithDots(stageNotice);
                 if (percentText) percentText.textContent = `${simPct}%`;
                 if (progressBar) progressBar.style.width = `${simPct}%`;
             }
@@ -120,25 +277,43 @@ export function createImageProgressCard(promptText, isEdit = false) {
     return {
         element: card,
         update: (eventData) => {
-            if (eventData.step !== undefined && eventData.max_steps) {
+            if (!eventData) return;
+
+            if (eventData.max_steps) {
+                maxSteps = eventData.max_steps;
+            }
+            if (eventData.step !== undefined) {
                 currentStep = eventData.step;
-                if (eventData.step > 0) {
-                    stepText.textContent = `Step ${eventData.step} / ${eventData.max_steps}`;
-                    const pct = eventData.percentage || Math.round((eventData.step / eventData.max_steps) * 100);
-                    percentText.textContent = `${pct}%`;
-                    progressBar.style.width = `${Math.max(5, Math.min(100, pct))}%`;
-                }
             }
 
-            if (eventData.stage_text) {
+            const isSampler = eventData.is_sampler === true ||
+                              eventData.sampler === 'KSampler' ||
+                              (eventData.class_type && String(eventData.class_type).includes('KSampler')) ||
+                              (eventData.stage_text && eventData.stage_text.toLowerCase().includes('ksampler')) ||
+                              (eventData.step > 0 && eventData.step !== undefined);
+
+            if (isSampler) {
+                isSamplerActive = true;
+                currentStage = 'ksampler';
+                renderStepDisplay(currentStep, maxSteps);
+
+                const pct = eventData.percentage !== undefined
+                    ? eventData.percentage
+                    : (maxSteps > 0 ? Math.round((currentStep / maxSteps) * 100) : 20);
+                if (percentText) percentText.textContent = `${pct}%`;
+                if (progressBar) progressBar.style.width = `${Math.max(5, Math.min(100, pct))}%`;
+            } else if (eventData.stage_text) {
+                // Non-sampler stage (e.g. CheckpointLoader, CLIPTextEncode, VAEDecode, SaveImage)
+                isSamplerActive = false;
                 currentStage = eventData.stage_text;
-                if (currentStep === 0) {
-                    stepText.textContent = eventData.stage_text;
-                    if (eventData.percentage) {
-                        percentText.textContent = `${eventData.percentage}%`;
-                        progressBar.style.width = `${eventData.percentage}%`;
-                    }
+                if (stepText) stepText.innerHTML = formatStatusWithDots(eventData.stage_text);
+                if (eventData.percentage !== undefined) {
+                    if (percentText) percentText.textContent = `${eventData.percentage}%`;
+                    if (progressBar) progressBar.style.width = `${Math.max(5, Math.min(100, eventData.percentage))}%`;
                 }
+            } else if (eventData.percentage !== undefined) {
+                if (percentText) percentText.textContent = `${eventData.percentage}%`;
+                if (progressBar) progressBar.style.width = `${Math.max(5, Math.min(100, eventData.percentage))}%`;
             }
 
             if (eventData.preview_url) {
@@ -146,15 +321,47 @@ export function createImageProgressCard(promptText, isEdit = false) {
                 previewImg.style.display = 'block';
                 previewBadge.style.display = 'block';
                 previewPlaceholder.style.display = 'none';
+
+                const resizeToAspect = () => {
+                    if (previewImg.naturalWidth && previewImg.naturalHeight) {
+                        const nw = previewImg.naturalWidth;
+                        const nh = previewImg.naturalHeight;
+                        const isPort = nh > nw;
+                        previewContainer.style.aspectRatio = `${nw} / ${nh}`;
+                        if (isPort) {
+                            previewContainer.style.width = 'auto';
+                            previewContainer.style.height = '380px';
+                            previewContainer.style.maxHeight = '420px';
+                            previewContainer.style.maxWidth = '100%';
+                        } else {
+                            previewContainer.style.width = '100%';
+                            previewContainer.style.height = 'auto';
+                            previewContainer.style.maxHeight = '360px';
+                        }
+                        previewContainer.style.margin = '0 auto 12px auto';
+                        previewImg.style.objectFit = 'contain';
+                    }
+                };
+                if (previewImg.complete && previewImg.naturalWidth) {
+                    resizeToAspect();
+                } else {
+                    previewImg.onload = resizeToAspect;
+                }
             }
         },
         finish: (finalImageUrl, originalUrl = null) => {
             clearInterval(timerInterval);
             const finalElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            saveImageDuration(finalImageUrl, finalElapsed);
 
-            // Render clean single image card (slider removed as requested to avoid aspect ratio bugs)
-            const singleCard = createSingleImageCard(finalImageUrl, promptText, finalElapsed);
-            card.replaceWith(singleCard);
+            if (isEdit && originalUrl) {
+                const compareCard = createBeforeAfterSlider(originalUrl, finalImageUrl, promptText, finalElapsed);
+                card.replaceWith(compareCard);
+            } else {
+                const singleCard = createSingleImageCard(finalImageUrl, promptText, finalElapsed);
+                card.replaceWith(singleCard);
+            }
+            return finalElapsed;
         },
         error: (errorMsg) => {
             clearInterval(timerInterval);
@@ -178,6 +385,9 @@ export function createImageProgressCard(promptText, isEdit = false) {
  */
 async function attachImageForChatEdit(imageUrl) {
     try {
+        const filename = imageUrl.split('/').pop() || 'generated_image.png';
+        state.lastGeneratedImage = filename;
+
         const promptInput = document.getElementById('userPrompt');
         if (promptInput) {
             promptInput.value = 'Change this image to: ';
@@ -188,7 +398,6 @@ async function attachImageForChatEdit(imageUrl) {
 
         const resp = await fetch(imageUrl);
         const blob = await resp.blob();
-        const filename = imageUrl.split('/').pop() || 'generated_image.png';
         const file = new File([blob], filename, { type: blob.type || 'image/png' });
 
         state.attachedImages = [{
@@ -219,10 +428,20 @@ async function attachImageForChatEdit(imageUrl) {
  * Creates an interactive Before/After comparison slider card for edited images.
  */
 export function createBeforeAfterSlider(beforeUrl, afterUrl, promptText, durationSec = null) {
+    const filename = afterUrl.split('/').pop() || 'edited.png';
+    state.lastGeneratedImage = filename;
+
+    if (!durationSec) {
+        durationSec = getImageDuration(afterUrl);
+    }
+    if (durationSec) {
+        saveImageDuration(afterUrl, durationSec);
+    }
+
     const container = document.createElement('div');
     container.className = 'image-compare-card';
     container.style.cssText = `
-        background: rgba(18, 18, 26, 0.8);
+        background: rgba(18, 18, 26, 0.85);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 12px;
         padding: 12px;
@@ -258,23 +477,48 @@ export function createBeforeAfterSlider(beforeUrl, afterUrl, promptText, duratio
                 </div>
             </div>
 
-            ${durationSec ? `<span style="position: absolute; bottom: 8px; right: 8px; z-index: 15; background: rgba(0,0,0,0.65); padding: 3px 8px; border-radius: 4px; font-size: 0.72rem; color: #cbd5e1; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 4px;"><i class="fa-regular fa-clock" style="font-size: 0.65rem;"></i>${durationSec}s</span>` : ''}
-        </div>
-
-        <div style="margin-top: 10px; display: flex; gap: 8px;">
-            <button class="btn-secondary inspect-btn" style="flex: 1; padding: 7px 12px; font-size: 0.78rem; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;">
-                <i class="fa-solid fa-maximize"></i> Inspect
-            </button>
-            <a href="${afterUrl}" download="edited_${Date.now()}.png" class="btn-secondary" style="padding: 7px 16px; font-size: 0.78rem; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none;">
-                <i class="fa-solid fa-download"></i> Save
-            </a>
+            <div style="position: absolute; bottom: 8px; right: 8px; z-index: 25; display: flex; align-items: center; gap: 5px;" class="image-overlay-actions">
+                <button type="button" class="img-pill-btn inspect-btn" title="Inspect full view" style="padding: 3px 8px;">
+                    <i class="fa-solid fa-maximize"></i>
+                </button>
+                <button type="button" class="img-pill-btn edit-again-btn" title="Edit in Chat" style="padding: 3px 8px;">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <a href="${afterUrl}" download="${filename}" class="img-pill-btn save-img-btn" title="Save image" style="padding: 3px 8px;">
+                    <i class="fa-solid fa-download"></i>
+                </a>
+                ${durationSec ? `<span class="img-pill-btn img-pill-static" style="padding: 3px 8px; font-variant-numeric: tabular-nums;"><i class="fa-regular fa-clock" style="font-size: 0.65rem;"></i>${durationSec}s</span>` : ''}
+            </div>
         </div>
     `;
+
+    // Asynchronously fetch server metadata if duration was not cached or provided
+    if (!durationSec && filename) {
+        fetch(`/api/image/meta/${encodeURIComponent(filename)}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(meta => {
+                if (meta && meta.duration_seconds) {
+                    const dur = Number(meta.duration_seconds).toFixed(1);
+                    saveImageDuration(afterUrl, dur);
+                    const overlay = container.querySelector('.image-overlay-actions');
+                    if (overlay && !overlay.querySelector('.img-pill-static')) {
+                        const badge = document.createElement('span');
+                        badge.className = 'img-pill-btn img-pill-static';
+                        badge.style.cssText = 'padding: 3px 8px; font-variant-numeric: tabular-nums;';
+                        badge.innerHTML = `<i class="fa-regular fa-clock" style="font-size: 0.65rem;"></i>${dur}s`;
+                        overlay.appendChild(badge);
+                    }
+                }
+            })
+            .catch(() => {});
+    }
 
     const sliderInput = container.querySelector('.slider-input');
     const beforeImg = container.querySelector('.before-img');
     const divider = container.querySelector('.slider-divider');
     const inspectBtn = container.querySelector('.inspect-btn');
+    const editBtn = container.querySelector('.edit-again-btn');
+    const saveBtn = container.querySelector('.save-img-btn');
 
     sliderInput.oninput = (e) => {
         const pos = e.target.value;
@@ -282,9 +526,21 @@ export function createBeforeAfterSlider(beforeUrl, afterUrl, promptText, duratio
         divider.style.left = `${pos}%`;
     };
 
-    inspectBtn.onclick = () => {
+    inspectBtn.onclick = (e) => {
+        e.stopPropagation();
         openImageDetailModal(afterUrl, beforeUrl, promptText);
     };
+
+    if (editBtn) {
+        editBtn.onclick = (e) => {
+            e.stopPropagation();
+            attachImageForChatEdit(afterUrl);
+        };
+    }
+
+    if (saveBtn) {
+        saveBtn.onclick = (e) => e.stopPropagation();
+    }
 
     return container;
 }
@@ -294,10 +550,20 @@ export function createBeforeAfterSlider(beforeUrl, afterUrl, promptText, duratio
  * Creates a single high-res image card for text-to-image generations.
  */
 export function createSingleImageCard(imageUrl, promptText, durationSec = null) {
+    const filename = imageUrl.split('/').pop() || 'generated.png';
+    state.lastGeneratedImage = filename;
+
+    if (!durationSec) {
+        durationSec = getImageDuration(imageUrl);
+    }
+    if (durationSec) {
+        saveImageDuration(imageUrl, durationSec);
+    }
+
     const container = document.createElement('div');
     container.className = 'image-result-card';
     container.style.cssText = `
-        background: rgba(18, 18, 26, 0.8);
+        background: rgba(18, 18, 26, 0.85);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 12px;
         padding: 12px;
@@ -310,24 +576,58 @@ export function createSingleImageCard(imageUrl, promptText, durationSec = null) 
     container.innerHTML = `
         <div style="position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #000; cursor: pointer;" class="image-click-wrap">
             <img src="${imageUrl}" alt="${escapeHtml(promptText)}" style="width: 100%; height: auto; display: block;" />
-            ${durationSec ? `<span style="position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.65); padding: 3px 8px; border-radius: 4px; font-size: 0.72rem; color: #cbd5e1; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 4px;"><i class="fa-regular fa-clock" style="font-size: 0.65rem;"></i>${durationSec}s</span>` : ''}
-        </div>
-
-        <div style="margin-top: 10px; display: flex; gap: 8px;">
-            <button class="btn-secondary edit-again-btn" style="flex: 1; padding: 7px 12px; font-size: 0.78rem; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;">
-                <i class="fa-solid fa-pen-to-square"></i> Edit in Chat
-            </button>
-            <a href="${imageUrl}" download="gen_${Date.now()}.png" class="btn-secondary" style="padding: 7px 16px; font-size: 0.78rem; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none;">
-                <i class="fa-solid fa-download"></i> Save
-            </a>
+            <div style="position: absolute; bottom: 8px; right: 8px; display: flex; align-items: center; gap: 5px; z-index: 10;" class="image-overlay-actions">
+                <button type="button" class="img-pill-btn edit-again-btn" title="Edit in Chat" style="padding: 3px 8px;">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <a href="${imageUrl}" download="${filename}" class="img-pill-btn save-img-btn" title="Save image" style="padding: 3px 8px;">
+                    <i class="fa-solid fa-download"></i>
+                </a>
+                ${durationSec ? `<span class="img-pill-btn img-pill-static" style="padding: 3px 8px; font-variant-numeric: tabular-nums;"><i class="fa-regular fa-clock" style="font-size: 0.65rem;"></i>${durationSec}s</span>` : ''}
+            </div>
         </div>
     `;
 
+    // Asynchronously fetch server metadata if duration was not cached or provided
+    if (!durationSec && filename) {
+        fetch(`/api/image/meta/${encodeURIComponent(filename)}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(meta => {
+                if (meta && meta.duration_seconds) {
+                    const dur = Number(meta.duration_seconds).toFixed(1);
+                    saveImageDuration(imageUrl, dur);
+                    const overlay = container.querySelector('.image-overlay-actions');
+                    if (overlay && !overlay.querySelector('.img-pill-static')) {
+                        const badge = document.createElement('span');
+                        badge.className = 'img-pill-btn img-pill-static';
+                        badge.style.cssText = 'padding: 3px 8px; font-variant-numeric: tabular-nums;';
+                        badge.innerHTML = `<i class="fa-regular fa-clock" style="font-size: 0.65rem;"></i>${dur}s`;
+                        overlay.appendChild(badge);
+                    }
+                }
+            })
+            .catch(() => {});
+    }
+
     const clickWrap = container.querySelector('.image-click-wrap');
     const editBtn = container.querySelector('.edit-again-btn');
+    const saveBtn = container.querySelector('.save-img-btn');
 
-    clickWrap.onclick = () => openImageDetailModal(imageUrl, null, promptText);
-    editBtn.onclick = () => attachImageForChatEdit(imageUrl);
+    clickWrap.onclick = (e) => {
+        if (e.target.closest('.image-overlay-actions')) return;
+        openImageDetailModal(imageUrl, null, promptText);
+    };
+
+    if (editBtn) {
+        editBtn.onclick = (e) => {
+            e.stopPropagation();
+            attachImageForChatEdit(imageUrl);
+        };
+    }
+
+    if (saveBtn) {
+        saveBtn.onclick = (e) => e.stopPropagation();
+    }
 
     return container;
 }

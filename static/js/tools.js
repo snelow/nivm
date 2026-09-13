@@ -23,6 +23,23 @@ function mountImageProgressCard(cardElement) {
 
 const recentlyReadKeys = new Set();
 
+let _animeRegistryCache = null;
+
+export async function refreshAnimeRegistryCache() {
+    try {
+        const isUnfiltered = !!state.nsfwMode;
+        const resp = await fetch(`/api/image/anime/registry?nsfw_enabled=${isUnfiltered}`);
+        if (resp.ok) {
+            _animeRegistryCache = await resp.json();
+            return _animeRegistryCache;
+        }
+    } catch (_) {}
+    return null;
+}
+
+// Eager initial load of registry
+refreshAnimeRegistryCache();
+
 export function mergeMemoryValues(existingVal, newVal) {
     if (!existingVal || !String(existingVal).trim()) return newVal;
     if (!newVal || !String(newVal).trim()) return existingVal;
@@ -135,18 +152,16 @@ export const tools = [
 
             try {
                 const res = await executeTerminalAPI(cmd);
-                let output = '';
-                if (res.stdout && res.stdout.trim()) {
-                    output += res.stdout.trim();
+                let output = typeof res === 'string' ? res : (res?.output || res?.stdout || '');
+                if (typeof res === 'object' && res.stderr && res.stderr.trim()) {
+                    if (output && !output.includes(res.stderr.trim())) {
+                        output += `\n[STDERR]\n${res.stderr.trim()}`;
+                    }
                 }
-                if (res.stderr && res.stderr.trim()) {
-                    if (output) output += '\n';
-                    output += `STDERR: ${res.stderr.trim()}`;
+                if (!output || !output.trim()) {
+                    output = '(Command executed with exit code 0, no output produced)';
                 }
-                if (!output) {
-                    output = `(Command executed with exit code ${res.exit_code || 0}, no output produced)`;
-                }
-                return output;
+                return output.trim();
             } catch (err) {
                 return `Execution error: ${err.message}`;
             }
@@ -160,6 +175,156 @@ export const tools = [
         execute: async (argsStr) => {
             let reason = argsStr ? argsStr.trim().replace(/^['"]|['"]$/g, '') : 'User requested or safety threshold reached.';
             return `Conversation ended: ${reason}`;
+        }
+    },
+    {
+        name: 'generate_anime_image',
+        description: 'Synthesize an anime character illustration using the local Illustrious SDXL engine with character LoRAs, outfits, and styling.',
+        instruction: 'Call this when the user asks to draw or generate an anime character. Specify the character key from the live registered characters list, and optional outfit, expression, hairstyle, concept, pose, prompt details, and aspect ratio.',
+        usageFormat: 'TOOL_CALL: generate_anime_image("character_key", "prompt_details", "expression")',
+        execute: async (argsStr) => {
+            let charKey = '';
+            let outfit = null;
+            let hairstyle = null;
+            let expression = 'smile';
+            let concept = 'none';
+            let pose = 'none';
+            let userPrompt = '';
+            let useLcm = false;
+            let resolution = 'portrait';
+
+            let trimmed = (argsStr || '').trim();
+            if ((trimmed.startsWith("'") && trimmed.endsWith("'")) || (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.includes('{'))) {
+                trimmed = trimmed.substring(1, trimmed.length - 1).trim();
+            }
+            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    charKey = parsed.character || parsed.char || '';
+                    outfit = parsed.outfit || null;
+                    hairstyle = parsed.hairstyle || parsed.hair || null;
+                    expression = parsed.expression || parsed.expr || 'smile';
+                    concept = parsed.concept || 'none';
+                    pose = parsed.pose || 'none';
+                    userPrompt = parsed.prompt || parsed.user_prompt || '';
+                    useLcm = !!parsed.use_lcm || !!parsed.turbo || !!parsed.lcm;
+                    resolution = parsed.resolution || parsed.aspect_ratio || 'portrait';
+                } catch (_) {}
+            } else {
+                const parts = trimmed.match(/(?:[^\s,"']+|"[^"]*"|'[^']*')+/g) || [];
+                const cleanParts = parts.map(p => p.trim().replace(/^['"]|['"]$/g, ''));
+                if (cleanParts.length > 0) charKey = cleanParts[0].toLowerCase().replace(/\s+/g, '_');
+                if (cleanParts.length > 1) userPrompt = cleanParts[1];
+                if (cleanParts.length > 2) expression = cleanParts[2];
+            }
+
+            if (!charKey && _animeRegistryCache?.characters) {
+                const keys = Object.keys(_animeRegistryCache.characters);
+                if (keys.length > 0) charKey = keys[0];
+            }
+
+            if (!charKey) {
+                charKey = 'none';
+            }
+
+            if (!useLcm && /\b(fast|faster|quick|turbo|lcm)\b/i.test(userPrompt)) {
+                useLcm = true;
+            }
+
+            const titlePrefix = charKey && charKey !== 'none' ? `Anime (${charKey}):` : 'Anime:';
+            const progressCard = createImageProgressCard(`${titlePrefix} ${userPrompt}`.trim(), false, resolution);
+            mountImageProgressCard(progressCard.element);
+            progressCard.update({ max_steps: useLcm ? 6 : 28 });
+
+            try {
+                const resp = await fetch('/api/image/anime/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        character: charKey,
+                        hairstyle: hairstyle,
+                        outfit: outfit,
+                        expression: expression,
+                        concept: concept,
+                        pose: pose,
+                        user_prompt: userPrompt,
+                        resolution: resolution,
+                        use_lcm: useLcm,
+                    })
+                });
+
+                if (!resp.ok) {
+                    const errData = await resp.json().catch(() => ({ detail: resp.statusText }));
+                    throw new Error(errData.detail || `Server error ${resp.status}`);
+                }
+
+                const data = await resp.json();
+                const taskId = data.task_id;
+                if (!taskId) throw new Error('No task_id returned from server');
+                if (data.max_steps || data.steps) {
+                    progressCard.update({ max_steps: data.max_steps || data.steps });
+                }
+
+                return await new Promise((resolve) => {
+                    let completed = false;
+                    let pollTimer = null;
+                    const evtSource = window.EventSource ? new EventSource(`/api/image/progress/${taskId}`) : null;
+
+                    const finishSuccess = (imgData) => {
+                        if (completed) return;
+                        completed = true;
+                        if (pollTimer) clearInterval(pollTimer);
+                        if (evtSource) try { evtSource.close(); } catch (_) {}
+                        const durationSec = progressCard.finish(imgData.url) || null;
+                        const filename = imgData.filename || (imgData.url ? imgData.url.split('/').pop() : 'anime_generated.png');
+                        state.lastGeneratedImage = filename;
+                        const durStr = durationSec ? ` (Duration: ${durationSec}s)` : '';
+                        resolve(`[Generated Image: ${filename}]${durStr} Anime illustration synthesized successfully: ${imgData.url} - Display this image to the user, note filename "${filename}", and describe the character depiction.`);
+                    };
+
+                    const finishFail = (errMsg) => {
+                        if (completed) return;
+                        completed = true;
+                        if (pollTimer) clearInterval(pollTimer);
+                        if (evtSource) try { evtSource.close(); } catch (_) {}
+                        progressCard.fail(errMsg || 'Generation failed');
+                        resolve(`Anime generation failed: ${errMsg || 'Unknown error'}`);
+                    };
+
+                    if (evtSource) {
+                        evtSource.onmessage = (e) => {
+                            try {
+                                const evData = JSON.parse(e.data);
+                                progressCard.update(evData);
+                                if (evData.status === 'complete' && (evData.image || evData.url)) {
+                                    finishSuccess(evData.image || { url: evData.url, filename: evData.filename || 'anime_generated.png' });
+                                } else if (evData.status === 'error') {
+                                    finishFail(evData.error);
+                                }
+                            } catch (_) {}
+                        };
+                    }
+
+                    pollTimer = setInterval(async () => {
+                        if (completed) return;
+                        try {
+                            const pRes = await fetch(`/api/image/task/${taskId}`);
+                            if (pRes.ok) {
+                                const pData = await pRes.json();
+                                progressCard.update(pData);
+                                if (pData.status === 'complete' && (pData.image || pData.result)) {
+                                    finishSuccess(pData.image || pData.result);
+                                } else if (pData.status === 'error') {
+                                    finishFail(pData.error);
+                                }
+                            }
+                        } catch (_) {}
+                    }, 1500);
+                });
+            } catch (err) {
+                progressCard.fail(err.message);
+                return `Anime generation failed: ${err.message}`;
+            }
         }
     },
     {
@@ -189,7 +354,7 @@ export const tools = [
                 }
             }
 
-            const progressCard = createImageProgressCard(prompt, false);
+            const progressCard = createImageProgressCard(prompt, false, aspectRatio);
             mountImageProgressCard(progressCard.element);
 
             try {
@@ -207,6 +372,9 @@ export const tools = [
                 const data = await resp.json();
                 const taskId = data.task_id;
                 if (!taskId) throw new Error('No task_id returned from server');
+                if (data.max_steps || data.steps) {
+                    progressCard.update({ max_steps: data.max_steps || data.steps });
+                }
 
                 return await new Promise((resolve) => {
                     let completed = false;
@@ -218,8 +386,11 @@ export const tools = [
                         completed = true;
                         if (pollTimer) clearInterval(pollTimer);
                         if (evtSource) try { evtSource.close(); } catch (_) {}
-                        progressCard.finish(imgData.url);
-                        resolve(`[Generated Image: ${imgData.filename}] Image synthesized successfully: ${imgData.url} - Display this image to the user and describe the visual scene.`);
+                        const durationSec = progressCard.finish(imgData.url) || null;
+                        const filename = imgData.filename || (imgData.url ? imgData.url.split('/').pop() : 'generated.png');
+                        state.lastGeneratedImage = filename;
+                        const durStr = durationSec ? ` (Duration: ${durationSec}s)` : '';
+                        resolve(`[Generated Image: ${filename}]${durStr} Image synthesized successfully: ${imgData.url} - Display this image to the user, note filename "${filename}", and describe the visual scene.`);
                     };
 
                     const finishFail = (errMsg) => {
@@ -285,8 +456,8 @@ export const tools = [
             if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
                 try {
                     const parsed = JSON.parse(trimmed);
-                    imageFilename = parsed.image_filename || parsed.filename || '';
-                    prompt = parsed.prompt || '';
+                    imageFilename = parsed.image_filename || parsed.filename || parsed.image || '';
+                    prompt = parsed.prompt || parsed.instruction || '';
                     aspectRatio = normalizeAspectRatio(parsed.aspect_ratio, 'original');
                     if (parsed.denoise_strength !== undefined) denoise = parsed.denoise_strength;
                 } catch (_) {}
@@ -295,19 +466,56 @@ export const tools = [
             if (!imageFilename || !prompt) {
                 const parts = trimmed.match(/(?:[^\s,"']+|"[^"]*"|'[^']*')+/g) || [];
                 const cleanParts = parts.map(p => p.trim().replace(/^['"]|['"]$/g, ''));
-                imageFilename = cleanParts[0] || '';
-                prompt = cleanParts[1] || '';
-                if (cleanParts.length > 2) {
-                    const third = cleanParts[2].toLowerCase();
-                    if (!isNaN(parseFloat(third)) && !third.includes(':')) {
-                        denoise = parseFloat(third);
-                    } else {
-                        aspectRatio = normalizeAspectRatio(third, 'original');
+                if (cleanParts.length === 1) {
+                    prompt = cleanParts[0] || '';
+                    imageFilename = state.lastGeneratedImage || '';
+                } else {
+                    imageFilename = cleanParts[0] || '';
+                    prompt = cleanParts[1] || '';
+                    if (cleanParts.length > 2) {
+                        const third = cleanParts[2].toLowerCase();
+                        if (!isNaN(parseFloat(third)) && !third.includes(':')) {
+                            denoise = parseFloat(third);
+                        } else {
+                            aspectRatio = normalizeAspectRatio(third, 'original');
+                        }
                     }
                 }
             }
 
-            const progressCard = createImageProgressCard(prompt, true);
+            // Fallback resolution for generic pronouns or missing filenames
+            const genericTerms = ['it', 'this', 'that', 'the image', 'image', 'latest', 'recent', 'current', 'last', 'photo', 'picture'];
+            if (!imageFilename || genericTerms.includes(imageFilename.toLowerCase().trim())) {
+                if (state.lastGeneratedImage) {
+                    imageFilename = state.lastGeneratedImage;
+                } else if (state.attachedImages && state.attachedImages.length > 0 && state.attachedImages[0].file) {
+                    imageFilename = state.attachedImages[0].file.name;
+                } else {
+                    const activeChat = state.conversations?.find(c => c.id === state.activeChatId);
+                    if (activeChat && activeChat.messages) {
+                        for (let i = activeChat.messages.length - 1; i >= 0; i--) {
+                            const content = activeChat.messages[i].content;
+                            if (typeof content === 'string') {
+                                const m = content.match(/\[(?:Generated|Attached)\s+Image:\s*([^\]]+)\]/i);
+                                if (m && m[1]) {
+                                    imageFilename = m[1].trim();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                if (!imageFilename) {
+                    imageFilename = 'latest';
+                }
+            }
+
+            if (!prompt && imageFilename && !genericTerms.includes(imageFilename.toLowerCase().trim())) {
+                prompt = imageFilename;
+                imageFilename = state.lastGeneratedImage || 'latest';
+            }
+
+            const progressCard = createImageProgressCard(prompt, true, aspectRatio);
             mountImageProgressCard(progressCard.element);
 
             try {
@@ -331,6 +539,9 @@ export const tools = [
                 const taskId = data.task_id;
                 const origUrl = data.original_url || null;
                 if (!taskId) throw new Error('No task_id returned from server');
+                if (data.max_steps || data.steps) {
+                    progressCard.update({ max_steps: data.max_steps || data.steps });
+                }
 
                 return await new Promise((resolve) => {
                     let completed = false;
@@ -342,8 +553,11 @@ export const tools = [
                         completed = true;
                         if (pollTimer) clearInterval(pollTimer);
                         if (evtSource) try { evtSource.close(); } catch (_) {}
-                        progressCard.finish(imgData.url, finalOrigUrl || origUrl);
-                        resolve(`[Generated Image: ${imgData.filename}] Image edited successfully: ${imgData.url} (original: ${finalOrigUrl || origUrl}). Show the updated image and explain the changes applied.`);
+                        const durationSec = progressCard.finish(imgData.url, finalOrigUrl || origUrl) || null;
+                        const filename = imgData.filename || (imgData.url ? imgData.url.split('/').pop() : 'edited.png');
+                        state.lastGeneratedImage = filename;
+                        const durStr = durationSec ? ` (Duration: ${durationSec}s)` : '';
+                        resolve(`[Generated Image: ${filename}]${durStr} Image edited successfully: ${imgData.url} (original: ${finalOrigUrl || origUrl}). Note filename "${filename}". Show the updated image and explain the changes applied.`);
                     };
 
                     const finishFail = (errMsg) => {
@@ -534,6 +748,7 @@ export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume 
     const hasMemory = activeTools.some(t => t.name === 'read_memory' || t.name === 'write_memory');
     const hasEndConvo = activeTools.some(t => t.name === 'end_conversation');
     const hasImageTools = activeTools.some(t => t.name === 'generate_image' || t.name === 'edit_image');
+    const hasAnimeTools = activeTools.some(t => t.name === 'generate_anime_image');
 
     let instruction = `\n\n[TOOLS & ACTIONS SYSTEM]\n`;
     instruction += `To call a tool, your entire message must output EXACTLY:\n`;
@@ -552,7 +767,8 @@ export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume 
         instruction += `   - "What time is it?" -> TOOL_CALL: execute_terminal(date)\n`;
         instruction += `   - "What files are in this folder?" -> TOOL_CALL: execute_terminal(ls -la)\n`;
         instruction += `   - "Show system stats" -> TOOL_CALL: execute_terminal(uptime && free -h)\n`;
-        instruction += `4. The user CANNOT see raw terminal output. When you receive the tool result, you MUST convey and explain the results to the user while staying in character.\n`;
+        instruction += `4. User Visibility: The user CANNOT see raw terminal output directly! You MUST always state, summarize, or explain the terminal output and findings to the user in your response.\n`;
+        instruction += `5. Empty Output Handling: If the terminal command returns empty or no stdout, you MUST explicitly state to the user that the command ran cleanly with exit code 0 and explain why it produced no output (e.g. silent command, file/directory created, or no matching items).\n`;
     }
 
     if (hasMemory) {
@@ -601,18 +817,67 @@ export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume 
 
     if (hasImageTools) {
         instruction += `\nImage Generation & Editing Rules (generate_image, edit_image):\n`;
+        if (state.lastGeneratedImage) {
+            instruction += `   - ACTIVE IMAGE IN CONVERSATION: "${state.lastGeneratedImage}". Pass "${state.lastGeneratedImage}" as the first argument to edit_image whenever the user asks to modify, alter, or edit it.\n`;
+        }
         instruction += `1. When the user asks to create, draw, paint, or generate an image:\n`;
         instruction += `   - Expand the user's brief request into a vivid, highly detailed visual prompt (specify subject features, environment/backdrop, lighting, mood, color palette, camera shot/angle, and photorealism or art style).\n`;
         instruction += `   - Pick the appropriate aspect_ratio: "1:1" (square/default), "16:9" (cinematic/landscape), "9:16" (mobile/portrait), or "4:3".\n`;
         instruction += `   - Output: TOOL_CALL: generate_image("detailed prompt", "aspect_ratio")\n`;
         instruction += `2. When the user asks to edit, alter, or transform an attached or previously generated image:\n`;
-        instruction += `   - Identify the source image filename from [Attached Image: filename] or [Generated Image: filename].\n`;
+        instruction += `   - Identify the source image filename from [Attached Image: filename] or [Generated Image: filename] (current active image: "${state.lastGeneratedImage || 'none'}").\n`;
         instruction += `   - If Vision is available, inspect the visual context (subject, pose, lighting, background) and formulate an edit prompt specifying the exact changes while preserving the core subject and composition.\n`;
         instruction += `   - ALWAYS use "original" for aspect_ratio to preserve the source image's exact dimensions and orientation, unless the user explicitly requested a format change (e.g. "make it widescreen 16:9").\n`;
         instruction += `   - Output: TOOL_CALL: edit_image("filename", "instruction describing the transformation", "original")\n`;
         instruction += `3. Post-Generation Response & Visual Description (MANDATORY):\n`;
         instruction += `   - The rendered image is displayed automatically in the UI. Do NOT output raw file URLs, markdown images, or HTML tags.\n`;
         instruction += `   - Describe the resulting visual scene to the user warmly in your active persona/character—highlight the atmosphere, lighting, key artistic details, and textures, and invite them to explore further edits or variations!\n`;
+    }
+
+    if (hasAnimeTools) {
+        instruction += `\nAnime Character Illustration Engine (generate_anime_image):\n`;
+        instruction += `1. Engine Capabilities & Live Registry:\n`;
+        instruction += `   - You have access to a local Illustrious SDXL engine with dynamic character LoRA chaining.\n`;
+
+        const characters = _animeRegistryCache?.characters || {};
+        const charKeys = Object.keys(characters);
+
+        if (charKeys.length > 0) {
+            instruction += `   - Currently Registered Characters & Available Options:\n`;
+            charKeys.forEach(k => {
+                const c = characters[k];
+                const outfits = Object.keys(c.outfits || {});
+                const hairstyles = c.hairstyles ? Object.keys(c.hairstyles) : [];
+                let details = `     * ${c.display_name} (key: "${k}")`;
+                if (outfits.length > 0) details += ` | outfits: [${outfits.join(', ')}]`;
+                if (hairstyles.length > 0) details += ` | hairstyles: [${hairstyles.join(', ')}]`;
+                instruction += `${details}\n`;
+            });
+        } else {
+            instruction += `   - Registered Characters: None loaded yet. You can still generate anime illustrations using the base Illustrious engine by setting 'character': 'none'!\n`;
+        }
+
+        const concepts = Object.keys(_animeRegistryCache?.concepts || {}).filter(k => k !== 'none');
+        if (concepts.length > 0) {
+            instruction += `   - Available Concepts: [${concepts.join(', ')}]\n`;
+        }
+
+        const poses = Object.keys(_animeRegistryCache?.poses || {}).filter(k => k !== 'none');
+        if (poses.length > 0) {
+            instruction += `   - Available Poses: [${poses.join(', ')}]\n`;
+        }
+
+        const exprs = Object.keys(_animeRegistryCache?.expressions || {}).filter(k => k !== 'none');
+        if (exprs.length > 0) {
+            instruction += `   - Common Expressions: [${exprs.slice(0, 16).join(', ')}]\n`;
+        }
+
+        instruction += `2. Calling generate_anime_image:\n`;
+        instruction += `   - Always specify a single subject. If characters are registered, pick a valid character and outfit. If no characters exist or general anime illustration is requested, use 'character': 'none'.\n`;
+        instruction += `   - Use JSON format with the character's key: TOOL_CALL: generate_anime_image('{"character": "character_key", "outfit": "outfit_key", "expression": "smile", "prompt": "rich scene and lighting description"}')\n`;
+        instruction += `   - Concepts & Poses: Only pass concept or pose when explicitly requested by the user. If unrequested, omit them.\n`;
+        instruction += `   - Fast/Turbo Mode: Set "use_lcm": true if the user requests fast or quick generation (6 steps).\n`;
+        instruction += `   - User Inquiry: When the user asks what anime characters or outfits are available, report the live list above accurately.\n`;
     }
 
     instruction += `\nCRITICAL TOOL SYNTAX RULES:\n`;

@@ -3,7 +3,8 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>nivm</title>
 
     <!-- PWA & Mobile Web App Meta -->
@@ -31,7 +32,7 @@
     <script src="/static/vendor/marked.min.js"></script>
     <!-- WebGL Fluid Simulation -->
     <script src="/static/vendor/webgl-fluid.js?v=2.0" defer></script>
-    <link rel="stylesheet" href="/static/css/main.css?v=8.5">
+    <link rel="stylesheet" href="/static/css/main.css?v=9.0">
 </head>
 
 <body>
@@ -205,6 +206,9 @@
                 <button class="nav-icon-btn" id="memoryToggleBtn" title="nivm Memory">
                     <i class="fa-solid fa-brain"></i>
                 </button>
+                <button class="nav-icon-btn" id="imageStudioBtn" title="Image Studio (Anime & Diffusion)">
+                    <i class="fa-solid fa-paintbrush"></i>
+                </button>
             </div>
 
             <div class="sidebar-bottom">
@@ -238,7 +242,8 @@
                     <img src="/static/icons/favicon.png" alt="nivm" class="drawer-brand-img">
                     <span>nivm</span>
                 </div>
-                <button class="icon-btn-sm" id="closeHistoryBtn" title="Close Drawer"><i class="fa-solid fa-xmark"></i></button>
+                <button class="icon-btn-sm" id="closeHistoryBtn" title="Close Drawer"><i
+                        class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="drawer-search">
                 <i class="fa-solid fa-magnifying-glass drawer-search-icon"></i>
@@ -254,6 +259,10 @@
                 <button class="drawer-tool-item" id="drawerVoiceBtn" title="Voice & Speech Profile" type="button">
                     <i class="fa-solid fa-microphone-lines"></i>
                     <span>Voice</span>
+                </button>
+                <button class="drawer-tool-item" id="drawerImageStudioBtn" title="Image Studio" type="button">
+                    <i class="fa-solid fa-paintbrush" style="color: var(--accent-purple);"></i>
+                    <span>Studio</span>
                 </button>
                 <button class="drawer-tool-item" id="drawerThemeBtn" title="Themes & Colors" type="button">
                     <i class="fa-solid fa-palette"></i>
@@ -271,7 +280,8 @@
                     <i class="fa-solid fa-toolbox"></i>
                     <span>Tools</span>
                 </button>
-                <button class="drawer-tool-item" id="drawerSettingsBtn" title="System & Inference Settings" type="button">
+                <button class="drawer-tool-item" id="drawerSettingsBtn" title="System & Inference Settings"
+                    type="button">
                     <i class="fa-solid fa-gear"></i>
                     <span>Settings</span>
                 </button>
@@ -279,7 +289,8 @@
                     <i class="fa-solid fa-chart-simple"></i>
                     <span>Stats</span>
                 </button>
-                <button class="drawer-tool-item tool-unload" id="drawerUnloadBtn" title="Free All Models & GPU VRAM" type="button">
+                <button class="drawer-tool-item tool-unload" id="drawerUnloadBtn" title="Free All Models & GPU VRAM"
+                    type="button">
                     <i class="fa-solid fa-bolt-lightning"></i>
                     <span>Free VRAM</span>
                 </button>
@@ -326,11 +337,14 @@
                         <span id="voiceModeName">Voice Mode</span>
                     </div>
                     <div class="voice-stage-actions">
-                        <button class="voice-mode-dock-btn" id="voiceStageSettingsBtn" title="Voice & Speech Settings" type="button">
+                        <button class="voice-mode-dock-btn" id="voiceStageSettingsBtn" title="Voice & Speech Settings"
+                            type="button">
                             <i class="fa-solid fa-sliders"></i> <span id="voiceStageSettingsLabel">Settings</span>
                         </button>
-                        <button class="voice-mode-dock-btn" id="toggleVoiceDockBtn" title="Switch between full-screen and collapsed dock" type="button">
-                            <i class="fa-solid fa-down-left-and-up-right-to-center" id="voiceDockBtnIcon"></i> <span id="voiceDockBtnLabel">Collapse</span>
+                        <button class="voice-mode-dock-btn" id="toggleVoiceDockBtn"
+                            title="Switch between full-screen and collapsed dock" type="button">
+                            <i class="fa-solid fa-down-left-and-up-right-to-center" id="voiceDockBtnIcon"></i> <span
+                                id="voiceDockBtnLabel">Collapse</span>
                         </button>
                         <button class="voice-mode-exit-btn" id="exitVoiceModeBtn" title="Exit Voice Mode" type="button">
                             <i class="fa-solid fa-xmark"></i> <span>Exit</span>
@@ -382,7 +396,8 @@
                         <button id="sideNotifLoadBtn" class="app-notif-action-btn side-notif-btn" type="button">
                             Load
                         </button>
-                        <button id="sideNotifCloseBtn" class="app-notif-close-btn side-notif-close" type="button" title="Dismiss">
+                        <button id="sideNotifCloseBtn" class="app-notif-close-btn side-notif-close" type="button"
+                            title="Dismiss">
                             <i class="fa-solid fa-xmark"></i>
                         </button>
                     </div>
@@ -420,12 +435,13 @@
                                 title="Deep Reasoning: Enable deeper planning for complex requests.">
                                 <i class="fa-solid fa-brain"></i> <span class="toggle-btn-label">Reasoning</span>
                             </button>
-                            
+
                             <button id="visionToggleBtn" class="thinking-toggle-btn" title="Vision: Multimodal input">
                                 <i class="fa-solid fa-eye"></i> <span class="toggle-btn-label">Vision</span>
                             </button>
 
-                            <button id="voiceModeToggleBtn" class="thinking-toggle-btn" title="Voice Mode: Converse via voice">
+                            <button id="voiceModeToggleBtn" class="thinking-toggle-btn"
+                                title="Voice Mode: Converse via voice">
                                 <i class="fa-solid fa-microphone-lines"></i> <span class="toggle-btn-label">Voice</span>
                             </button>
                         </div>
@@ -434,10 +450,13 @@
                             <button id="micRecordBtn" class="icon-btn-sm hidden" title="Record Audio">
                                 <i class="fa-solid fa-microphone"></i>
                             </button>
-                            <button id="attachImgBtn" class="icon-btn-sm hidden" title="Attach Image, PDF, Video, or Audio">
+                            <button id="attachImgBtn" class="icon-btn-sm hidden"
+                                title="Attach Image, PDF, Video, or Audio">
                                 <i class="fa-solid fa-paperclip"></i>
                             </button>
-                            <input type="file" id="imageUploadInput" accept="image/*,application/pdf,video/*,audio/*,.wav,.mp3,.m4a,.ogg,.flac,.aac,.webm" multiple class="hidden">
+                            <input type="file" id="imageUploadInput"
+                                accept="image/*,application/pdf,video/*,audio/*,.wav,.mp3,.m4a,.ogg,.flac,.aac,.webm"
+                                multiple class="hidden">
 
                             <button id="sendBtn" class="send-action-btn" title="Send Message">
                                 <i class="fa-solid fa-arrow-up"></i>
@@ -457,7 +476,8 @@
                                 </div>
                                 <div class="chatbox-load-text">
                                     <span class="chatbox-load-title">No Model Active</span>
-                                    <span class="chatbox-load-sub" id="chatBoxDraftHint">Tap Settings to load a model</span>
+                                    <span class="chatbox-load-sub" id="chatBoxDraftHint">Tap Settings to load a
+                                        model</span>
                                 </div>
                             </div>
                             <div class="chatbox-load-badge">
@@ -475,21 +495,31 @@
                             </div>
                             <div class="convo-ended-info">
                                 <span class="convo-ended-title">Conversation Ended</span>
-                                <span class="convo-ended-reason" id="convoEndedReason">This conversation has concluded.</span>
+                                <span class="convo-ended-reason" id="convoEndedReason">This conversation has
+                                    concluded.</span>
                             </div>
                         </div>
                         <div class="convo-ended-actions">
-                            <button id="convoEndedResumeBtn" class="btn-subtle-resume" type="button" title="Resume and unlock this conversation">
+                            <button id="convoEndedResumeBtn" class="btn-subtle-resume" type="button"
+                                title="Resume and unlock this conversation">
                                 <i class="fa-solid fa-unlock"></i> Resume
                             </button>
-                            <button id="convoEndedNewChatBtn" class="btn-primary-newchat" type="button" title="Start a fresh conversation">
+                            <button id="convoEndedNewChatBtn" class="btn-primary-newchat" type="button"
+                                title="Start a fresh conversation">
                                 <i class="fa-solid fa-plus"></i> New Chat
                             </button>
                         </div>
                     </div>
                 </div>
                 <div class="footer-caption">
-                    <span class="footer-desktop-only">nivm may make mistakes. &bull; </span><span class="footer-mobile-only">nivm might make mistakes &bull; </span><a href="#" id="openCreatorBtn" class="credits-link" title="Meet the creator"><span class="footer-desktop-only">crafted with <i class="fa-solid fa-heart dynamic-footer-heart" id="footerHeartIcon"></i> </span>by snelow</a><span class="footer-desktop-only"> &bull; <a href="https://github.com/snelow/nivm" target="_blank" rel="noopener noreferrer" class="credits-link" title="GitHub Repository"><i class="fa-brands fa-github"></i> repo</a></span>
+                    <span class="footer-desktop-only">nivm may make mistakes. &bull; </span><span
+                        class="footer-mobile-only">nivm might make mistakes &bull; </span><a href="#"
+                        id="openCreatorBtn" class="credits-link" title="Meet the creator"><span
+                            class="footer-desktop-only">crafted with <i class="fa-solid fa-heart dynamic-footer-heart"
+                                id="footerHeartIcon"></i> </span>by snelow</a><span class="footer-desktop-only"> &bull;
+                        <a href="https://github.com/snelow/nivm" target="_blank" rel="noopener noreferrer"
+                            class="credits-link" title="GitHub Repository"><i class="fa-brands fa-github"></i>
+                            repo</a></span>
                 </div>
             </div>
         </main>
@@ -497,19 +527,23 @@
 
     <!-- Creator Card Modal -->
     <div id="siteGlitchOverlay" class="site-glitch-overlay hidden"></div>
-    <div class="window-wrapper hidden" id="creatorModal" style="z-index: 960; display: flex; align-items: center; justify-content: center;">
+    <div class="window-wrapper hidden" id="creatorModal"
+        style="z-index: 960; display: flex; align-items: center; justify-content: center;">
         <div class="creator-window" id="creatorWindow">
             <div class="window-header" id="creatorWindowHeader" style="cursor: default;">
                 <div class="window-title">
                     <i class="fa-solid fa-sparkles" style="color: var(--accent-purple, #a855f7);"></i>
                     <span>Creator &amp; Project</span>
                 </div>
-                <button class="icon-btn-sm" id="closeCreatorBtn" type="button"><i class="fa-solid fa-xmark"></i></button>
+                <button class="icon-btn-sm" id="closeCreatorBtn" type="button"><i
+                        class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="window-body creator-body">
                 <div class="creator-badge-row">
                     <div class="creator-avatar-glow" id="creatorAvatarWrap" title="Click to spin! ✨">
-                        <img id="creatorAvatarImg" src="https://github.com/snelow.png" alt="snelow" class="creator-avatar-img" onerror="this.style.display='none'; document.getElementById('creatorAvatarFallback').style.display='flex';" />
+                        <img id="creatorAvatarImg" src="https://github.com/snelow.png" alt="snelow"
+                            class="creator-avatar-img"
+                            onerror="this.style.display='none'; document.getElementById('creatorAvatarFallback').style.display='flex';" />
                         <div id="creatorAvatarFallback" class="creator-avatar-fallback" style="display: none;">
                             <i class="fa-brands fa-github creator-avatar-icon"></i>
                         </div>
@@ -531,7 +565,8 @@
                 </div>
 
                 <div class="creator-links-grid">
-                    <a href="https://github.com/snelow/nivm" target="_blank" rel="noopener noreferrer" class="creator-link-card repo-link">
+                    <a href="https://github.com/snelow/nivm" target="_blank" rel="noopener noreferrer"
+                        class="creator-link-card repo-link">
                         <div class="link-icon"><i class="fa-solid fa-star"></i></div>
                         <div class="link-info">
                             <span class="link-title">Star nivm on GitHub</span>
@@ -539,7 +574,8 @@
                         </div>
                         <i class="fa-solid fa-arrow-up-right-from-square link-arrow"></i>
                     </a>
-                    <a href="https://github.com/snelow" target="_blank" rel="noopener noreferrer" class="creator-link-card profile-link">
+                    <a href="https://github.com/snelow" target="_blank" rel="noopener noreferrer"
+                        class="creator-link-card profile-link">
                         <div class="link-icon"><i class="fa-brands fa-github"></i></div>
                         <div class="link-info">
                             <span class="link-title">snelow's Profile</span>
@@ -551,7 +587,8 @@
 
                 <div class="creator-footer-actions">
                     <button type="button" id="creatorHypeBtn" class="hype-heart-btn" title="Send love to the creator!">
-                        <i class="fa-solid fa-heart"></i> <span>Send Love</span> <span id="hypeCountBadge" class="hype-badge">0</span>
+                        <i class="fa-solid fa-heart"></i> <span>Send Love</span> <span id="hypeCountBadge"
+                            class="hype-badge">0</span>
                     </button>
                 </div>
             </div>
@@ -566,154 +603,156 @@
             </div>
             <div class="bleh-pixel-avatar" style="border-color: var(--accent-purple, #8b5cf6);">
                 <!-- Human Form Reze -->
-                <svg id="rezeHumanSvg" viewBox="0 0 32 32" class="pixel-art-svg reze-human-svg" shape-rendering="crispEdges">
+                <svg id="rezeHumanSvg" viewBox="0 0 32 32" class="pixel-art-svg reze-human-svg"
+                    shape-rendering="crispEdges">
                     <!-- Hair Back / Silhouette -->
-                    <rect x="8" y="3" width="16" height="3" fill="#1e172e"/>
-                    <rect x="6" y="5" width="20" height="3" fill="#251c38"/>
-                    <rect x="5" y="7" width="22" height="15" fill="#251c38"/>
-                    
+                    <rect x="8" y="3" width="16" height="3" fill="#1e172e" />
+                    <rect x="6" y="5" width="20" height="3" fill="#251c38" />
+                    <rect x="5" y="7" width="22" height="15" fill="#251c38" />
+
                     <!-- Face Base (Fair Skin) -->
-                    <rect x="7" y="8" width="18" height="15" fill="#fff1e8"/>
-                    <rect x="9" y="23" width="14" height="2" fill="#fde2d2"/>
-                    <rect x="11" y="25" width="10" height="1" fill="#f8cfb7"/>
+                    <rect x="7" y="8" width="18" height="15" fill="#fff1e8" />
+                    <rect x="9" y="23" width="14" height="2" fill="#fde2d2" />
+                    <rect x="11" y="25" width="10" height="1" fill="#f8cfb7" />
 
                     <!-- Neck -->
-                    <rect x="13" y="25" width="6" height="2" fill="#fde2d2"/>
+                    <rect x="13" y="25" width="6" height="2" fill="#fde2d2" />
 
                     <!-- Reze Iconic Black Choker -->
-                    <rect x="11" y="26" width="10" height="2" fill="#0f0e17"/>
+                    <rect x="11" y="26" width="10" height="2" fill="#0f0e17" />
                     <!-- Grenade Pull-Pin Ring -->
-                    <rect x="14" y="27" width="4" height="3" fill="#cbd5e1"/>
-                    <rect x="15" y="28" width="2" height="1" fill="#0f0e17"/>
+                    <rect x="14" y="27" width="4" height="3" fill="#cbd5e1" />
+                    <rect x="15" y="28" width="2" height="1" fill="#0f0e17" />
 
                     <!-- White Shirt Collar -->
-                    <rect x="9" y="29" width="14" height="3" fill="#ffffff"/>
-                    <rect x="12" y="29" width="8" height="1" fill="#e2e8f0"/>
+                    <rect x="9" y="29" width="14" height="3" fill="#ffffff" />
+                    <rect x="12" y="29" width="8" height="1" fill="#e2e8f0" />
 
                     <!-- Reze Dark Purple / Indigo Bangs -->
-                    <rect x="5" y="6" width="5" height="14" fill="#2d2244"/>
-                    <rect x="22" y="6" width="5" height="14" fill="#2d2244"/>
-                    <rect x="8" y="5" width="16" height="4" fill="#362952"/>
-                    <rect x="10" y="7" width="4" height="6" fill="#2d2244"/>
-                    <rect x="17" y="7" width="4" height="5" fill="#2d2244"/>
-                    <rect x="13" y="6" width="5" height="4" fill="#3f305f"/>
+                    <rect x="5" y="6" width="5" height="14" fill="#2d2244" />
+                    <rect x="22" y="6" width="5" height="14" fill="#2d2244" />
+                    <rect x="8" y="5" width="16" height="4" fill="#362952" />
+                    <rect x="10" y="7" width="4" height="6" fill="#2d2244" />
+                    <rect x="17" y="7" width="4" height="5" fill="#2d2244" />
+                    <rect x="13" y="6" width="5" height="4" fill="#3f305f" />
                     <!-- Hair Highlights -->
-                    <rect x="10" y="4" width="11" height="1" fill="#584382"/>
-                    <rect x="6" y="9" width="2" height="8" fill="#3d2f5a"/>
-                    <rect x="24" y="9" width="2" height="8" fill="#3d2f5a"/>
+                    <rect x="10" y="4" width="11" height="1" fill="#584382" />
+                    <rect x="6" y="9" width="2" height="8" fill="#3d2f5a" />
+                    <rect x="24" y="9" width="2" height="8" fill="#3d2f5a" />
 
                     <!-- Left Eye: Cheeky Wink (>) -->
-                    <rect x="9" y="14" width="2" height="1" fill="#1e172e"/>
-                    <rect x="11" y="15" width="2" height="1" fill="#1e172e"/>
-                    <rect x="9" y="16" width="2" height="1" fill="#1e172e"/>
+                    <rect x="9" y="14" width="2" height="1" fill="#1e172e" />
+                    <rect x="11" y="15" width="2" height="1" fill="#1e172e" />
+                    <rect x="9" y="16" width="2" height="1" fill="#1e172e" />
 
                     <!-- Right Eye: Reze Emerald-Green Eye -->
-                    <rect x="19" y="13" width="5" height="1" fill="#1e172e"/>
-                    <rect x="19" y="14" width="5" height="3" fill="#ffffff"/>
-                    <rect x="20" y="14" width="3" height="3" fill="#10b981"/>
-                    <rect x="21" y="15" width="1" height="2" fill="#064e3b"/>
-                    <rect x="20" y="14" width="1" height="1" fill="#ffffff"/>
+                    <rect x="19" y="13" width="5" height="1" fill="#1e172e" />
+                    <rect x="19" y="14" width="5" height="3" fill="#ffffff" />
+                    <rect x="20" y="14" width="3" height="3" fill="#10b981" />
+                    <rect x="21" y="15" width="1" height="2" fill="#064e3b" />
+                    <rect x="20" y="14" width="1" height="1" fill="#ffffff" />
 
                     <!-- Cute Rosy Blush -->
-                    <rect x="7" y="17" width="4" height="2" fill="#f472b6" opacity="0.75"/>
-                    <rect x="21" y="17" width="4" height="2" fill="#f472b6" opacity="0.75"/>
+                    <rect x="7" y="17" width="4" height="2" fill="#f472b6" opacity="0.75" />
+                    <rect x="21" y="17" width="4" height="2" fill="#f472b6" opacity="0.75" />
 
                     <!-- Open Mouth -->
-                    <rect x="13" y="18" width="6" height="3" fill="#251c38"/>
+                    <rect x="13" y="18" width="6" height="3" fill="#251c38" />
 
                     <!-- Reze Playful Pink Tongue Out -->
-                    <rect x="14" y="20" width="4" height="3" fill="#ff4d79"/>
-                    <rect x="15" y="22" width="2" height="2" fill="#f43f5e"/>
-                    <rect x="16" y="21" width="1" height="2" fill="#ffffff" opacity="0.7"/>
+                    <rect x="14" y="20" width="4" height="3" fill="#ff4d79" />
+                    <rect x="15" y="22" width="2" height="2" fill="#f43f5e" />
+                    <rect x="16" y="21" width="1" height="2" fill="#ffffff" opacity="0.7" />
                 </svg>
 
                 <!-- Bomb Devil Form Reze (Boom Mode) -->
-                <svg id="rezeBombSvg" viewBox="0 0 32 32" class="pixel-art-svg reze-bomb-svg" shape-rendering="crispEdges">
+                <svg id="rezeBombSvg" viewBox="0 0 32 32" class="pixel-art-svg reze-bomb-svg"
+                    shape-rendering="crispEdges">
                     <!-- Bomb Fins / Stabilizers (Back/Sides) -->
-                    <rect x="4" y="7" width="4" height="8" fill="#14131c"/>
-                    <rect x="3" y="9" width="2" height="5" fill="#14131c"/>
-                    <rect x="24" y="7" width="4" height="8" fill="#14131c"/>
-                    <rect x="27" y="9" width="2" height="5" fill="#14131c"/>
+                    <rect x="4" y="7" width="4" height="8" fill="#14131c" />
+                    <rect x="3" y="9" width="2" height="5" fill="#14131c" />
+                    <rect x="24" y="7" width="4" height="8" fill="#14131c" />
+                    <rect x="27" y="9" width="2" height="5" fill="#14131c" />
 
                     <!-- Detonator Wick / Spark Top -->
-                    <rect x="15" y="1" width="2" height="2" fill="#ef4444"/>
-                    <rect x="15" y="0" width="2" height="1" fill="#fef08a"/>
-                    <rect x="14" y="2" width="4" height="2" fill="#f59e0b"/>
+                    <rect x="15" y="1" width="2" height="2" fill="#ef4444" />
+                    <rect x="15" y="0" width="2" height="1" fill="#fef08a" />
+                    <rect x="14" y="2" width="4" height="2" fill="#f59e0b" />
                     <!-- Detonator Fuse Cap -->
-                    <rect x="13" y="3" width="6" height="2" fill="#474554"/>
-                    <rect x="14" y="3" width="4" height="1" fill="#686582"/>
+                    <rect x="13" y="3" width="6" height="2" fill="#474554" />
+                    <rect x="14" y="3" width="4" height="1" fill="#686582" />
 
                     <!-- Warhead Shell Outer Silhouette -->
-                    <rect x="9" y="4" width="14" height="3" fill="#16151f"/>
-                    <rect x="7" y="6" width="18" height="3" fill="#16151f"/>
-                    <rect x="6" y="8" width="20" height="16" fill="#16151f"/>
+                    <rect x="9" y="4" width="14" height="3" fill="#16151f" />
+                    <rect x="7" y="6" width="18" height="3" fill="#16151f" />
+                    <rect x="6" y="8" width="20" height="16" fill="#16151f" />
 
                     <!-- Warhead Main Steel Casing (Dark Charcoal Metallic) -->
-                    <rect x="10" y="5" width="12" height="2" fill="#282736"/>
-                    <rect x="8" y="7" width="16" height="10" fill="#282736"/>
-                    <rect x="7" y="9" width="18" height="8" fill="#282736"/>
+                    <rect x="10" y="5" width="12" height="2" fill="#282736" />
+                    <rect x="8" y="7" width="16" height="10" fill="#282736" />
+                    <rect x="7" y="9" width="18" height="8" fill="#282736" />
 
                     <!-- Warhead Curved Metallic Sheen / Highlight (Left/Top) -->
-                    <rect x="11" y="5" width="8" height="1" fill="#4e4c63"/>
-                    <rect x="9" y="7" width="5" height="3" fill="#4e4c63"/>
-                    <rect x="8" y="9" width="3" height="6" fill="#4e4c63"/>
-                    <rect x="9" y="8" width="2" height="5" fill="#6d6a87"/>
+                    <rect x="11" y="5" width="8" height="1" fill="#4e4c63" />
+                    <rect x="9" y="7" width="5" height="3" fill="#4e4c63" />
+                    <rect x="8" y="9" width="3" height="6" fill="#4e4c63" />
+                    <rect x="9" y="8" width="2" height="5" fill="#6d6a87" />
 
                     <!-- Warhead Shading / Seams -->
-                    <rect x="19" y="8" width="5" height="9" fill="#1b1a26"/>
-                    <rect x="15" y="7" width="1" height="10" fill="#1f1e2b"/>
+                    <rect x="19" y="8" width="5" height="9" fill="#1b1a26" />
+                    <rect x="15" y="7" width="1" height="10" fill="#1f1e2b" />
 
                     <!-- Eyeless Upper Face / Warhead Nose Plate -->
-                    <rect x="8" y="14" width="16" height="3" fill="#232230"/>
-                    <rect x="10" y="15" width="12" height="2" fill="#2d2c3d"/>
+                    <rect x="8" y="14" width="16" height="3" fill="#232230" />
+                    <rect x="10" y="15" width="12" height="2" fill="#2d2c3d" />
                     <!-- Dark Sockets / Indents -->
-                    <rect x="9" y="14" width="4" height="2" fill="#161520"/>
-                    <rect x="19" y="14" width="4" height="2" fill="#161520"/>
+                    <rect x="9" y="14" width="4" height="2" fill="#161520" />
+                    <rect x="19" y="14" width="4" height="2" fill="#161520" />
 
                     <!-- Wide Serrated Grinning Mouth Cavity -->
-                    <rect x="7" y="17" width="18" height="7" fill="#0d0407"/>
-                    <rect x="8" y="18" width="16" height="5" fill="#180409"/>
+                    <rect x="7" y="17" width="18" height="7" fill="#0d0407" />
+                    <rect x="8" y="18" width="16" height="5" fill="#180409" />
 
                     <!-- Upper Razor Teeth (Sharp White Serrations) -->
-                    <rect x="8" y="17" width="2" height="2" fill="#f8fafc"/>
-                    <rect x="11" y="17" width="2" height="3" fill="#f8fafc"/>
-                    <rect x="14" y="17" width="2" height="3" fill="#f8fafc"/>
-                    <rect x="17" y="17" width="2" height="3" fill="#f8fafc"/>
-                    <rect x="20" y="17" width="2" height="3" fill="#f8fafc"/>
-                    <rect x="23" y="17" width="1" height="2" fill="#f8fafc"/>
+                    <rect x="8" y="17" width="2" height="2" fill="#f8fafc" />
+                    <rect x="11" y="17" width="2" height="3" fill="#f8fafc" />
+                    <rect x="14" y="17" width="2" height="3" fill="#f8fafc" />
+                    <rect x="17" y="17" width="2" height="3" fill="#f8fafc" />
+                    <rect x="20" y="17" width="2" height="3" fill="#f8fafc" />
+                    <rect x="23" y="17" width="1" height="2" fill="#f8fafc" />
 
                     <!-- Lower Razor Teeth (Sharp White Serrations pointing up) -->
-                    <rect x="9" y="21" width="2" height="2" fill="#f8fafc"/>
-                    <rect x="12" y="20" width="2" height="3" fill="#f8fafc"/>
-                    <rect x="15" y="20" width="2" height="3" fill="#f8fafc"/>
-                    <rect x="18" y="20" width="2" height="3" fill="#f8fafc"/>
-                    <rect x="21" y="21" width="2" height="2" fill="#f8fafc"/>
+                    <rect x="9" y="21" width="2" height="2" fill="#f8fafc" />
+                    <rect x="12" y="20" width="2" height="3" fill="#f8fafc" />
+                    <rect x="15" y="20" width="2" height="3" fill="#f8fafc" />
+                    <rect x="18" y="20" width="2" height="3" fill="#f8fafc" />
+                    <rect x="21" y="21" width="2" height="2" fill="#f8fafc" />
 
                     <!-- Teeth Depth Accents -->
-                    <rect x="11" y="17" width="1" height="1" fill="#cbd5e1"/>
-                    <rect x="14" y="17" width="1" height="1" fill="#cbd5e1"/>
-                    <rect x="17" y="17" width="1" height="1" fill="#cbd5e1"/>
-                    <rect x="20" y="17" width="1" height="1" fill="#cbd5e1"/>
+                    <rect x="11" y="17" width="1" height="1" fill="#cbd5e1" />
+                    <rect x="14" y="17" width="1" height="1" fill="#cbd5e1" />
+                    <rect x="17" y="17" width="1" height="1" fill="#cbd5e1" />
+                    <rect x="20" y="17" width="1" height="1" fill="#cbd5e1" />
 
                     <!-- Jaw Rim & Chin -->
-                    <rect x="8" y="24" width="16" height="2" fill="#1a1924"/>
-                    <rect x="11" y="25" width="10" height="1" fill="#2a2938"/>
+                    <rect x="8" y="24" width="16" height="2" fill="#1a1924" />
+                    <rect x="11" y="25" width="10" height="1" fill="#2a2938" />
 
                     <!-- Neck with Fuse Ribs & Choker -->
-                    <rect x="12" y="26" width="8" height="2" fill="#14131c"/>
-                    <rect x="11" y="27" width="10" height="2" fill="#0b0a10"/>
-                    <rect x="13" y="26" width="1" height="2" fill="#ef4444"/>
-                    <rect x="16" y="26" width="1" height="2" fill="#ef4444"/>
-                    <rect x="18" y="26" width="1" height="2" fill="#ef4444"/>
+                    <rect x="12" y="26" width="8" height="2" fill="#14131c" />
+                    <rect x="11" y="27" width="10" height="2" fill="#0b0a10" />
+                    <rect x="13" y="26" width="1" height="2" fill="#ef4444" />
+                    <rect x="16" y="26" width="1" height="2" fill="#ef4444" />
+                    <rect x="18" y="26" width="1" height="2" fill="#ef4444" />
 
                     <!-- Pulled Grenade Pin Ring hanging loose -->
-                    <rect x="14" y="28" width="4" height="3" fill="#cbd5e1"/>
-                    <rect x="15" y="29" width="2" height="1" fill="#0b0a10"/>
+                    <rect x="14" y="28" width="4" height="3" fill="#cbd5e1" />
+                    <rect x="15" y="29" width="2" height="1" fill="#0b0a10" />
 
                     <!-- Torso / Apron / Shirt Collar -->
-                    <rect x="8" y="30" width="16" height="2" fill="#334155"/>
-                    <rect x="10" y="30" width="12" height="2" fill="#f8fafc"/>
-                    <rect x="12" y="30" width="8" height="1" fill="#cbd5e1"/>
+                    <rect x="8" y="30" width="16" height="2" fill="#334155" />
+                    <rect x="10" y="30" width="12" height="2" fill="#f8fafc" />
+                    <rect x="12" y="30" width="8" height="1" fill="#cbd5e1" />
                 </svg>
             </div>
             <div class="bleh-sparkles">
@@ -725,33 +764,46 @@
     </div>
 
     <!-- Resume Appeal Decision Modal -->
-    <div class="window-wrapper hidden" id="resumeAppealModal" style="z-index: 950; display: flex; align-items: center; justify-content: center;">
+    <div class="window-wrapper hidden" id="resumeAppealModal"
+        style="z-index: 950; display: flex; align-items: center; justify-content: center;">
         <div class="draggable-window" id="resumeAppealWindow" style="max-width: 490px; width: 92%;">
             <div class="window-header" id="resumeAppealWindowHeader">
                 <div class="window-title">
                     <i class="fa-solid fa-hand-holding-heart" style="color: var(--accent-purple, #a855f7);"></i>
                     <span>Resume Conversation</span>
                 </div>
-                <button class="icon-btn-sm" id="closeResumeAppealBtn" type="button"><i class="fa-solid fa-xmark"></i></button>
+                <button class="icon-btn-sm" id="closeResumeAppealBtn" type="button"><i
+                        class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="window-body" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;">
-                <div style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--text-secondary);">
+                <div
+                    style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--text-secondary);">
                     <span>Locked:</span>
-                    <span style="padding: 3px 8px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 6px; color: #fca5a5; font-size: 0.8rem; font-weight: 500; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="resumeAppealReasonDisplay">
+                    <span
+                        style="padding: 3px 8px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 6px; color: #fca5a5; font-size: 0.8rem; font-weight: 500; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                        id="resumeAppealReasonDisplay">
                         Conversation concluded.
                     </span>
                 </div>
                 <div class="field-group" style="display: flex; flex-direction: column; gap: 6px;">
-                    <label for="resumeAppealInput" style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);">Message (optional):</label>
-                    <textarea id="resumeAppealInput" rows="2" style="width: 100%; resize: vertical; padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border); color: var(--text-primary); font-family: inherit; font-size: 0.86rem;" placeholder="e.g. Can we start fresh?"></textarea>
+                    <label for="resumeAppealInput"
+                        style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);">Message
+                        (optional):</label>
+                    <textarea id="resumeAppealInput" rows="2"
+                        style="width: 100%; resize: vertical; padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border); color: var(--text-primary); font-family: inherit; font-size: 0.86rem;"
+                        placeholder="e.g. Can we start fresh?"></textarea>
                 </div>
                 <div style="display: flex; flex-wrap: wrap; gap: 6px;" id="resumeAppealChips">
                     <button type="button" class="resume-chip" data-text="Let's start fresh.">Let's start fresh</button>
-                    <button type="button" class="resume-chip" data-text="Ready to continue now.">Ready to continue</button>
-                    <button type="button" class="resume-chip" data-text="Just a misunderstanding.">Misunderstanding</button>
+                    <button type="button" class="resume-chip" data-text="Ready to continue now.">Ready to
+                        continue</button>
+                    <button type="button" class="resume-chip"
+                        data-text="Just a misunderstanding.">Misunderstanding</button>
                 </div>
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px; gap: 10px;">
-                    <button type="button" id="resumeAppealForceBtn" class="btn-subtle-resume" style="font-size: 0.78rem; opacity: 0.75;" title="Skip asking and unlock immediately">
+                <div
+                    style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px; gap: 10px;">
+                    <button type="button" id="resumeAppealForceBtn" class="btn-subtle-resume"
+                        style="font-size: 0.78rem; opacity: 0.75;" title="Skip asking and unlock immediately">
                         <i class="fa-solid fa-unlock-keyhole"></i> Force Unlock
                     </button>
                     <div style="display: flex; gap: 8px;">
@@ -783,11 +835,13 @@
                         <label for="userNameInput">What should nivm call you?</label>
                         <input type="text" id="userNameInput" placeholder="Enter your name (optional)">
                         <div class="pref-quick-grid">
-                            <button type="button" class="pref-quick-btn" id="openPersonalityFromSettingsBtn" title="Customize Personality & Instructions">
+                            <button type="button" class="pref-quick-btn" id="openPersonalityFromSettingsBtn"
+                                title="Customize Personality & Instructions">
                                 <i class="fa-solid fa-user-pen"></i>
                                 <span>Personality</span>
                             </button>
-                            <button type="button" class="pref-quick-btn" id="openVoiceFromSettingsBtn" title="Customize Voice & Speech Profile">
+                            <button type="button" class="pref-quick-btn" id="openVoiceFromSettingsBtn"
+                                title="Customize Voice & Speech Profile">
                                 <i class="fa-solid fa-microphone-lines"></i>
                                 <span>Voice Profile</span>
                             </button>
@@ -801,7 +855,8 @@
                 <div class="settings-section">
                     <div class="section-title">Inference Mode</div>
                     <div class="mode-selector">
-                        <button class="mode-btn active" id="singleModeBtn" data-mode="single" title="One model handles everything">
+                        <button class="mode-btn active" id="singleModeBtn" data-mode="single"
+                            title="One model handles everything">
                             <i class="fa-solid fa-microchip"></i>
                             <span class="mode-btn-label">Single</span>
                         </button>
@@ -836,75 +891,108 @@
                         <div id="customModelCard" class="custom-model-card hidden">
                             <!-- Model (GGUF) Selector -->
                             <div class="field-group" style="margin-bottom: 12px;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                                     <label style="font-size: 0.8rem; margin: 0; font-weight: 600;">
-                                        <i class="fa-solid fa-cube" style="color: var(--accent-blue, #60a5fa); margin-right: 4px;"></i>
+                                        <i class="fa-solid fa-cube"
+                                            style="color: var(--accent-blue, #60a5fa); margin-right: 4px;"></i>
                                         Model File (GGUF)
                                     </label>
-                                    <span id="customModelPathStatus" class="file-status-pill status-unknown">No file selected</span>
+                                    <span id="customModelPathStatus" class="file-status-pill status-unknown">No file
+                                        selected</span>
                                 </div>
                                 <div class="custom-input-with-btn">
-                                    <select id="scannedGgufSelect" class="modal-select" style="flex: 1 1 0; min-width: 0; font-size: 0.8rem;">
+                                    <select id="scannedGgufSelect" class="modal-select"
+                                        style="flex: 1 1 0; min-width: 0; font-size: 0.8rem;">
                                         <option value="">-- Select detected model --</option>
                                     </select>
-                                    <button id="browseCustomPathBtn" class="btn-primary" type="button" title="Browse Model (Native Dialog)">
+                                    <button id="browseCustomPathBtn" class="btn-primary" type="button"
+                                        title="Browse Model (Native Dialog)">
                                         <i class="fa-solid fa-folder-open"></i> Browse
                                     </button>
-                                    <button id="exploreCustomPathBtn" class="btn-secondary" type="button" title="In-Browser File Explorer">
+                                    <button id="exploreCustomPathBtn" class="btn-secondary" type="button"
+                                        title="In-Browser File Explorer">
                                         <i class="fa-solid fa-compass"></i>
                                     </button>
-                                    <button id="clearCustomPathBtn" class="btn-secondary" type="button" title="Clear model selection" style="padding: 7px 10px; color: var(--text-tertiary);">
+                                    <button id="clearCustomPathBtn" class="btn-secondary" type="button"
+                                        title="Clear model selection"
+                                        style="padding: 7px 10px; color: var(--text-tertiary);">
                                         <i class="fa-solid fa-xmark"></i>
                                     </button>
                                 </div>
-                                <div class="model-path-row" style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
-                                    <span style="font-size: 0.72rem; color: var(--text-tertiary); white-space: nowrap;">Path:</span>
-                                    <input type="text" id="customModelPathInput" placeholder="/path/to/my-model.gguf" style="flex: 1 1 0; min-width: 0; font-size: 0.75rem; padding: 4px 8px; font-family: var(--font-code); background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; color: var(--text-secondary);" title="Active model path (in sync with dropdown)">
+                                <div class="model-path-row"
+                                    style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
+                                    <span
+                                        style="font-size: 0.72rem; color: var(--text-tertiary); white-space: nowrap;">Path:</span>
+                                    <input type="text" id="customModelPathInput" placeholder="/path/to/my-model.gguf"
+                                        style="flex: 1 1 0; min-width: 0; font-size: 0.75rem; padding: 4px 8px; font-family: var(--font-code); background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; color: var(--text-secondary);"
+                                        title="Active model path (in sync with dropdown)">
                                 </div>
                             </div>
 
                             <!-- Remembered Paths Chips -->
                             <div id="rememberedPathsContainer" class="remembered-paths-container hidden">
-                                <label style="font-size: 0.72rem; color: var(--text-tertiary); display: block; margin-bottom: 4px;">Recent Paths</label>
+                                <label
+                                    style="font-size: 0.72rem; color: var(--text-tertiary); display: block; margin-bottom: 4px;">Recent
+                                    Paths</label>
                                 <div id="rememberedPathsChips" class="remembered-paths-chips"></div>
                             </div>
 
-                            <div class="divider" style="margin: 12px 0 10px 0; border-color: rgba(255,255,255,0.06);"></div>
+                            <div class="divider" style="margin: 12px 0 10px 0; border-color: rgba(255,255,255,0.06);">
+                            </div>
 
                             <!-- Vision Projector (mmproj) Selector -->
                             <div class="field-group" style="margin-bottom: 4px;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                                     <label style="font-size: 0.8rem; margin: 0; font-weight: 600;">
-                                        <i class="fa-solid fa-eye" style="color: var(--accent-purple, #a855f7); margin-right: 4px;"></i>
-                                        Vision Projector (mmproj) <span style="opacity: 0.6; font-size: 0.72rem; font-weight: normal;">(Optional)</span>
+                                        <i class="fa-solid fa-eye"
+                                            style="color: var(--accent-purple, #a855f7); margin-right: 4px;"></i>
+                                        Vision Projector (mmproj) <span
+                                            style="opacity: 0.6; font-size: 0.72rem; font-weight: normal;">(Optional)</span>
                                     </label>
                                     <span id="customMmprojStatus" class="file-status-pill status-unknown">None</span>
                                 </div>
                                 <div class="custom-input-with-btn">
-                                    <select id="scannedMmprojSelect" class="modal-select" style="flex: 1 1 0; min-width: 0; font-size: 0.8rem;">
+                                    <select id="scannedMmprojSelect" class="modal-select"
+                                        style="flex: 1 1 0; min-width: 0; font-size: 0.8rem;">
                                         <option value="">-- None (Disabled) --</option>
                                     </select>
-                                    <button id="browseMmprojBtn" class="btn-primary" type="button" title="Browse Projector (Native Dialog)">
+                                    <button id="browseMmprojBtn" class="btn-primary" type="button"
+                                        title="Browse Projector (Native Dialog)">
                                         <i class="fa-solid fa-folder-open"></i> Browse
                                     </button>
-                                    <button id="exploreMmprojBtn" class="btn-secondary" type="button" title="In-Browser File Explorer">
+                                    <button id="exploreMmprojBtn" class="btn-secondary" type="button"
+                                        title="In-Browser File Explorer">
                                         <i class="fa-solid fa-compass"></i>
                                     </button>
-                                    <button id="clearMmprojBtn" class="btn-secondary" type="button" title="Disable Vision Projector" style="padding: 7px 10px; color: var(--text-tertiary);">
+                                    <button id="clearMmprojBtn" class="btn-secondary" type="button"
+                                        title="Disable Vision Projector"
+                                        style="padding: 7px 10px; color: var(--text-tertiary);">
                                         <i class="fa-solid fa-xmark"></i>
                                     </button>
                                 </div>
-                                <div class="model-path-row" style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
-                                    <span style="font-size: 0.72rem; color: var(--text-tertiary); white-space: nowrap;">Path:</span>
-                                    <input type="text" id="customMmprojInput" placeholder="No projector active (text-only)" style="flex: 1 1 0; min-width: 0; font-size: 0.75rem; padding: 4px 8px; font-family: var(--font-code); background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; color: var(--text-secondary);" title="Active projector path (leave empty for none)">
+                                <div class="model-path-row"
+                                    style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
+                                    <span
+                                        style="font-size: 0.72rem; color: var(--text-tertiary); white-space: nowrap;">Path:</span>
+                                    <input type="text" id="customMmprojInput"
+                                        placeholder="No projector active (text-only)"
+                                        style="flex: 1 1 0; min-width: 0; font-size: 0.75rem; padding: 4px 8px; font-family: var(--font-code); background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; color: var(--text-secondary);"
+                                        title="Active projector path (leave empty for none)">
                                 </div>
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; flex-wrap: wrap; gap: 8px;">
-                                    <label class="flag-chip" title="Offload Vision Projector to CPU: Runs image/vision encoding in system RAM instead of GPU VRAM (saves 1–2 GB of GPU VRAM)">
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; flex-wrap: wrap; gap: 8px;">
+                                    <label class="flag-chip"
+                                        title="Offload Vision Projector to CPU: Runs image/vision encoding in system RAM instead of GPU VRAM (saves 1–2 GB of GPU VRAM)">
                                         <input type="checkbox" id="customMmprojCpu"> mmproj on CPU
                                     </label>
-                                    <div style="display: flex; align-items: center; gap: 6px;" title="Rendering DPI for PDF page analysis: 150 DPI is optimal for Vision LLMs (fast and sharp without excessive tokens)">
-                                        <label style="font-size: 0.76rem; color: var(--text-secondary);">PDF Quality:</label>
-                                        <select id="pdfDpiSelect" class="modal-select" style="width: auto; padding: 3px 8px; font-size: 0.76rem;">
+                                    <div style="display: flex; align-items: center; gap: 6px;"
+                                        title="Rendering DPI for PDF page analysis: 150 DPI is optimal for Vision LLMs (fast and sharp without excessive tokens)">
+                                        <label style="font-size: 0.76rem; color: var(--text-secondary);">PDF
+                                            Quality:</label>
+                                        <select id="pdfDpiSelect" class="modal-select"
+                                            style="width: auto; padding: 3px 8px; font-size: 0.76rem;">
                                             <option value="150" selected>150 DPI (Optimal)</option>
                                             <option value="200">200 DPI (High Detail)</option>
                                             <option value="300">300 DPI (Maximum)</option>
@@ -916,26 +1004,35 @@
 
                         <!-- Single model engine config (mirrors whichever role is selected) -->
                         <div class="role-config-grid">
-                            <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                            <div class="color-picker-item"
+                                style="flex-direction: column; align-items: stretch; gap: 8px;">
                                 <div style="display: flex; justify-content: space-between;">
                                     <label style="font-size: 0.8rem;">GPU Layers</label>
-                                    <span id="singleGpuVal" style="font-size: 0.8rem; color: var(--text-muted);">-1 (Max)</span>
+                                    <span id="singleGpuVal" style="font-size: 0.8rem; color: var(--text-muted);">-1
+                                        (Max)</span>
                                 </div>
-                                <input type="range" id="singleGpuSlider" class="custom-slider" min="-1" max="128" value="-1">
+                                <input type="range" id="singleGpuSlider" class="custom-slider" min="-1" max="128"
+                                    value="-1">
                             </div>
-                            <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                            <div class="color-picker-item"
+                                style="flex-direction: column; align-items: stretch; gap: 8px;">
                                 <div style="display: flex; justify-content: space-between;">
                                     <label style="font-size: 0.8rem;">Context (KV Cache)</label>
-                                    <span id="singleCtxVal" style="font-size: 0.8rem; color: var(--text-muted);">8192</span>
+                                    <span id="singleCtxVal"
+                                        style="font-size: 0.8rem; color: var(--text-muted);">8192</span>
                                 </div>
-                                <input type="range" id="singleCtxSlider" class="custom-slider" min="512" max="131072" step="512" value="8192">
+                                <input type="range" id="singleCtxSlider" class="custom-slider" min="512" max="131072"
+                                    step="512" value="8192">
                             </div>
-                            <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                            <div class="color-picker-item"
+                                style="flex-direction: column; align-items: stretch; gap: 8px;">
                                 <div style="display: flex; justify-content: space-between;">
                                     <label style="font-size: 0.8rem;">Batch Size</label>
-                                    <span id="singleBatchVal" style="font-size: 0.8rem; color: var(--text-muted);">512</span>
+                                    <span id="singleBatchVal"
+                                        style="font-size: 0.8rem; color: var(--text-muted);">512</span>
                                 </div>
-                                <input type="range" id="singleBatchSlider" class="custom-slider" min="128" max="4096" step="128" value="512">
+                                <input type="range" id="singleBatchSlider" class="custom-slider" min="128" max="4096"
+                                    step="128" value="512">
                             </div>
                             <div class="field-group" style="margin-top: 4px;">
                                 <label style="font-size: 0.8rem;">KV Quantization</label>
@@ -947,10 +1044,18 @@
                                 </select>
                             </div>
                             <div class="role-flags-row">
-                                <label class="flag-chip" title="Flash Attention: Accelerates generation speed and reduces VRAM usage"><input type="checkbox" id="singleFlashAttn" checked> Flash Attn</label>
-                                <label class="flag-chip" title="KV Cache to GPU: Keeps chat context in fast GPU VRAM. Uncheck to keep context in system RAM if VRAM is tight"><input type="checkbox" id="singleOffloadKqv" checked> KV → GPU</label>
-                                <label class="flag-chip" title="Memory Lock (mlock): Locks model in physical RAM to prevent OS swapping to disk (avoids lag spikes, needs plenty of RAM)"><input type="checkbox" id="singleMlock"> mlock</label>
-                                <label class="flag-chip" title="Memory Mapping (mmap): Streams model weights directly from disk as needed for instant startup and lower initial RAM"><input type="checkbox" id="singleMmap" checked> mmap</label>
+                                <label class="flag-chip"
+                                    title="Flash Attention: Accelerates generation speed and reduces VRAM usage"><input
+                                        type="checkbox" id="singleFlashAttn" checked> Flash Attn</label>
+                                <label class="flag-chip"
+                                    title="KV Cache to GPU: Keeps chat context in fast GPU VRAM. Uncheck to keep context in system RAM if VRAM is tight"><input
+                                        type="checkbox" id="singleOffloadKqv" checked> KV → GPU</label>
+                                <label class="flag-chip"
+                                    title="Memory Lock (mlock): Locks model in physical RAM to prevent OS swapping to disk (avoids lag spikes, needs plenty of RAM)"><input
+                                        type="checkbox" id="singleMlock"> mlock</label>
+                                <label class="flag-chip"
+                                    title="Memory Mapping (mmap): Streams model weights directly from disk as needed for instant startup and lower initial RAM"><input
+                                        type="checkbox" id="singleMmap" checked> mmap</label>
                             </div>
                         </div>
                     </div>
@@ -973,26 +1078,35 @@
                             </div>
                             <div class="role-card-body collapsed" id="routerCardBody">
                                 <div class="role-config-grid">
-                                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                    <div class="color-picker-item"
+                                        style="flex-direction: column; align-items: stretch; gap: 8px;">
                                         <div style="display: flex; justify-content: space-between;">
                                             <label style="font-size: 0.8rem;">GPU Layers</label>
-                                            <span id="routerGpuVal" style="font-size: 0.8rem; color: var(--text-muted);">-1 (Max)</span>
+                                            <span id="routerGpuVal"
+                                                style="font-size: 0.8rem; color: var(--text-muted);">-1 (Max)</span>
                                         </div>
-                                        <input type="range" id="routerGpuSlider" class="custom-slider" min="-1" max="128" value="-1">
+                                        <input type="range" id="routerGpuSlider" class="custom-slider" min="-1"
+                                            max="128" value="-1">
                                     </div>
-                                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                    <div class="color-picker-item"
+                                        style="flex-direction: column; align-items: stretch; gap: 8px;">
                                         <div style="display: flex; justify-content: space-between;">
                                             <label style="font-size: 0.8rem;">Context (KV Cache)</label>
-                                            <span id="routerCtxVal" style="font-size: 0.8rem; color: var(--text-muted);">8192</span>
+                                            <span id="routerCtxVal"
+                                                style="font-size: 0.8rem; color: var(--text-muted);">8192</span>
                                         </div>
-                                        <input type="range" id="routerCtxSlider" class="custom-slider" min="512" max="131072" step="512" value="8192">
+                                        <input type="range" id="routerCtxSlider" class="custom-slider" min="512"
+                                            max="131072" step="512" value="8192">
                                     </div>
-                                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                    <div class="color-picker-item"
+                                        style="flex-direction: column; align-items: stretch; gap: 8px;">
                                         <div style="display: flex; justify-content: space-between;">
                                             <label style="font-size: 0.8rem;">Batch Size</label>
-                                            <span id="routerBatchVal" style="font-size: 0.8rem; color: var(--text-muted);">512</span>
+                                            <span id="routerBatchVal"
+                                                style="font-size: 0.8rem; color: var(--text-muted);">512</span>
                                         </div>
-                                        <input type="range" id="routerBatchSlider" class="custom-slider" min="128" max="4096" step="128" value="512">
+                                        <input type="range" id="routerBatchSlider" class="custom-slider" min="128"
+                                            max="4096" step="128" value="512">
                                     </div>
                                     <div class="field-group" style="margin-top: 4px;">
                                         <label style="font-size: 0.8rem;">KV Quantization</label>
@@ -1004,10 +1118,18 @@
                                         </select>
                                     </div>
                                     <div class="role-flags-row">
-                                        <label class="flag-chip" title="Flash Attention: Accelerates generation speed and reduces VRAM usage"><input type="checkbox" id="routerFlashAttn" checked> Flash Attn</label>
-                                        <label class="flag-chip" title="KV Cache to GPU: Keeps chat context in fast GPU VRAM. Uncheck to keep context in system RAM if VRAM is tight"><input type="checkbox" id="routerOffloadKqv" checked> KV → GPU</label>
-                                        <label class="flag-chip" title="Memory Lock (mlock): Locks model in physical RAM to prevent OS swapping to disk (avoids lag spikes, needs plenty of RAM)"><input type="checkbox" id="routerMlock"> mlock</label>
-                                        <label class="flag-chip" title="Memory Mapping (mmap): Streams model weights directly from disk as needed for instant startup and lower initial RAM"><input type="checkbox" id="routerMmap" checked> mmap</label>
+                                        <label class="flag-chip"
+                                            title="Flash Attention: Accelerates generation speed and reduces VRAM usage"><input
+                                                type="checkbox" id="routerFlashAttn" checked> Flash Attn</label>
+                                        <label class="flag-chip"
+                                            title="KV Cache to GPU: Keeps chat context in fast GPU VRAM. Uncheck to keep context in system RAM if VRAM is tight"><input
+                                                type="checkbox" id="routerOffloadKqv" checked> KV → GPU</label>
+                                        <label class="flag-chip"
+                                            title="Memory Lock (mlock): Locks model in physical RAM to prevent OS swapping to disk (avoids lag spikes, needs plenty of RAM)"><input
+                                                type="checkbox" id="routerMlock"> mlock</label>
+                                        <label class="flag-chip"
+                                            title="Memory Mapping (mmap): Streams model weights directly from disk as needed for instant startup and lower initial RAM"><input
+                                                type="checkbox" id="routerMmap" checked> mmap</label>
                                     </div>
                                 </div>
                             </div>
@@ -1025,26 +1147,35 @@
                             </div>
                             <div class="role-card-body collapsed" id="coderCardBody">
                                 <div class="role-config-grid">
-                                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                    <div class="color-picker-item"
+                                        style="flex-direction: column; align-items: stretch; gap: 8px;">
                                         <div style="display: flex; justify-content: space-between;">
                                             <label style="font-size: 0.8rem;">GPU Layers</label>
-                                            <span id="coderGpuVal" style="font-size: 0.8rem; color: var(--text-muted);">-1 (Max)</span>
+                                            <span id="coderGpuVal"
+                                                style="font-size: 0.8rem; color: var(--text-muted);">-1 (Max)</span>
                                         </div>
-                                        <input type="range" id="coderGpuSlider" class="custom-slider" min="-1" max="128" value="-1">
+                                        <input type="range" id="coderGpuSlider" class="custom-slider" min="-1" max="128"
+                                            value="-1">
                                     </div>
-                                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                    <div class="color-picker-item"
+                                        style="flex-direction: column; align-items: stretch; gap: 8px;">
                                         <div style="display: flex; justify-content: space-between;">
                                             <label style="font-size: 0.8rem;">Context (KV Cache)</label>
-                                            <span id="coderCtxVal" style="font-size: 0.8rem; color: var(--text-muted);">8192</span>
+                                            <span id="coderCtxVal"
+                                                style="font-size: 0.8rem; color: var(--text-muted);">8192</span>
                                         </div>
-                                        <input type="range" id="coderCtxSlider" class="custom-slider" min="512" max="131072" step="512" value="8192">
+                                        <input type="range" id="coderCtxSlider" class="custom-slider" min="512"
+                                            max="131072" step="512" value="8192">
                                     </div>
-                                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                    <div class="color-picker-item"
+                                        style="flex-direction: column; align-items: stretch; gap: 8px;">
                                         <div style="display: flex; justify-content: space-between;">
                                             <label style="font-size: 0.8rem;">Batch Size</label>
-                                            <span id="coderBatchVal" style="font-size: 0.8rem; color: var(--text-muted);">1024</span>
+                                            <span id="coderBatchVal"
+                                                style="font-size: 0.8rem; color: var(--text-muted);">1024</span>
                                         </div>
-                                        <input type="range" id="coderBatchSlider" class="custom-slider" min="128" max="4096" step="128" value="1024">
+                                        <input type="range" id="coderBatchSlider" class="custom-slider" min="128"
+                                            max="4096" step="128" value="1024">
                                     </div>
                                     <div class="field-group" style="margin-top: 4px;">
                                         <label style="font-size: 0.8rem;">KV Quantization</label>
@@ -1056,10 +1187,18 @@
                                         </select>
                                     </div>
                                     <div class="role-flags-row">
-                                        <label class="flag-chip" title="Flash Attention: Accelerates generation speed and reduces VRAM usage"><input type="checkbox" id="coderFlashAttn" checked> Flash Attn</label>
-                                        <label class="flag-chip" title="KV Cache to GPU: Keeps chat context in fast GPU VRAM. Uncheck to keep context in system RAM if VRAM is tight"><input type="checkbox" id="coderOffloadKqv" checked> KV → GPU</label>
-                                        <label class="flag-chip" title="Memory Lock (mlock): Locks model in physical RAM to prevent OS swapping to disk (avoids lag spikes, needs plenty of RAM)"><input type="checkbox" id="coderMlock"> mlock</label>
-                                        <label class="flag-chip" title="Memory Mapping (mmap): Streams model weights directly from storage on-demand (enables instant startup and lower initial RAM)"><input type="checkbox" id="coderMmap" checked> mmap</label>
+                                        <label class="flag-chip"
+                                            title="Flash Attention: Accelerates generation speed and reduces VRAM usage"><input
+                                                type="checkbox" id="coderFlashAttn" checked> Flash Attn</label>
+                                        <label class="flag-chip"
+                                            title="KV Cache to GPU: Keeps chat context in fast GPU VRAM. Uncheck to keep context in system RAM if VRAM is tight"><input
+                                                type="checkbox" id="coderOffloadKqv" checked> KV → GPU</label>
+                                        <label class="flag-chip"
+                                            title="Memory Lock (mlock): Locks model in physical RAM to prevent OS swapping to disk (avoids lag spikes, needs plenty of RAM)"><input
+                                                type="checkbox" id="coderMlock"> mlock</label>
+                                        <label class="flag-chip"
+                                            title="Memory Mapping (mmap): Streams model weights directly from storage on-demand (enables instant startup and lower initial RAM)"><input
+                                                type="checkbox" id="coderMmap" checked> mmap</label>
                                     </div>
                                 </div>
                             </div>
@@ -1077,26 +1216,35 @@
                             </div>
                             <div class="role-card-body collapsed" id="visionCardBody">
                                 <div class="role-config-grid">
-                                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                    <div class="color-picker-item"
+                                        style="flex-direction: column; align-items: stretch; gap: 8px;">
                                         <div style="display: flex; justify-content: space-between;">
                                             <label style="font-size: 0.8rem;">GPU Layers</label>
-                                            <span id="visionGpuVal" style="font-size: 0.8rem; color: var(--text-muted);">-1 (Max)</span>
+                                            <span id="visionGpuVal"
+                                                style="font-size: 0.8rem; color: var(--text-muted);">-1 (Max)</span>
                                         </div>
-                                        <input type="range" id="visionGpuSlider" class="custom-slider" min="-1" max="128" value="-1">
+                                        <input type="range" id="visionGpuSlider" class="custom-slider" min="-1"
+                                            max="128" value="-1">
                                     </div>
-                                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                    <div class="color-picker-item"
+                                        style="flex-direction: column; align-items: stretch; gap: 8px;">
                                         <div style="display: flex; justify-content: space-between;">
                                             <label style="font-size: 0.8rem;">Context (KV Cache)</label>
-                                            <span id="visionCtxVal" style="font-size: 0.8rem; color: var(--text-muted);">27136</span>
+                                            <span id="visionCtxVal"
+                                                style="font-size: 0.8rem; color: var(--text-muted);">27136</span>
                                         </div>
-                                        <input type="range" id="visionCtxSlider" class="custom-slider" min="512" max="131072" step="512" value="27136">
+                                        <input type="range" id="visionCtxSlider" class="custom-slider" min="512"
+                                            max="131072" step="512" value="27136">
                                     </div>
-                                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                                    <div class="color-picker-item"
+                                        style="flex-direction: column; align-items: stretch; gap: 8px;">
                                         <div style="display: flex; justify-content: space-between;">
                                             <label style="font-size: 0.8rem;">Batch Size</label>
-                                            <span id="visionBatchVal" style="font-size: 0.8rem; color: var(--text-muted);">1280</span>
+                                            <span id="visionBatchVal"
+                                                style="font-size: 0.8rem; color: var(--text-muted);">1280</span>
                                         </div>
-                                        <input type="range" id="visionBatchSlider" class="custom-slider" min="128" max="4096" step="128" value="1280">
+                                        <input type="range" id="visionBatchSlider" class="custom-slider" min="128"
+                                            max="4096" step="128" value="1280">
                                     </div>
                                     <div class="field-group" style="margin-top: 4px;">
                                         <label style="font-size: 0.8rem;">KV Quantization</label>
@@ -1108,11 +1256,21 @@
                                         </select>
                                     </div>
                                     <div class="role-flags-row">
-                                        <label class="flag-chip" title="Flash Attention: Accelerates generation speed and reduces VRAM usage"><input type="checkbox" id="visionFlashAttn" checked> Flash Attn</label>
-                                        <label class="flag-chip" title="KV Cache to GPU: Keeps chat context in fast GPU VRAM. Uncheck to keep context in system RAM if VRAM is tight"><input type="checkbox" id="visionOffloadKqv" checked> KV → GPU</label>
-                                        <label class="flag-chip" title="Memory Lock (mlock): Locks model in physical RAM to prevent OS swapping to disk (avoids lag spikes, needs plenty of RAM)"><input type="checkbox" id="visionMlock"> mlock</label>
-                                        <label class="flag-chip" title="Memory Mapping (mmap): Streams model weights directly from storage on-demand (enables instant startup and lower initial RAM)"><input type="checkbox" id="visionMmap" checked> mmap</label>
-                                        <label class="flag-chip" title="Offload Vision Projector to CPU: Runs image/vision encoding in system RAM/CPU instead of GPU VRAM (saves 1–2 GB of VRAM)"><input type="checkbox" id="visionMmprojCpu"> mmproj on CPU</label>
+                                        <label class="flag-chip"
+                                            title="Flash Attention: Accelerates generation speed and reduces VRAM usage"><input
+                                                type="checkbox" id="visionFlashAttn" checked> Flash Attn</label>
+                                        <label class="flag-chip"
+                                            title="KV Cache to GPU: Keeps chat context in fast GPU VRAM. Uncheck to keep context in system RAM if VRAM is tight"><input
+                                                type="checkbox" id="visionOffloadKqv" checked> KV → GPU</label>
+                                        <label class="flag-chip"
+                                            title="Memory Lock (mlock): Locks model in physical RAM to prevent OS swapping to disk (avoids lag spikes, needs plenty of RAM)"><input
+                                                type="checkbox" id="visionMlock"> mlock</label>
+                                        <label class="flag-chip"
+                                            title="Memory Mapping (mmap): Streams model weights directly from storage on-demand (enables instant startup and lower initial RAM)"><input
+                                                type="checkbox" id="visionMmap" checked> mmap</label>
+                                        <label class="flag-chip"
+                                            title="Offload Vision Projector to CPU: Runs image/vision encoding in system RAM/CPU instead of GPU VRAM (saves 1–2 GB of VRAM)"><input
+                                                type="checkbox" id="visionMmprojCpu"> mmproj on CPU</label>
                                     </div>
                                 </div>
                             </div>
@@ -1130,8 +1288,10 @@
                     <div class="field-group">
                         <label style="font-size: 0.8rem;">Model Download URL</label>
                         <div class="custom-input-with-btn">
-                            <input type="text" id="modelDownloadUrlInput" placeholder="https://huggingface.co/.../model.gguf">
-                            <button id="startDownloadBtn" class="btn-primary" type="button" style="white-space: nowrap;">
+                            <input type="text" id="modelDownloadUrlInput"
+                                placeholder="https://huggingface.co/.../model.gguf">
+                            <button id="startDownloadBtn" class="btn-primary" type="button"
+                                style="white-space: nowrap;">
                                 <i class="fa-solid fa-cloud-arrow-down"></i> Download
                             </button>
                         </div>
@@ -1150,14 +1310,16 @@
                                     <span id="downloadCardEta">ETA: --</span>
                                 </div>
                             </div>
-                            <button id="cancelDownloadBtn" class="download-cancel-btn" type="button" title="Cancel Download">
+                            <button id="cancelDownloadBtn" class="download-cancel-btn" type="button"
+                                title="Cancel Download">
                                 <i class="fa-solid fa-xmark"></i>
                             </button>
                         </div>
                         <div class="download-progress-track">
                             <div id="downloadProgressBar" class="download-progress-bar" style="width: 0%;"></div>
                         </div>
-                        <div style="display: flex; justify-content: flex-end; font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">
+                        <div
+                            style="display: flex; justify-content: flex-end; font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">
                             <span id="downloadEngineLabel" class="hidden"></span>
                             <span id="downloadPercentLabel">0%</span>
                         </div>
@@ -1171,36 +1333,46 @@
 
                         <div class="api-notice-box" id="apiNoticeBox">
                             <i class="fa-solid fa-circle-info"></i>
-                            <span id="apiNoticeText">External OpenAI-compatible API. Multimodal vision attachments are supported for Gemini, GPT-4o, and Vision models.</span>
+                            <span id="apiNoticeText">External OpenAI-compatible API. Multimodal vision attachments are
+                                supported for Gemini, GPT-4o, and Vision models.</span>
                         </div>
 
                         <!-- Quick Presets -->
                         <div class="field-group" style="margin-bottom: 14px;">
-                            <label style="font-size: 0.78rem; margin-bottom: 6px; display: block; color: var(--text-secondary);">Provider Quick Presets</label>
+                            <label
+                                style="font-size: 0.78rem; margin-bottom: 6px; display: block; color: var(--text-secondary);">Provider
+                                Quick Presets</label>
                             <div class="api-presets-row">
-                                <button type="button" class="api-preset-chip" data-preset="gemini" title="Google AI Studio (Gemini 2.5 Flash / Pro)">
+                                <button type="button" class="api-preset-chip" data-preset="gemini"
+                                    title="Google AI Studio (Gemini 2.5 Flash / Pro)">
                                     <i class="fa-brands fa-google" style="color: #4285f4;"></i> Gemini
                                 </button>
-                                <button type="button" class="api-preset-chip" data-preset="groq" title="Groq LPUs (Fast Cloud Inference)">
+                                <button type="button" class="api-preset-chip" data-preset="groq"
+                                    title="Groq LPUs (Fast Cloud Inference)">
                                     <i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> Groq
                                 </button>
                                 <button type="button" class="api-preset-chip" data-preset="openai" title="OpenAI API">
                                     <i class="fa-solid fa-cloud" style="color: #10b981;"></i> OpenAI
                                 </button>
-                                <button type="button" class="api-preset-chip" data-preset="ollama" title="Local Ollama instance">
+                                <button type="button" class="api-preset-chip" data-preset="ollama"
+                                    title="Local Ollama instance">
                                     <i class="fa-solid fa-server" style="color: #60a5fa;"></i> Ollama
                                 </button>
-                                <button type="button" class="api-preset-chip" data-preset="local" title="nivm Localhost Port">
-                                    <i class="fa-solid fa-laptop-code" style="color: var(--accent-purple, #c084fc);"></i> nivm Local
+                                <button type="button" class="api-preset-chip" data-preset="local"
+                                    title="nivm Localhost Port">
+                                    <i class="fa-solid fa-laptop-code"
+                                        style="color: var(--accent-purple, #c084fc);"></i> nivm Local
                                 </button>
                             </div>
                         </div>
 
                         <!-- Base URL -->
                         <div class="field-group" style="margin-bottom: 12px;">
-                            <label style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Base URL (Host Endpoint)</label>
+                            <label style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Base URL (Host
+                                Endpoint)</label>
                             <div class="api-endpoint-box">
-                                <input type="text" id="apiBaseUrl" class="api-endpoint-input" placeholder="https://api.groq.com/openai/v1" value="https://api.groq.com/openai/v1">
+                                <input type="text" id="apiBaseUrl" class="api-endpoint-input"
+                                    placeholder="https://api.groq.com/openai/v1" value="https://api.groq.com/openai/v1">
                                 <button type="button" class="api-copy-btn" id="copyApiBaseUrlBtn" title="Copy Base URL">
                                     <i class="fa-regular fa-copy"></i>
                                 </button>
@@ -1209,9 +1381,12 @@
 
                         <!-- Chat Completions URL -->
                         <div class="field-group" style="margin-bottom: 12px;">
-                            <label style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Chat Completions URL</label>
+                            <label style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Chat Completions
+                                URL</label>
                             <div class="api-endpoint-box">
-                                <input type="text" id="apiChatUrl" class="api-endpoint-input" placeholder="https://api.groq.com/openai/v1/chat/completions" value="https://api.groq.com/openai/v1/chat/completions">
+                                <input type="text" id="apiChatUrl" class="api-endpoint-input"
+                                    placeholder="https://api.groq.com/openai/v1/chat/completions"
+                                    value="https://api.groq.com/openai/v1/chat/completions">
                                 <button type="button" class="api-copy-btn" id="copyApiChatUrlBtn" title="Copy Chat URL">
                                     <i class="fa-regular fa-copy"></i>
                                 </button>
@@ -1220,13 +1395,17 @@
 
                         <!-- API Key (Optional) -->
                         <div class="field-group" style="margin-bottom: 12px;">
-                            <label style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <label
+                                style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                                 <span>API Key</span>
-                                <span style="font-size: 0.72rem; color: var(--text-muted);">(Optional — provider dependent)</span>
+                                <span style="font-size: 0.72rem; color: var(--text-muted);">(Optional — provider
+                                    dependent)</span>
                             </label>
                             <div class="api-endpoint-box">
-                                <input type="password" id="apiKeyInput" class="api-endpoint-input" placeholder="gsk_... or sk-... (leave empty for Ollama)" autocomplete="off">
-                                <button type="button" class="api-copy-btn" id="toggleApiKeyVisibilityBtn" title="Toggle Visibility">
+                                <input type="password" id="apiKeyInput" class="api-endpoint-input"
+                                    placeholder="gsk_... or sk-... (leave empty for Ollama)" autocomplete="off">
+                                <button type="button" class="api-copy-btn" id="toggleApiKeyVisibilityBtn"
+                                    title="Toggle Visibility">
                                     <i class="fa-regular fa-eye"></i>
                                 </button>
                                 <button type="button" class="api-copy-btn" id="copyApiKeyBtn" title="Copy API Key">
@@ -1237,9 +1416,11 @@
 
                         <!-- Model Identifier (Dynamically queried from provider) -->
                         <div class="field-group" style="margin-bottom: 14px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                                 <label style="font-size: 0.8rem; margin: 0;">Model Identifier</label>
-                                <button type="button" id="fetchRemoteModelsBtn" class="api-fetch-models-btn" title="Query provider endpoint for available models">
+                                <button type="button" id="fetchRemoteModelsBtn" class="api-fetch-models-btn"
+                                    title="Query provider endpoint for available models">
                                     <i class="fa-solid fa-arrows-rotate"></i> Fetch Models
                                 </button>
                             </div>
@@ -1247,24 +1428,33 @@
                                 <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
                                 <option value="__custom__">+ Enter Custom Model...</option>
                             </select>
-                            <input type="text" id="apiModelInput" class="api-endpoint-input hidden" style="margin-top: 6px;" placeholder="Type custom model name (e.g. meta-llama/...)" value="llama-3.3-70b-versatile" autocomplete="off">
-                            <div id="fetchModelsStatus" style="font-size: 0.72rem; margin-top: 4px; display: none;"></div>
+                            <input type="text" id="apiModelInput" class="api-endpoint-input hidden"
+                                style="margin-top: 6px;" placeholder="Type custom model name (e.g. meta-llama/...)"
+                                value="llama-3.3-70b-versatile" autocomplete="off">
+                            <div id="fetchModelsStatus" style="font-size: 0.72rem; margin-top: 4px; display: none;">
+                            </div>
                             <div class="role-flags-row" style="margin-top: 8px;">
-                                <label class="flag-chip" title="Enable multimodal support (image and document attachments) if the external model or provider supports vision">
+                                <label class="flag-chip"
+                                    title="Enable multimodal support (image and document attachments) if the external model or provider supports vision">
                                     <input type="checkbox" id="apiMultimodalCheck"> Multimodal / Vision
                                 </label>
                             </div>
                         </div>
 
                         <!-- Quick Test Snippet -->
-                        <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-light, rgba(255,255,255,0.08)); border-radius: 8px; padding: 10px 12px; margin-top: 10px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);"><i class="fa-solid fa-terminal"></i> Live Test Snippet (cURL)</span>
-                                <button type="button" class="api-copy-btn" id="copyApiCurlBtn" style="padding: 2px 8px; font-size: 0.7rem;">
+                        <div
+                            style="background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-light, rgba(255,255,255,0.08)); border-radius: 8px; padding: 10px 12px; margin-top: 10px;">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);"><i
+                                        class="fa-solid fa-terminal"></i> Live Test Snippet (cURL)</span>
+                                <button type="button" class="api-copy-btn" id="copyApiCurlBtn"
+                                    style="padding: 2px 8px; font-size: 0.7rem;">
                                     <i class="fa-regular fa-copy"></i> Copy
                                 </button>
                             </div>
-                            <pre id="apiCurlSnippet" style="margin: 0; font-size: 0.72rem; font-family: monospace; color: var(--text-muted); overflow-x: auto; white-space: pre-wrap;">curl -X POST https://api.groq.com/openai/v1/chat/completions \
+                            <pre id="apiCurlSnippet"
+                                style="margin: 0; font-size: 0.72rem; font-family: monospace; color: var(--text-muted); overflow-x: auto; white-space: pre-wrap;">curl -X POST https://api.groq.com/openai/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": "Hello!"}]}'</pre>
                         </div>
@@ -1275,43 +1465,67 @@
 
                 <!-- Image Studio Configuration (Qwen-Rapid Engine) -->
                 <div class="settings-section" id="imageStudioSection">
-                    <div class="section-title" style="display: flex; align-items: center; justify-content: space-between;">
-                        <span><i class="fa-solid fa-paintbrush" style="color: var(--accent-purple); margin-right: 6px;"></i>Image Studio (Qwen-Rapid)</span>
-                        <span id="imageStudioMasterBadge" class="role-card-badge" style="background: rgba(139,92,246,0.15); color: var(--accent-purple); border: 1px solid rgba(139,92,246,0.3);">Checking...</span>
+                    <div class="section-title"
+                        style="display: flex; align-items: center; justify-content: space-between;">
+                        <span><i class="fa-solid fa-paintbrush"
+                                style="color: var(--accent-purple); margin-right: 6px;"></i>Image Studio
+                            (Qwen-Rapid)</span>
+                        <span id="imageStudioMasterBadge" class="role-card-badge"
+                            style="background: rgba(139,92,246,0.15); color: var(--accent-purple); border: 1px solid rgba(139,92,246,0.3);">Checking...</span>
                     </div>
 
                     <!-- ComfyUI Backend Detection Card -->
                     <div class="role-config-card" style="margin-bottom: 12px; background: rgba(0,0,0,0.25);">
                         <div style="padding: 12px;">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-                                <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);"><i class="fa-solid fa-server" style="color: #38bdf8; margin-right: 6px;"></i>ComfyUI Backend Engine</span>
+                            <div
+                                style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                                <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);"><i
+                                        class="fa-solid fa-server"
+                                        style="color: #38bdf8; margin-right: 6px;"></i>ComfyUI Backend Engine</span>
                                 <span id="comfyStatusBadge" class="role-card-badge">—</span>
                             </div>
-                            <div id="comfyPathDisplay" style="font-size: 0.75rem; color: var(--text-tertiary); word-break: break-all; margin-bottom: 8px;">
+                            <div id="comfyPathDisplay"
+                                style="font-size: 0.75rem; color: var(--text-tertiary); word-break: break-all; margin-bottom: 8px;">
                                 Path: Detecting...
                             </div>
-                            
+
                             <!-- Custom Path or Install Helper -->
-                            <div id="comfyActionControls" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+                            <div id="comfyActionControls"
+                                style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
                                 <div style="display: flex; gap: 6px;">
-                                    <input type="text" id="customComfyPathInput" placeholder="/path/to/ComfyUI" style="flex: 1; font-size: 0.78rem; padding: 6px 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 6px; color: var(--text-primary);">
-                                    <button type="button" id="setComfyPathBtn" class="btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; white-space: nowrap;">Set Path</button>
+                                    <input type="text" id="customComfyPathInput" placeholder="/path/to/ComfyUI"
+                                        style="flex: 1; font-size: 0.78rem; padding: 6px 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 6px; color: var(--text-primary);">
+                                    <button type="button" id="setComfyPathBtn" class="btn-secondary"
+                                        style="padding: 4px 10px; font-size: 0.75rem; white-space: nowrap;">Set
+                                        Path</button>
                                 </div>
-                                <button type="button" id="autoSetupComfyBtn" class="btn-secondary" style="width: 100%; justify-content: center; gap: 6px; display: flex; align-items: center; font-size: 0.78rem; padding: 6px;">
+                                <button type="button" id="autoSetupComfyBtn" class="btn-secondary"
+                                    style="width: 100%; justify-content: center; gap: 6px; display: flex; align-items: center; font-size: 0.78rem; padding: 6px;">
                                     <i class="fa-solid fa-cloud-arrow-down"></i> Auto-Install ComfyUI to nivm/engine/
                                 </button>
-                                <div id="comfySetupProgressBox" style="display: none; background: rgba(0,0,0,0.4); border: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.3); border-radius: 6px; padding: 10px; font-size: 0.72rem;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                        <div id="comfySetupStepText" style="color: var(--accent-purple); font-weight: 600;">[Step 1/3] Cloning ComfyUI...</div>
-                                        <span id="comfySetupPct" style="color: var(--text-muted); font-size: 0.7rem;">0%</span>
+                                <div id="comfySetupProgressBox"
+                                    style="display: none; background: rgba(0,0,0,0.4); border: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.3); border-radius: 6px; padding: 10px; font-size: 0.72rem;">
+                                    <div
+                                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                        <div id="comfySetupStepText"
+                                            style="color: var(--accent-purple); font-weight: 600;">[Step 1/3] Cloning
+                                            ComfyUI...</div>
+                                        <span id="comfySetupPct"
+                                            style="color: var(--text-muted); font-size: 0.7rem;">0%</span>
                                     </div>
-                                    <div id="comfySetupTargetDir" style="color: #94a3b8; font-size: 0.68rem; margin-bottom: 6px; word-break: break-all; font-family: monospace;">
+                                    <div id="comfySetupTargetDir"
+                                        style="color: #94a3b8; font-size: 0.68rem; margin-bottom: 6px; word-break: break-all; font-family: monospace;">
                                         Target: nivm/engine/ComfyUI
                                     </div>
-                                    <div style="background: rgba(255,255,255,0.08); height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 8px;">
-                                        <div id="comfySetupProgressBar" style="width: 0%; height: 100%; background: var(--accent-purple); transition: width 0.3s ease;"></div>
+                                    <div
+                                        style="background: rgba(255,255,255,0.08); height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 8px;">
+                                        <div id="comfySetupProgressBar"
+                                            style="width: 0%; height: 100%; background: var(--accent-purple); transition: width 0.3s ease;">
+                                        </div>
                                     </div>
-                                    <div id="comfySetupLogText" style="font-family: monospace; color: #cbd5e1; font-size: 0.68rem; max-height: 90px; overflow-y: auto; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: 4px; padding: 6px; white-space: pre-wrap; line-height: 1.35;"></div>
+                                    <div id="comfySetupLogText"
+                                        style="font-family: monospace; color: #cbd5e1; font-size: 0.68rem; max-height: 90px; overflow-y: auto; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: 4px; padding: 6px; white-space: pre-wrap; line-height: 1.35;">
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1320,55 +1534,84 @@
                     <!-- Image Models Card -->
                     <div class="role-config-card" style="background: rgba(0,0,0,0.25);">
                         <div style="padding: 12px;">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-                                <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);"><i class="fa-solid fa-cubes" style="color: var(--accent-purple); margin-right: 6px;"></i>Qwen-Rapid Diffusion Models</span>
+                            <div
+                                style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                                <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);"><i
+                                        class="fa-solid fa-cubes"
+                                        style="color: var(--accent-purple); margin-right: 6px;"></i>Qwen-Rapid Diffusion
+                                    Models</span>
                                 <span id="imageModelsBadge" class="role-card-badge">—</span>
                             </div>
                             <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 10px;">
                                 Verified models: Qwen-Rapid UNet (13.3 GB), Qwen2.5-VL CLIP (4.7 GB), VAE (253 MB)
                             </div>
-                            
+
                             <!-- Model Checklist -->
-                            <div style="display: flex; flex-direction: column; gap: 4px; font-size: 0.73rem; margin-bottom: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px;">
-                                <div style="display: flex; justify-content: space-between;"><span id="unetModelCheck">○ UNet (Qwen-Rapid-NSFW-v23_Q4_K.gguf)</span><span style="color: var(--text-muted);">13.3 GB</span></div>
-                                <div style="display: flex; justify-content: space-between;"><span id="clipModelCheck">○ Text Encoder (Qwen2.5-VL-7B-Instruct-abliterated.Q4_K_M.gguf)</span><span style="color: var(--text-muted);">4.7 GB</span></div>
-                                <div style="display: flex; justify-content: space-between;"><span id="vaeModelCheck">○ VAE (qwen_image_vae.safetensors)</span><span style="color: var(--text-muted);">253 MB</span></div>
+                            <div
+                                style="display: flex; flex-direction: column; gap: 4px; font-size: 0.73rem; margin-bottom: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px;">
+                                <div style="display: flex; justify-content: space-between;"><span id="unetModelCheck">○
+                                        UNet (Qwen-Rapid-NSFW-v23_Q4_K.gguf)</span><span
+                                        style="color: var(--text-muted);">13.3 GB</span></div>
+                                <div style="display: flex; justify-content: space-between;"><span id="clipModelCheck">○
+                                        Text Encoder (Qwen2.5-VL-7B-Instruct-abliterated.Q4_K_M.gguf)</span><span
+                                        style="color: var(--text-muted);">4.7 GB</span></div>
+                                <div style="display: flex; justify-content: space-between;"><span id="vaeModelCheck">○
+                                        VAE (qwen_image_vae.safetensors)</span><span
+                                        style="color: var(--text-muted);">253 MB</span></div>
                             </div>
 
                             <!-- Verified Banner (Shown when verified, replaces download button) -->
-                            <div id="imageModelsVerifiedBox" style="display: none; align-items: center; justify-content: center; gap: 8px; font-size: 0.78rem; color: #34d399; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.25); border-radius: 6px; padding: 8px; font-weight: 500;">
+                            <div id="imageModelsVerifiedBox"
+                                style="display: none; align-items: center; justify-content: center; gap: 8px; font-size: 0.78rem; color: #34d399; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.25); border-radius: 6px; padding: 8px; font-weight: 500;">
                                 <i class="fa-solid fa-circle-check"></i>
                                 <span>All Models Verified & Ready</span>
                             </div>
 
                             <!-- Download Button & Progress (Hidden when all verified, skips existing files) -->
-                            <button type="button" id="downloadImageModelsBtn" class="btn-primary" style="width: 100%; justify-content: center; gap: 6px; display: none; align-items: center; font-size: 0.78rem; padding: 7px;">
-                                <i class="fa-solid fa-download"></i> <span id="downloadBtnLabel">Download Image Models (aria2)</span>
+                            <button type="button" id="downloadImageModelsBtn" class="btn-primary"
+                                style="width: 100%; justify-content: center; gap: 6px; display: none; align-items: center; font-size: 0.78rem; padding: 7px;">
+                                <i class="fa-solid fa-download"></i> <span id="downloadBtnLabel">Download Image Models
+                                    (aria2)</span>
                             </button>
 
-                            <div id="imageDownloadProgressBox" style="display: none; margin-top: 8px; background: rgba(0,0,0,0.4); border: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.3); border-radius: 6px; padding: 10px; font-size: 0.72rem;">
+                            <div id="imageDownloadProgressBox"
+                                style="display: none; margin-top: 8px; background: rgba(0,0,0,0.4); border: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.3); border-radius: 6px; padding: 10px; font-size: 0.72rem;">
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <span id="imageDownloadModelName" style="color: var(--accent-purple); font-weight: 600;">Downloading UNet...</span>
+                                    <span id="imageDownloadModelName"
+                                        style="color: var(--accent-purple); font-weight: 600;">Downloading
+                                        UNet...</span>
                                     <span id="imageDownloadPct" style="color: var(--text-muted);">0%</span>
                                 </div>
-                                <div id="imageDownloadTargetPath" style="color: #94a3b8; font-size: 0.68rem; margin-bottom: 6px; word-break: break-all; font-family: monospace;">
+                                <div id="imageDownloadTargetPath"
+                                    style="color: #94a3b8; font-size: 0.68rem; margin-bottom: 6px; word-break: break-all; font-family: monospace;">
                                     Saving to: nivm/models/image/
                                 </div>
-                                <div style="background: rgba(255,255,255,0.08); height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
-                                    <div id="imageDownloadProgressBar" style="width: 0%; height: 100%; background: var(--accent-purple); transition: width 0.3s ease;"></div>
+                                <div
+                                    style="background: rgba(255,255,255,0.08); height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
+                                    <div id="imageDownloadProgressBar"
+                                        style="width: 0%; height: 100%; background: var(--accent-purple); transition: width 0.3s ease;">
+                                    </div>
                                 </div>
-                                <div style="display: flex; justify-content: space-between; color: #94a3b8; font-size: 0.68rem; font-family: monospace;">
+                                <div
+                                    style="display: flex; justify-content: space-between; color: #94a3b8; font-size: 0.68rem; font-family: monospace;">
                                     <span id="imageDownloadBytes">0 MB / 0 MB</span>
                                     <span id="imageDownloadSpeed">0 MB/s</span>
                                     <span id="imageDownloadEta">ETA: --</span>
                                 </div>
                             </div>
+
+                            <button type="button" id="openImageStudioFromSettingsBtn" class="btn-secondary"
+                                style="width: 100%; justify-content: center; gap: 6px; display: flex; align-items: center; font-size: 0.78rem; padding: 7px; margin-top: 8px;">
+                                <i class="fa-solid fa-paintbrush" style="color: var(--accent-purple);"></i> Open Image
+                                Studio
+                            </button>
                         </div>
                     </div>
                 </div>
 
                 <!-- Smart Engine Toggle & Unload All -->
-                <div class="settings-section" id="smartEngineSection" style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
+                <div class="settings-section" id="smartEngineSection"
+                    style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
                     <button class="smart-toggle-btn" id="smartToggleBtn">
                         <i class="fa-solid fa-bolt"></i>
                         <span id="smartToggleLabel">Load Engine</span>
@@ -1376,7 +1619,9 @@
                     <div id="engineStatusText" style="font-size: 0.8rem; text-align: center; color: var(--text-muted);">
                         Status: Not Loaded
                     </div>
-                    <button type="button" class="btn-secondary" id="unloadAllModelsBtn" title="Unload all models (LLM, Voice TTS, STT, Diffusion) and completely free GPU VRAM" style="width: 100%; border-color: rgba(239, 68, 68, 0.25); color: #f87171; justify-content: center; gap: 8px; display: flex; align-items: center; font-size: 0.82rem; padding: 9px 14px; margin-top: 2px;">
+                    <button type="button" class="btn-secondary" id="unloadAllModelsBtn"
+                        title="Unload all models (LLM, Voice TTS, STT, Diffusion) and completely free GPU VRAM"
+                        style="width: 100%; border-color: rgba(239, 68, 68, 0.25); color: #f87171; justify-content: center; gap: 8px; display: flex; align-items: center; font-size: 0.82rem; padding: 9px 14px; margin-top: 2px;">
                         <i class="fa-solid fa-broom"></i>
                         <span>Unload All Models (Free VRAM)</span>
                     </button>
@@ -1420,25 +1665,33 @@
                     <i class="fa-solid fa-user-gear drag-handle-icon"></i>
                     <span>Personality & Instructions</span>
                 </div>
-                <button class="icon-btn-sm" id="closePersonalityBtn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+                <button class="icon-btn-sm" id="closePersonalityBtn" title="Close"><i
+                        class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="window-body">
                 <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45; margin: 0;">
-                    Shape nivm's demeanor, tone, and specific behavioral guidelines. 
+                    Shape nivm's demeanor, tone, and specific behavioral guidelines.
                     The core engine instructions (local execution, memory, and tools) remain active underneath.
                 </p>
 
                 <div class="field-group" style="margin-bottom: 12px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <label for="personalityPresetSelect" style="margin: 0; font-size: 0.82rem; font-weight: 600;">Active Persona</label>
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <label for="personalityPresetSelect"
+                            style="margin: 0; font-size: 0.82rem; font-weight: 600;">Active Persona</label>
                         <div style="display: flex; gap: 6px; align-items: center;">
-                            <button type="button" class="btn-secondary" id="newPersonaBtn" title="Create New Persona" style="padding: 3px 8px; font-size: 0.72rem; height: 26px; border-radius: 6px; display: flex; align-items: center; gap: 4px;">
+                            <button type="button" class="btn-secondary" id="newPersonaBtn" title="Create New Persona"
+                                style="padding: 3px 8px; font-size: 0.72rem; height: 26px; border-radius: 6px; display: flex; align-items: center; gap: 4px;">
                                 <i class="fa-solid fa-plus"></i> New
                             </button>
-                            <button type="button" class="btn-secondary" id="saveAsPersonaBtn" title="Save current instructions as a new persona" style="padding: 3px 8px; font-size: 0.72rem; height: 26px; border-radius: 6px; display: flex; align-items: center; gap: 4px;">
+                            <button type="button" class="btn-secondary" id="saveAsPersonaBtn"
+                                title="Save current instructions as a new persona"
+                                style="padding: 3px 8px; font-size: 0.72rem; height: 26px; border-radius: 6px; display: flex; align-items: center; gap: 4px;">
                                 <i class="fa-solid fa-floppy-disk"></i> Save As
                             </button>
-                            <button type="button" class="btn-secondary hidden" id="deletePersonaBtn" title="Delete active custom persona" style="padding: 3px 8px; font-size: 0.72rem; height: 26px; border-radius: 6px; display: flex; align-items: center; gap: 4px; color: #f43f5e; border-color: rgba(244, 63, 94, 0.3);">
+                            <button type="button" class="btn-secondary hidden" id="deletePersonaBtn"
+                                title="Delete active custom persona"
+                                style="padding: 3px 8px; font-size: 0.72rem; height: 26px; border-radius: 6px; display: flex; align-items: center; gap: 4px; color: #f43f5e; border-color: rgba(244, 63, 94, 0.3);">
                                 <i class="fa-solid fa-trash"></i>
                             </button>
                         </div>
@@ -1449,19 +1702,28 @@
                 </div>
 
                 <!-- Inline Save As New Persona Card -->
-                <div id="savePersonaCard" class="hidden" style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--glass-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; box-sizing: border-box; width: 100%;">
-                    <label style="font-size: 0.76rem; color: var(--text-muted); display: block; margin-bottom: 6px;">Persona Name / Title:</label>
+                <div id="savePersonaCard" class="hidden"
+                    style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--glass-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; box-sizing: border-box; width: 100%;">
+                    <label
+                        style="font-size: 0.76rem; color: var(--text-muted); display: block; margin-bottom: 6px;">Persona
+                        Name / Title:</label>
                     <div style="display: flex; gap: 8px; align-items: center; width: 100%; box-sizing: border-box;">
-                        <input type="text" id="customPersonaNameInput" placeholder="e.g. Python Architect, Creative Lead..." style="flex: 1 1 0; min-width: 0; box-sizing: border-box; font-size: 0.82rem; padding: 6px 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: var(--text-primary); outline: none;">
-                        <button type="button" class="btn-primary" id="confirmSavePersonaBtn" style="padding: 6px 12px; font-size: 0.78rem; flex-shrink: 0; white-space: nowrap;">Save</button>
-                        <button type="button" class="btn-secondary" id="cancelSavePersonaBtn" style="padding: 6px 10px; font-size: 0.78rem; flex-shrink: 0; white-space: nowrap;">Cancel</button>
+                        <input type="text" id="customPersonaNameInput"
+                            placeholder="e.g. Python Architect, Creative Lead..."
+                            style="flex: 1 1 0; min-width: 0; box-sizing: border-box; font-size: 0.82rem; padding: 6px 10px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: var(--text-primary); outline: none;">
+                        <button type="button" class="btn-primary" id="confirmSavePersonaBtn"
+                            style="padding: 6px 12px; font-size: 0.78rem; flex-shrink: 0; white-space: nowrap;">Save</button>
+                        <button type="button" class="btn-secondary" id="cancelSavePersonaBtn"
+                            style="padding: 6px 10px; font-size: 0.78rem; flex-shrink: 0; white-space: nowrap;">Cancel</button>
                     </div>
                 </div>
 
                 <div class="field-group">
-                    <label for="personalityTextarea" style="display: flex; justify-content: space-between; align-items: center;">
+                    <label for="personalityTextarea"
+                        style="display: flex; justify-content: space-between; align-items: center;">
                         <span>Custom Instructions / Persona</span>
-                        <span style="font-size: 0.75rem; color: var(--text-muted);" id="personalityCharCount">0 chars</span>
+                        <span style="font-size: 0.75rem; color: var(--text-muted);" id="personalityCharCount">0
+                            chars</span>
                     </label>
                     <textarea id="personalityTextarea" class="settings-textarea" rows="8"
                         placeholder="e.g. You are a senior engineer who favors Rust and Python. Be direct and avoid boilerplate..."
@@ -1469,22 +1731,30 @@
                 </div>
 
                 <!-- Discreet Unfiltered / Mature Toggle -->
-                <div style="margin-top: 10px; padding: 10px 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 8px; display: flex; align-items: center; justify-content: space-between;">
+                <div
+                    style="margin-top: 10px; padding: 10px 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 8px; display: flex; align-items: center; justify-content: space-between;">
                     <div style="padding-right: 12px;">
-                        <div style="display: flex; align-items: center; gap: 7px; font-size: 0.82rem; font-weight: 500; color: var(--text-primary);">
-                            <i class="fa-solid fa-fire-flame-curved" style="color: var(--text-muted); font-size: 0.85rem; transition: color 0.2s;" id="nsfwFireIcon"></i>
+                        <div
+                            style="display: flex; align-items: center; gap: 7px; font-size: 0.82rem; font-weight: 500; color: var(--text-primary);">
+                            <i class="fa-solid fa-fire-flame-curved"
+                                style="color: var(--text-muted); font-size: 0.85rem; transition: color 0.2s;"
+                                id="nsfwFireIcon"></i>
                             <span>Unfiltered / Mature Mode</span>
                         </div>
                         <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 3px; line-height: 1.35;">
-                            Permits raw creative dialogue, explicit anatomical vocabulary without euphemisms, and removes moralizing refusals.
+                            Permits raw creative dialogue, explicit anatomical vocabulary without euphemisms, and
+                            removes moralizing refusals.
                         </div>
                     </div>
-                    <input type="checkbox" id="nsfwToggle" class="custom-toggle" style="flex-shrink: 0;" title="Toggle Unfiltered / NSFW Mode">
+                    <input type="checkbox" id="nsfwToggle" class="custom-toggle" style="flex-shrink: 0;"
+                        title="Toggle Unfiltered / NSFW Mode">
                 </div>
 
-                <div style="font-size: 0.76rem; color: var(--text-muted); background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 6px; border-left: 3px solid var(--accent-primary); margin-top: 10px;">
+                <div
+                    style="font-size: 0.76rem; color: var(--text-muted); background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 6px; border-left: 3px solid var(--accent-primary); margin-top: 10px;">
                     <i class="fa-solid fa-circle-info" style="margin-right: 4px;"></i>
-                    These custom instructions are appended as your active persona and will take effect in every chat turn.
+                    These custom instructions are appended as your active persona and will take effect in every chat
+                    turn.
                 </div>
             </div>
             <div class="window-footer">
@@ -1493,6 +1763,372 @@
                     <button class="btn-secondary" id="cancelPersonalityBtn">Cancel</button>
                     <button class="btn-primary" id="savePersonalityBtn">Save Persona</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Draggable Image Studio Window (Character & LoRA Hub) -->
+    <div class="window-wrapper hidden" id="imageStudioModal" style="z-index: 940;">
+        <div class="draggable-window" id="imageStudioWindow"
+            style="width: 860px; max-width: min(860px, 96vw); max-height: 90vh; display: flex; flex-direction: column;">
+            <div class="window-header" id="imageStudioWindowHeader">
+                <div class="window-title">
+                    <i class="fa-solid fa-paintbrush drag-handle-icon" style="color: var(--accent-purple);"></i>
+                    <span>Image Studio</span>
+                    <span class="role-card-badge" id="studioCharCountBadge" style="margin-left: 8px;">0
+                        Characters</span>
+                </div>
+                <button class="icon-btn-sm" id="closeImageStudioBtn" title="Close"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="window-body"
+                style="overflow-y: auto; flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 16px;">
+
+
+
+                <!-- Category Segmented Tabs -->
+                <div class="studio-category-tabs">
+                    <button type="button" class="studio-cat-btn active" data-tab="characters" id="studioTabCharacters">
+                        <i class="fa-solid fa-user"></i>
+                        <span>Characters</span>
+                        <span class="studio-cat-count" id="studioCharsCount">0</span>
+                    </button>
+                    <button type="button" class="studio-cat-btn" data-tab="concepts" id="studioTabConcepts">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        <span>Concepts</span>
+                        <span class="studio-cat-count" id="studioConceptsCount">0</span>
+                    </button>
+                    <button type="button" class="studio-cat-btn" data-tab="poses" id="studioTabPoses">
+                        <i class="fa-solid fa-person-walking"></i>
+                        <span>Poses</span>
+                        <span class="studio-cat-count" id="studioPosesCount">0</span>
+                    </button>
+                </div>
+
+                <!-- Action & Filter Bar -->
+                <div class="studio-action-bar">
+                    <div class="studio-search-wrapper">
+                        <i class="fa-solid fa-magnifying-glass studio-search-icon"></i>
+                        <input type="text" id="characterSearchInput"
+                            placeholder="Search by name, key, or trigger tags..."
+                            class="studio-search-input">
+                    </div>
+                    <div class="studio-action-buttons">
+                        <button type="button" class="btn-primary" id="actionToggleImporterBtn"
+                            style="padding: 6px 13px; font-size: 0.78rem; gap: 6px;" title="Open / Close LoRA Importer Panel">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> <span>Import LoRA</span>
+                        </button>
+                        <button type="button" class="btn-secondary" id="newCharacterBtn"
+                            style="padding: 6px 12px; font-size: 0.78rem; gap: 6px;" title="Define character profile manually without dropping a file">
+                            <i class="fa-solid fa-user-plus"></i> <span>Manual Profile</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Smart LoRA Drop-In Importer Card (Hidden by default, toggled via Import LoRA or Browse) -->
+                <div id="smartLoraImporterSection" class="hidden character-editor-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-cloud-arrow-up" style="color: #38bdf8;"></i>
+                            <span style="font-weight: 600; font-size: 0.92rem; color: var(--text-primary);">Smart LoRA Drop-In Importer</span>
+                            <span class="role-card-badge" style="color: #38bdf8; border-color: rgba(56,189,248,0.3); font-size: 0.68rem;">models/image/loras/</span>
+                        </div>
+                        <button type="button" class="icon-btn-sm" id="closeLoraImporterBtn" title="Close Importer"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+
+                    <p style="font-size: 0.73rem; color: var(--text-muted); margin: 0 0 10px 0; line-height: 1.4;">
+                        Drop any <code>.safetensors</code> LoRA file here, or browse your device/host. Nivm will automatically organize and copy it into <code>models/image/loras/</code>.
+                    </p>
+
+                    <div id="loraDropZone" class="lora-drop-zone" style="cursor: pointer; margin-bottom: 12px;">
+                        <i class="fa-solid fa-cloud-arrow-up" style="font-size: 1.8rem; color: var(--accent-purple); margin-bottom: 6px; display: block; pointer-events: none;"></i>
+                        <div id="loraDropZoneLabel" style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 500; pointer-events: none;">
+                            Drop .safetensors LoRA file here or browse
+                        </div>
+                        <div style="font-size: 0.68rem; color: var(--text-muted); margin-top: 3px; margin-bottom: 8px; pointer-events: none;">Supports SDXL LoRA weights</div>
+                        <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+                            <label for="loraFileInput" class="btn-secondary" id="loraBrowseBtn" style="padding: 5px 14px; font-size: 0.74rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;" title="Upload local file from device">
+                                <i class="fa-solid fa-cloud-arrow-up"></i> <span>Upload File</span>
+                            </label>
+                            <button type="button" class="btn-primary" id="loraHostBrowseBtn" style="padding: 5px 14px; font-size: 0.74rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;" title="Browse host LoRA file (Native Dialog)">
+                                <i class="fa-solid fa-folder-open"></i> <span>Browse Host</span>
+                            </button>
+                            <button type="button" class="btn-secondary" id="loraHostExploreBtn" style="padding: 5px 10px; font-size: 0.74rem; cursor: pointer; display: inline-flex; align-items: center;" title="In-Browser File Explorer (Host LoRAs)">
+                                <i class="fa-solid fa-compass"></i>
+                            </button>
+                        </div>
+                        <input type="file" id="loraFileInput" accept=".safetensors,.pt" style="position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none;">
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 10px; margin-bottom: 10px;">
+                        <div>
+                            <label for="loraImportCategorySelect" style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">Category</label>
+                            <select id="loraImportCategorySelect" class="modal-select" style="font-size: 0.78rem; width: 100%;">
+                                <option value="character">Character LoRA</option>
+                                <option value="concept">Concept LoRA</option>
+                                <option value="pose">Pose LoRA</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="loraImportNameInput" style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">Display Name</label>
+                            <input type="text" id="loraImportNameInput" placeholder="e.g. Megumin" style="width: 100%; font-size: 0.78rem; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; box-sizing: border-box;">
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 0.5fr; gap: 10px; margin-bottom: 10px;" id="loraImportFieldsRow">
+                        <div>
+                            <label for="loraImportTriggerInput" style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">Trigger Word(s)</label>
+                            <input type="text" id="loraImportTriggerInput" placeholder="e.g. megumin, red eyes" style="width: 100%; font-size: 0.78rem; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; box-sizing: border-box;">
+                        </div>
+                        <div id="loraImportAppearanceField">
+                            <label for="loraImportAppearanceInput" style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">Appearance Tags</label>
+                            <input type="text" id="loraImportAppearanceInput" placeholder="e.g. brown hair, short hair" style="width: 100%; font-size: 0.78rem; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; box-sizing: border-box;">
+                        </div>
+                        <div>
+                            <label for="loraImportStrengthInput" style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">Strength</label>
+                            <input type="number" step="0.05" id="loraImportStrengthInput" value="0.9" style="width: 100%; font-size: 0.78rem; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; box-sizing: border-box;">
+                        </div>
+                    </div>
+
+                    <!-- Optional Character Default Outfit -->
+                    <div id="loraImportOutfitSection" style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: rgba(0,0,0,0.25); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1); margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: gap; gap: 6px;">
+                            <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);"><i class="fa-solid fa-shirt" style="color: var(--accent-purple); margin-right: 4px;"></i> Default Character Outfit</span>
+                            <label style="font-size: 0.72rem; color: #fda4af; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+                                <input type="checkbox" id="loraImportOutfitNsfwCheck" style="accent-color: #f43f5e; width: 14px; height: 14px; cursor: pointer;">
+                                <span>NSFW Outfit (hidden when NSFW mode is OFF)</span>
+                            </label>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 8px;" id="loraImportOutfitInputsRow">
+                            <div>
+                                <label for="loraImportOutfitNameInput" style="font-size: 0.68rem; color: var(--text-muted); display: block; margin-bottom: 2px;">Outfit Name</label>
+                                <input type="text" id="loraImportOutfitNameInput" value="Default Outfit" placeholder="e.g. School Uniform" style="width: 100%; font-size: 0.78rem; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; box-sizing: border-box;">
+                            </div>
+                            <div>
+                                <label for="loraImportOutfitTriggerInput" style="font-size: 0.68rem; color: var(--text-muted); display: block; margin-bottom: 2px;">Outfit Trigger Tags</label>
+                                <input type="text" id="loraImportOutfitTriggerInput" placeholder="e.g. collared shirt, pleated skirt, loafers" style="width: 100%; font-size: 0.78rem; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; box-sizing: border-box;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                        <label style="font-size: 0.74rem; color: #fda4af; display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="loraImportNsfwCheck" style="accent-color: #f43f5e; width: 14px; height: 14px; cursor: pointer;">
+                            <span>Mark entire Profile as NSFW (hidden when NSFW mode is OFF)</span>
+                        </label>
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                        <button type="button" class="btn-secondary" id="cancelLoraImporterBtn" style="padding: 7px 14px; font-size: 0.78rem;">Cancel</button>
+                        <button type="button" class="btn-primary" id="submitImportLoraBtn" style="padding: 7px 16px; font-size: 0.82rem; font-weight: 600; gap: 6px;">
+                            <i class="fa-solid fa-arrow-down-to-bracket"></i> Import & Register LoRA
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Inline Character Editor Card (Hidden by default) -->
+                <div id="characterEditorCard" class="hidden character-editor-card">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-id-card" style="color: var(--accent-purple);"></i>
+                            <span id="characterEditorTitle"
+                                style="font-weight: 600; font-size: 0.92rem; color: var(--text-primary);">Character
+                                Details</span>
+                        </div>
+                        <button type="button" class="icon-btn-sm" id="cancelCharacterEditBtn"><i
+                                class="fa-solid fa-xmark"></i></button>
+                    </div>
+
+                    <div style="margin-bottom: 8px;">
+                        <label style="font-size: 0.74rem; color: #fda4af; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="charEditNsfwCheck" style="accent-color: #f43f5e; width: 14px; height: 14px; cursor: pointer;">
+                            <span>Mark Character Profile as NSFW (hidden when NSFW mode is OFF)</span>
+                        </label>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                        <div>
+                            <label
+                                style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">Unique
+                                Key (slug)</label>
+                            <input type="text" id="charEditKeyInput" placeholder="e.g. kyouko_hori"
+                                style="width: 100%; font-size: 0.78rem; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; box-sizing: border-box;">
+                        </div>
+                        <div>
+                            <label
+                                style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">Display
+                                Name</label>
+                            <input type="text" id="charEditNameInput" placeholder="e.g. Kyouko Hori"
+                                style="width: 100%; font-size: 0.78rem; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; box-sizing: border-box;">
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1.4fr 0.6fr; gap: 10px; margin-bottom: 10px;">
+                        <div>
+                            <label
+                                style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">LoRA
+                                Filename</label>
+                            <div style="display: flex; gap: 6px;">
+                                <input type="text" id="charEditLoraFileInput" list="availableLoraFilesList" placeholder="char_kyouko_hori.safetensors (optional)"
+                                    style="flex: 1; min-width: 0; font-size: 0.78rem; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; box-sizing: border-box;">
+                                <button type="button" class="btn-primary" id="charEditBrowseLoraBtn" style="padding: 6px 12px; font-size: 0.74rem; gap: 6px; white-space: nowrap;" title="Browse LoRA (Native Dialog)">
+                                    <i class="fa-solid fa-folder-open"></i> Browse
+                                </button>
+                                <button type="button" class="btn-secondary" id="charEditExploreLoraBtn" style="padding: 6px 10px; font-size: 0.74rem;" title="In-Browser File Explorer">
+                                    <i class="fa-solid fa-compass"></i>
+                                </button>
+                            </div>
+                            <datalist id="availableLoraFilesList"></datalist>
+                        </div>
+                        <div>
+                            <label
+                                style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">LoRA
+                                Strength</label>
+                            <input type="number" step="0.05" id="charEditStrengthInput" value="0.9"
+                                style="width: 100%; font-size: 0.78rem; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; box-sizing: border-box;">
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                        <div>
+                            <label
+                                style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">Trigger
+                                Word</label>
+                            <input type="text" id="charEditTriggerInput" placeholder="e.g. kyouko hori"
+                                style="width: 100%; font-size: 0.78rem; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; box-sizing: border-box;">
+                        </div>
+                        <div>
+                            <label
+                                style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">Base
+                                Appearance Tags</label>
+                            <input type="text" id="charEditAppearanceInput"
+                                placeholder="e.g. brown hair, brown eyes, long hair"
+                                style="width: 100%; font-size: 0.78rem; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; box-sizing: border-box;">
+                        </div>
+                    </div>
+
+                    <!-- Outfits Section -->
+                    <div style="margin-bottom: 12px;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span
+                                style="font-size: 0.76rem; font-weight: 600; color: var(--text-secondary);">Outfits</span>
+                            <button type="button" class="btn-secondary" id="addOutfitRowBtn"
+                                style="padding: 3px 8px; font-size: 0.7rem;">+ Add Outfit</button>
+                        </div>
+                        <div id="charEditOutfitsContainer"></div>
+                    </div>
+
+                    <!-- Hairstyles Section -->
+                    <div style="margin-bottom: 14px;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-size: 0.76rem; font-weight: 600; color: var(--text-secondary);">Hairstyles
+                                (Optional)</span>
+                            <button type="button" class="btn-secondary" id="addHairstyleRowBtn"
+                                style="padding: 3px 8px; font-size: 0.7rem;">+ Add Hairstyle</button>
+                        </div>
+                        <div id="charEditHairstylesContainer"></div>
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                        <button type="button" class="btn-secondary" id="cancelCharEditActionBtn"
+                            style="padding: 6px 14px; font-size: 0.78rem;">Cancel</button>
+                        <button type="button" class="btn-primary" id="saveCharacterBtn"
+                            style="padding: 6px 16px; font-size: 0.78rem; gap: 6px;">
+                            <i class="fa-solid fa-floppy-disk"></i> Save Character to JSON
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Inline Concept / Pose Option Editor Card (Hidden by default) -->
+                <div id="optionEditorCard" class="hidden character-editor-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-wand-magic-sparkles" id="optionEditorIcon" style="color: var(--accent-purple);"></i>
+                            <span id="optionEditorTitle" style="font-weight: 600; font-size: 0.92rem; color: var(--text-primary);">Option Details</span>
+                        </div>
+                        <button type="button" class="icon-btn-sm" id="cancelOptionEditBtn"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+
+                    <div style="margin-bottom: 8px;">
+                        <label style="font-size: 0.74rem; color: #fda4af; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="optionEditNsfwCheck" style="accent-color: #f43f5e; width: 14px; height: 14px; cursor: pointer;">
+                            <span>NSFW Option (hidden when NSFW mode is OFF)</span>
+                        </label>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                        <div>
+                            <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">Unique Key (slug)</label>
+                            <input type="text" id="optionEditKeyInput" placeholder="e.g. custom_pose" style="width: 100%; font-size: 0.78rem; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; box-sizing: border-box;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">Display Name</label>
+                            <input type="text" id="optionEditNameInput" placeholder="e.g. Flying Kick" style="width: 100%; font-size: 0.78rem; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; box-sizing: border-box;">
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1.4fr 0.6fr; gap: 10px; margin-bottom: 10px;">
+                        <div>
+                            <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">LoRA Filename</label>
+                            <div style="display: flex; gap: 6px;">
+                                <input type="text" id="optionEditLoraInput" list="availableLoraFilesList" placeholder="pose_flying_kick.safetensors (optional)" style="flex: 1; min-width: 0; font-size: 0.78rem; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; box-sizing: border-box;">
+                                <button type="button" class="btn-primary" id="optionEditBrowseLoraBtn" style="padding: 6px 12px; font-size: 0.74rem; gap: 6px; white-space: nowrap;" title="Browse LoRA (Native Dialog)">
+                                    <i class="fa-solid fa-folder-open"></i> Browse
+                                </button>
+                                <button type="button" class="btn-secondary" id="optionEditExploreLoraBtn" style="padding: 6px 10px; font-size: 0.74rem;" title="In-Browser File Explorer">
+                                    <i class="fa-solid fa-compass"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">LoRA Strength</label>
+                            <input type="number" step="0.05" id="optionEditStrengthInput" value="1.0" style="width: 100%; font-size: 0.78rem; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; box-sizing: border-box;">
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 14px;">
+                        <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">Trigger Tags</label>
+                        <input type="text" id="optionEditTriggerInput" placeholder="e.g. flying kick, dynamic angle, action pose" style="width: 100%; font-size: 0.78rem; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; box-sizing: border-box;">
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                        <button type="button" class="btn-secondary" id="cancelOptionEditActionBtn" style="padding: 6px 14px; font-size: 0.78rem;">Cancel</button>
+                        <button type="button" class="btn-primary" id="saveOptionBtn" style="padding: 6px 16px; font-size: 0.78rem; gap: 6px;">
+                            <i class="fa-solid fa-floppy-disk"></i> <span id="saveOptionBtnText">Save Option to JSON</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Category Content Sections -->
+                <div id="studioCategoryContent">
+                    <!-- Characters Section -->
+                    <div id="studioCharactersSection">
+                        <div id="characterListContainer"
+                            style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px;">
+                            <!-- Dynamically populated -->
+                        </div>
+                    </div>
+
+                    <!-- Concepts Section (hidden by default) -->
+                    <div id="studioConceptsSection" class="hidden">
+                        <div id="conceptListContainer"
+                            style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px;">
+                            <!-- Dynamically populated -->
+                        </div>
+                    </div>
+
+                    <!-- Poses Section (hidden by default) -->
+                    <div id="studioPosesSection" class="hidden">
+                        <div id="poseListContainer"
+                            style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px;">
+                            <!-- Dynamically populated -->
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
@@ -1696,11 +2332,13 @@
                                 <label>Main Text</label>
                             </div>
                             <div class="palette-picker-col">
-                                <input type="color" id="mutedColorPicker" title="Muted text, hints, placeholders, and inactive icons">
+                                <input type="color" id="mutedColorPicker"
+                                    title="Muted text, hints, placeholders, and inactive icons">
                                 <label>Muted Text</label>
                             </div>
                             <div class="palette-picker-col">
-                                <input type="color" id="brandColorPicker" value="#a855f7" title="Custom accent color (replaces default purple)">
+                                <input type="color" id="brandColorPicker" value="#a855f7"
+                                    title="Custom accent color (replaces default purple)">
                                 <label>Accent</label>
                             </div>
                         </div>
@@ -1766,11 +2404,16 @@
                 <!-- Voice Color Buttons -->
                 <div style="margin-top: 2px;">
                     <div class="voice-circles" id="voiceCircles">
-                        <button class="voice-color-btn voice-color-1 active" data-voice="af_heart" data-color="#22c55e" data-num="1" title="Voice 1 (Natural & Balanced)"></button>
-                        <button class="voice-color-btn voice-color-2" data-voice="af_bella" data-color="#f59e0b" data-num="2" title="Voice 2 (Warm Companion)"></button>
-                        <button class="voice-color-btn voice-color-3" data-voice="af_sarah" data-color="#f97316" data-num="3" title="Voice 3 (Modern & Focused)"></button>
-                        <button class="voice-color-btn voice-color-4" data-voice="af_nicole" data-color="#f43f5e" data-num="4" title="Voice 4 (Gentle & Calm)"></button>
-                        <button class="voice-color-btn voice-color-5" data-voice="bf_emma" data-color="#a855f7" data-num="5" title="Voice 5 (FRIDAY • Intelligent Assistant)"></button>
+                        <button class="voice-color-btn voice-color-1 active" data-voice="af_heart" data-color="#22c55e"
+                            data-num="1" title="Voice 1 (Natural & Balanced)"></button>
+                        <button class="voice-color-btn voice-color-2" data-voice="af_bella" data-color="#f59e0b"
+                            data-num="2" title="Voice 2 (Warm Companion)"></button>
+                        <button class="voice-color-btn voice-color-3" data-voice="af_sarah" data-color="#f97316"
+                            data-num="3" title="Voice 3 (Modern & Focused)"></button>
+                        <button class="voice-color-btn voice-color-4" data-voice="af_nicole" data-color="#f43f5e"
+                            data-num="4" title="Voice 4 (Gentle & Calm)"></button>
+                        <button class="voice-color-btn voice-color-5" data-voice="bf_emma" data-color="#a855f7"
+                            data-num="5" title="Voice 5 (FRIDAY • Intelligent Assistant)"></button>
                     </div>
                 </div>
 
@@ -1779,7 +2422,8 @@
                     <div class="voice-slider-row">
                         <span class="voice-slider-label">Pace</span>
                         <div class="voice-slider-wrapper">
-                            <input type="range" id="voiceRateSlider" class="voice-range-slider" min="0.7" max="1.4" step="0.05" value="1.00">
+                            <input type="range" id="voiceRateSlider" class="voice-range-slider" min="0.7" max="1.4"
+                                step="0.05" value="1.00">
                         </div>
                         <span id="voiceRateVal" class="voice-slider-val">1.00x</span>
                     </div>
@@ -1787,7 +2431,8 @@
                     <div class="voice-slider-row">
                         <span class="voice-slider-label">Expressivity</span>
                         <div class="voice-slider-wrapper">
-                            <input type="range" id="voiceWarmthSlider" class="voice-range-slider" min="0" max="100" step="5" value="0">
+                            <input type="range" id="voiceWarmthSlider" class="voice-range-slider" min="0" max="100"
+                                step="5" value="0">
                         </div>
                         <span id="voiceWarmthVal" class="voice-slider-val">0%</span>
                     </div>
@@ -1800,23 +2445,32 @@
                         <span>Preview Voice</span>
                     </button>
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 2px 4px;">
-                        <label for="autoSpeakToggle" style="font-size: 0.8rem; color: var(--text-muted); cursor: pointer;">Auto-Speak Responses</label>
+                        <label for="autoSpeakToggle"
+                            style="font-size: 0.8rem; color: var(--text-muted); cursor: pointer;">Auto-Speak
+                            Responses</label>
                         <input type="checkbox" id="autoSpeakToggle" class="custom-toggle">
                     </div>
                 </div>
 
                 <!-- Custom Pronunciation Accordion -->
-                <div class="voice-pronunciation-accordion" style="margin-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 12px;">
-                    <div class="voice-pronunciation-header" id="togglePronunciationHeader" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
+                <div class="voice-pronunciation-accordion"
+                    style="margin-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 12px;">
+                    <div class="voice-pronunciation-header" id="togglePronunciationHeader"
+                        style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <i class="fa-solid fa-spell-check" style="color: var(--voice-accent, var(--accent-emerald, #22c55e)); font-size: 0.85rem;"></i>
-                            <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);">Custom Pronunciations</span>
-                            <span id="pronunciationCountBadge" class="badge" style="font-size: 0.68rem; padding: 1px 7px; border-radius: 10px; background: rgba(255,255,255,0.08); color: var(--text-secondary);">0</span>
+                            <i class="fa-solid fa-spell-check"
+                                style="color: var(--voice-accent, var(--accent-emerald, #22c55e)); font-size: 0.85rem;"></i>
+                            <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);">Custom
+                                Pronunciations</span>
+                            <span id="pronunciationCountBadge" class="badge"
+                                style="font-size: 0.68rem; padding: 1px 7px; border-radius: 10px; background: rgba(255,255,255,0.08); color: var(--text-secondary);">0</span>
                         </div>
-                        <i class="fa-solid fa-chevron-down" id="pronunciationChevron" style="font-size: 0.75rem; color: var(--text-muted); transition: transform 0.2s;"></i>
+                        <i class="fa-solid fa-chevron-down" id="pronunciationChevron"
+                            style="font-size: 0.75rem; color: var(--text-muted); transition: transform 0.2s;"></i>
                     </div>
 
-                    <div id="pronunciationBody" class="hidden" style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                    <div id="pronunciationBody" class="hidden"
+                        style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
                         <div style="font-size: 0.72rem; color: var(--text-muted); line-height: 1.35;">
                             Teach nivm how to pronounce specific words, acronyms, or names.
                         </div>
@@ -1824,12 +2478,15 @@
                         <!-- Add / Tweak Form -->
                         <div class="pronounce-form-box">
                             <div class="pronounce-input-row">
-                                <input type="text" id="pronounceWordInput" class="pronounce-input" placeholder="Word" autocomplete="off">
+                                <input type="text" id="pronounceWordInput" class="pronounce-input" placeholder="Word"
+                                    autocomplete="off">
                                 <span class="pronounce-arrow">→</span>
-                                <input type="text" id="pronouncePhoneticInput" class="pronounce-input" placeholder="Sounds like" autocomplete="off">
+                                <input type="text" id="pronouncePhoneticInput" class="pronounce-input"
+                                    placeholder="Sounds like" autocomplete="off">
                             </div>
                             <div class="pronounce-actions-row">
-                                <button type="button" id="testPronounceDraftBtn" class="pronounce-preview-btn" title="Preview this pronunciation before saving">
+                                <button type="button" id="testPronounceDraftBtn" class="pronounce-preview-btn"
+                                    title="Preview this pronunciation before saving">
                                     <i class="fa-solid fa-volume-high"></i>
                                     <span>Preview</span>
                                 </button>
@@ -1840,7 +2497,8 @@
                         </div>
 
                         <!-- List of Saved Custom Pronunciations -->
-                        <div id="pronounceList" style="max-height: 140px; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 5px; margin-top: 4px;">
+                        <div id="pronounceList"
+                            style="max-height: 140px; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 5px; margin-top: 4px;">
                             <!-- Dynamically generated rows with preview and delete buttons -->
                         </div>
                     </div>
@@ -1848,10 +2506,12 @@
             </div>
             <div class="window-footer voice-modal-footer">
                 <div class="voice-footer-left">
-                    <button type="button" class="btn-voice-action btn-voice-unload" id="unloadVoiceBtn" title="Unload Kokoro TTS engine to free GPU VRAM">
+                    <button type="button" class="btn-voice-action btn-voice-unload" id="unloadVoiceBtn"
+                        title="Unload Kokoro TTS engine to free GPU VRAM">
                         <i class="fa-solid fa-power-off"></i> <span>Unload</span>
                     </button>
-                    <button type="button" class="btn-voice-action btn-voice-reset" id="resetVoiceBtn" title="Reset voice sliders and settings to default">
+                    <button type="button" class="btn-voice-action btn-voice-reset" id="resetVoiceBtn"
+                        title="Reset voice sliders and settings to default">
                         <i class="fa-solid fa-rotate-left"></i> <span>Reset</span>
                     </button>
                 </div>
@@ -1861,65 +2521,110 @@
     </div>
 
     <!-- Stats Window Modal -->
-    <div class="draggable-window hidden" id="statsWindow" style="width:350px; left:60px; top:15px; z-index:100;">
+    <div class="draggable-window hidden" id="statsWindow"
+        style="width:420px; max-width:min(420px, 94vw); left:60px; top:15px; z-index:100;">
         <div class="window-header" id="statsWindowHeader">
-            <span class="window-title"><i class="fa-solid fa-chart-pie"></i> Usage Stats & Info</span>
-            <button class="icon-btn-sm" id="closeStatsBtn"><i class="fa-solid fa-xmark"></i></button>
+            <span class="window-title"><i class="fa-solid fa-chart-pie" style="color: var(--accent-purple);"></i> Usage
+                Stats & Info</span>
+            <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
+                <span class="stats-mode-badge mode-api" id="statsModeBadge">
+                    <span class="stats-mode-dot"></span>
+                    <span id="statsModeBadgeText">API Cloud</span>
+                </span>
+                <button class="icon-btn-sm" id="closeStatsBtn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
         </div>
-        <div class="window-body">
-            <div class="settings-group">
-                <label>Current Model</label>
-                <div class="setting-row">
-                    <span id="statsModelName" style="color:var(--text-primary); font-weight:600;">-</span>
+        <div class="window-body" style="padding: 14px 16px; gap: 14px;">
+            <!-- Active Model Card -->
+            <div class="stats-section">
+                <div class="stats-section-label">
+                    <i class="fa-solid fa-microchip"></i> Active Inference Target
                 </div>
-                <div class="setting-row">
-                    <span>Architecture:</span>
-                    <span id="statsArchitecture">-</span>
-                </div>
-                <div class="setting-row">
-                    <span>Model Type:</span>
-                    <span id="statsModelType">-</span>
-                </div>
-                <div class="setting-row">
-                    <span>Quantization:</span>
-                    <span id="statsQuantization">-</span>
-                </div>
-                <div class="setting-row">
-                    <span>Context Limit:</span>
-                    <span id="statsContextLimit" class="gradient-text">-</span>
+                <div class="stats-model-card">
+                    <div class="stats-model-top">
+                        <div class="stats-model-icon-box" id="statsModelIconBox">
+                            <i class="fa-solid fa-cloud" id="statsModelIcon"></i>
+                        </div>
+                        <div class="stats-model-details">
+                            <div id="statsModelName" class="stats-model-title">-</div>
+                            <div id="statsProviderTag" class="stats-model-sub">-</div>
+                        </div>
+                    </div>
+                    <div class="stats-spec-grid">
+                        <div class="stats-spec-item">
+                            <span class="stats-spec-label">Architecture</span>
+                            <span id="statsArchitecture" class="stats-spec-val">-</span>
+                        </div>
+                        <div class="stats-spec-item">
+                            <span class="stats-spec-label">Model Type</span>
+                            <span id="statsModelType" class="stats-spec-val stats-type-badge">-</span>
+                        </div>
+                        <div class="stats-spec-item">
+                            <span class="stats-spec-label">Quantization / Host</span>
+                            <span id="statsQuantization" class="stats-spec-val">-</span>
+                        </div>
+                        <div class="stats-spec-item">
+                            <span class="stats-spec-label">Context Limit</span>
+                            <span id="statsContextLimit" class="stats-spec-val gradient-text">-</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="settings-group">
-                <label>Global Usage Statistics</label>
-                <div class="setting-row">
-                    <span>Total Tokens:</span>
-                    <span id="statsTotalTokens">-</span>
+            <!-- Global Usage Metrics Grid -->
+            <div class="stats-section">
+                <div class="stats-section-label">
+                    <i class="fa-solid fa-chart-line"></i> Global Usage Metrics
                 </div>
-                <div class="setting-row">
-                    <span>Total Generation Time:</span>
-                    <span id="statsTotalTime">-</span>
-                </div>
-                <div class="setting-row">
-                    <span>Est. Total Cost:</span>
-                    <span id="statsTotalCost" style="color:var(--accent-emerald);">-</span>
+                <div class="stats-metrics-grid">
+                    <div class="stats-metric-card">
+                        <div class="stats-metric-header">
+                            <span class="stats-metric-icon"><i class="fa-solid fa-font"></i></span>
+                            <span class="stats-metric-label">Tokens</span>
+                        </div>
+                        <div class="stats-metric-value" id="statsTotalTokens">0</div>
+                    </div>
+                    <div class="stats-metric-card">
+                        <div class="stats-metric-header">
+                            <span class="stats-metric-icon"><i class="fa-solid fa-stopwatch"></i></span>
+                            <span class="stats-metric-label">Duration</span>
+                        </div>
+                        <div class="stats-metric-value" id="statsTotalTime">0.0s</div>
+                    </div>
+                    <div class="stats-metric-card">
+                        <div class="stats-metric-header">
+                            <span class="stats-metric-icon"><i class="fa-solid fa-receipt"></i></span>
+                            <span class="stats-metric-label">Est. Cost</span>
+                        </div>
+                        <div class="stats-metric-value text-emerald" id="statsTotalCost">$0.0000</div>
+                    </div>
+                    <div class="stats-metric-card">
+                        <div class="stats-metric-header">
+                            <span class="stats-metric-icon"><i class="fa-solid fa-bolt"></i></span>
+                            <span class="stats-metric-label">Avg Speed</span>
+                        </div>
+                        <div class="stats-metric-value" id="statsAvgSpeed">— tk/s</div>
+                    </div>
                 </div>
             </div>
-            <div class="settings-group">
-                <button class="btn-secondary" id="statsUnloadAllBtn"
-                    style="width: 100%; border-color: rgba(239, 68, 68, 0.25); color: #f87171; margin-bottom: 8px; justify-content: center; gap: 8px; display: flex; align-items: center; font-size: 0.82rem; padding: 8px 12px;">
-                    <i class="fa-solid fa-broom"></i> Unload All Models (Free VRAM)
+
+            <!-- Action Buttons -->
+            <div class="stats-actions-group">
+                <button class="stats-action-btn unload-btn" id="statsUnloadAllBtn">
+                    <i class="fa-solid fa-broom"></i>
+                    <span>Unload All Models (Free VRAM)</span>
                 </button>
-                <button class="btn-secondary" id="resetStatsBtn"
-                    style="width: 100%; border-color: rgba(239, 68, 68, 0.2); color: #ef4444;">
-                    <i class="fa-solid fa-trash-can"></i> Reset Statistics
+                <button class="stats-action-btn reset-btn" id="resetStatsBtn">
+                    <i class="fa-solid fa-trash-can"></i>
+                    <span>Reset Statistics</span>
                 </button>
             </div>
         </div>
     </div>
 
     <!-- nivm Network Monitor Window -->
-    <div class="draggable-window hidden" id="networkMonitorWindow" style="width:460px; left:60px; top:300px; z-index:100;">
+    <div class="draggable-window hidden" id="networkMonitorWindow"
+        style="width:460px; left:60px; top:300px; z-index:100;">
         <div class="window-header" id="networkMonitorHeader">
             <span class="window-title">
                 <i class="fa-solid fa-network-wired" style="color: var(--accent-emerald);"></i>
@@ -1941,7 +2646,8 @@
                     </div>
                     <div>
                         <div class="sentinel-status-label" id="netStatusBadgeText">Local Engine Active</div>
-                        <div class="sentinel-status-sub" id="netStatusSubText">0 external connections &bull; 127.0.0.1:8000</div>
+                        <div class="sentinel-status-sub" id="netStatusSubText">0 external connections &bull;
+                            127.0.0.1:8000</div>
                     </div>
                 </div>
                 <div class="sentinel-meta-pills">
@@ -1971,9 +2677,11 @@
 
             <!-- Tabs: Connected Sockets vs Security Log -->
             <div class="sentinel-tabs-row" style="margin-top: 10px;">
-                <button type="button" class="sentinel-tab active" id="sentinelTabSockets">Connected Sockets (<span id="netLocalCount">0</span>)</button>
+                <button type="button" class="sentinel-tab active" id="sentinelTabSockets">Connected Sockets (<span
+                        id="netLocalCount">0</span>)</button>
                 <button type="button" class="sentinel-tab" id="sentinelTabLogs">Forensic Security Log</button>
-                <button type="button" id="runSocketAuditBtn" class="sentinel-audit-btn" title="Run manual socket verification sweep">
+                <button type="button" id="runSocketAuditBtn" class="sentinel-audit-btn"
+                    title="Run manual socket verification sweep">
                     <i class="fa-solid fa-arrows-rotate"></i> Audit Now
                 </button>
             </div>
@@ -2024,7 +2732,7 @@
     </div>
 
     <!-- In-Browser File Explorer Modal -->
-    <div class="window-wrapper hidden" id="fileBrowserModal" style="z-index: 500;">
+    <div class="window-wrapper hidden" id="fileBrowserModal" style="z-index: 1200;">
         <div class="draggable-window" id="fileBrowserWindow">
             <div class="window-header" id="fileBrowserHeader">
                 <div class="window-title">
@@ -2032,7 +2740,8 @@
                     <i class="fa-solid fa-folder-tree" style="color: var(--accent-purple);"></i>
                     <span id="fileBrowserModalTitle">Browse & Select GGUF Model</span>
                 </div>
-                <button class="icon-btn-sm" id="closeFileBrowserBtn" type="button"><i class="fa-solid fa-xmark"></i></button>
+                <button class="icon-btn-sm" id="closeFileBrowserBtn" type="button"><i
+                        class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="window-body file-browser-body">
                 <!-- Shortcuts Bar -->
@@ -2074,11 +2783,13 @@
                         <span class="file-browser-none-selected">No file selected</span>
                     </div>
                     <div class="file-browser-actions">
-                        <button class="btn-secondary file-browser-native-btn" id="fileBrowserNativeBtn" title="Open Native System File Dialog" type="button">
+                        <button class="btn-secondary file-browser-native-btn" id="fileBrowserNativeBtn"
+                            title="Open Native System File Dialog" type="button">
                             <i class="fa-solid fa-arrow-up-right-from-square"></i> OS Picker
                         </button>
                         <button class="btn-secondary" id="fileBrowserCancelBtn" type="button">Cancel</button>
-                        <button class="btn-primary" id="fileBrowserSelectBtn" type="button" disabled>Select Model</button>
+                        <button class="btn-primary" id="fileBrowserSelectBtn" type="button" disabled>Select
+                            Model</button>
                     </div>
                 </div>
             </div>
@@ -2090,48 +2801,61 @@
     <!-- Image Lightbox Modal -->
     <div id="imageLightboxModal" class="modal-overlay hidden">
         <div class="lightbox-content">
-            <button class="lightbox-close-btn" id="closeLightboxBtn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            <button class="lightbox-close-btn" id="closeLightboxBtn" title="Close"><i
+                    class="fa-solid fa-xmark"></i></button>
             <img id="lightboxImage" src="" alt="Enlarged Preview">
         </div>
     </div>
 
     <!-- Video Preview Modal -->
     <div id="videoPreviewModal" class="modal-overlay hidden">
-        <div class="lightbox-content" style="max-width: 900px; width: 90vw; background: var(--bg-surface); padding: 16px; border-radius: 12px; border: 1px solid var(--border-light);">
+        <div class="lightbox-content"
+            style="max-width: 900px; width: 90vw; background: var(--bg-surface); padding: 16px; border-radius: 12px; border: 1px solid var(--border-light);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <div style="font-size: 1rem; font-weight: 600; color: var(--text-primary);">
-                    <i class="fa-solid fa-film" style="margin-right: 6px; color: var(--accent-purple);"></i> Video Inspection
+                    <i class="fa-solid fa-film" style="margin-right: 6px; color: var(--accent-purple);"></i> Video
+                    Inspection
                 </div>
-                <button class="icon-btn-sm" id="closeVideoPreviewBtn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+                <button class="icon-btn-sm" id="closeVideoPreviewBtn" title="Close"><i
+                        class="fa-solid fa-xmark"></i></button>
             </div>
-            
-            <div style="position: relative; width: 100%; background: #000; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+
+            <div
+                style="position: relative; width: 100%; background: #000; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
                 <video id="videoPreviewPlayer" style="width: 100%; max-height: 65vh;"></video>
             </div>
-            
+
             <div id="videoCustomControls" style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
                 <div style="font-size: 0.85rem; color: var(--text-secondary); text-align: center;">
                     <i class="fa-solid fa-microchip"></i> Frames Extracted & Sent to LLM Vision Projector
                 </div>
-                
+
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <button id="videoPlayPauseBtn" class="icon-btn-sm" style="color: var(--text-primary); width: 32px;"><i class="fa-solid fa-play"></i></button>
-                    <div id="videoTimeDisplay" style="font-size: 0.8rem; font-family: var(--font-code); color: var(--text-secondary); min-width: 85px; text-align: center;">0:00 / 0:00</div>
-                    
-                    <div id="videoMarkersTrack" style="flex: 1; position: relative; height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; cursor: pointer; overflow: hidden;">
-                        <div id="videoProgressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 0%; background: rgba(255,255,255,0.25); pointer-events: none;"></div>
+                    <button id="videoPlayPauseBtn" class="icon-btn-sm"
+                        style="color: var(--text-primary); width: 32px;"><i class="fa-solid fa-play"></i></button>
+                    <div id="videoTimeDisplay"
+                        style="font-size: 0.8rem; font-family: var(--font-code); color: var(--text-secondary); min-width: 85px; text-align: center;">
+                        0:00 / 0:00</div>
+
+                    <div id="videoMarkersTrack"
+                        style="flex: 1; position: relative; height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; cursor: pointer; overflow: hidden;">
+                        <div id="videoProgressBar"
+                            style="position: absolute; left: 0; top: 0; height: 100%; width: 0%; background: rgba(255,255,255,0.25); pointer-events: none;">
+                        </div>
                         <!-- Markers injected here dynamically -->
                     </div>
-                    
-                    <button id="videoMuteBtn" class="icon-btn-sm" style="color: var(--text-primary); width: 32px;"><i class="fa-solid fa-volume-high"></i></button>
-                    <button id="videoFullscreenBtn" class="icon-btn-sm" style="color: var(--text-primary); width: 32px;"><i class="fa-solid fa-expand"></i></button>
+
+                    <button id="videoMuteBtn" class="icon-btn-sm" style="color: var(--text-primary); width: 32px;"><i
+                            class="fa-solid fa-volume-high"></i></button>
+                    <button id="videoFullscreenBtn" class="icon-btn-sm"
+                        style="color: var(--text-primary); width: 32px;"><i class="fa-solid fa-expand"></i></button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Application Logic -->
-    <script type="module" src="/static/js/app.js?v=8.3"></script>
+    <script type="module" src="/static/js/app.js?v=9.6"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {

@@ -63,6 +63,15 @@ const rawDom = {
     promptPersonalityBtn: document.getElementById('promptPersonalityBtn'),
     nsfwToggle: document.getElementById('nsfwToggle'),
     nsfwFireIcon: document.getElementById('nsfwFireIcon'),
+
+    // Image Studio Modal Elements
+    imageStudioBtn: document.getElementById('imageStudioBtn'),
+    drawerImageStudioBtn: document.getElementById('drawerImageStudioBtn'),
+    imageStudioModal: document.getElementById('imageStudioModal'),
+    imageStudioWindow: document.getElementById('imageStudioWindow'),
+    imageStudioWindowHeader: document.getElementById('imageStudioWindowHeader'),
+    closeImageStudioBtn: document.getElementById('closeImageStudioBtn'),
+    openImageStudioFromSettingsBtn: document.getElementById('openImageStudioFromSettingsBtn'),
     
     // Voice Modal Elements
     voiceBtn: document.getElementById('voiceBtn'),
@@ -130,6 +139,11 @@ const rawDom = {
     statsTotalTokens: document.getElementById('statsTotalTokens'),
     statsTotalTime: document.getElementById('statsTotalTime'),
     statsTotalCost: document.getElementById('statsTotalCost'),
+    statsAvgSpeed: document.getElementById('statsAvgSpeed'),
+    statsModeBadge: document.getElementById('statsModeBadge'),
+    statsModeBadgeText: document.getElementById('statsModeBadgeText'),
+    statsProviderTag: document.getElementById('statsProviderTag'),
+    statsModelIcon: document.getElementById('statsModelIcon'),
     resetStatsBtn: document.getElementById('resetStatsBtn'),
 
     themeBtn: document.getElementById('themeBtn'),

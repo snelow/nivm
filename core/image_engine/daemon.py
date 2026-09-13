@@ -69,6 +69,14 @@ def start_daemon(timeout_seconds: int = 60) -> bool:
         "--preview-method", "auto",
     ]
 
+    try:
+        from .illustrious.config import ensure_extra_model_paths, EXTRA_MODEL_PATHS_YAML
+        ensure_extra_model_paths()
+        if os.path.isfile(EXTRA_MODEL_PATHS_YAML):
+            cmd.extend(["--extra-model-paths-config", EXTRA_MODEL_PATHS_YAML])
+    except Exception as e:
+        logger.warning(f"Could not configure extra model paths: {e}")
+
     logger.info(f"Launching ComfyUI daemon: {' '.join(cmd)}")
     log_path = os.path.join(comfy_dir, "user", "nivm_daemon.log")
     try:

@@ -69,9 +69,21 @@ async def execute_image_workflow(
     """
     # Ensure daemon is running
     if not is_running():
+        if progress_callback:
+            progress_callback({
+                "status": "booting",
+                "stage_text": "Booting headless diffusion engine (starting ComfyUI daemon)...",
+                "percentage": 2,
+            })
         started = start_daemon()
         if not started:
             raise RuntimeError("Could not start headless ComfyUI diffusion daemon.")
+        if progress_callback:
+            progress_callback({
+                "status": "ready",
+                "stage_text": "Diffusion engine online, preparing workflow graph...",
+                "percentage": 5,
+            })
 
     client_id = str(uuid.uuid4())
     base_url = get_api_base_url()
@@ -94,7 +106,15 @@ async def execute_image_workflow(
     # Connect to WebSocket and monitor progress
     output_images: List[Dict[str, Any]] = []
     current_step = 0
-    total_steps = 5
+    total_steps = 6
+
+    # Extract configured steps from KSampler node in workflow
+    for node_data in workflow.values():
+        if isinstance(node_data, dict) and "KSampler" in str(node_data.get("class_type", "")):
+            inputs = node_data.get("inputs", {})
+            if "steps" in inputs and isinstance(inputs["steps"], (int, float)):
+                total_steps = int(inputs["steps"])
+                break
 
     start_time = time.time()
 
@@ -129,8 +149,10 @@ async def execute_image_workflow(
                                 if progress_callback:
                                     progress_callback({
                                         "status": "generating",
+                                        "is_sampler": True,
                                         "step": current_step,
                                         "max_steps": total_steps,
+                                        "stage_text": f"Step {current_step} / {total_steps}",
                                         "percentage": round((current_step / max(1, total_steps)) * 100),
                                         "time_elapsed": round(time.time() - start_time, 1),
                                         "preview_url": preview_data_url,
@@ -155,8 +177,10 @@ async def execute_image_workflow(
                     if progress_callback:
                         progress_callback({
                             "status": "generating",
+                            "is_sampler": True,
                             "step": current_step,
                             "max_steps": total_steps,
+                            "stage_text": f"Step {current_step} / {total_steps}",
                             "percentage": percent,
                             "time_elapsed": round(time.time() - start_time, 1),
                         })
@@ -168,10 +192,56 @@ async def execute_image_workflow(
                         break
 
                     if node and progress_callback and (data.get("prompt_id") == prompt_id or not data.get("prompt_id")):
-                        stage_desc = NODE_STAGE_NAMES.get(str(node), f"Processing stage {node}...")
-                        pct = 5 if str(node) in ["1", "2", "3"] else (15 if str(node) in ["4", "5", "6"] else round((current_step / max(1, total_steps)) * 100))
+                        node_str = str(node)
+                        node_info = workflow.get(node_str, {})
+                        meta_title = node_info.get("_meta", {}).get("title")
+                        class_type = node_info.get("class_type", "")
+                        inputs = node_info.get("inputs", {})
+
+                        is_sampler = ("KSampler" in class_type or (meta_title and "KSampler" in meta_title))
+
+                        if is_sampler:
+                            if "steps" in inputs and isinstance(inputs["steps"], (int, float)):
+                                total_steps = int(inputs["steps"])
+                            stage_desc = f"Step {current_step} / {total_steps}..."
+                        elif meta_title:
+                            if "LoRA" in meta_title and inputs.get("lora_name"):
+                                stage_desc = f"Loading LoRA ({inputs['lora_name']})..."
+                            elif meta_title == "Load Checkpoint" and inputs.get("ckpt_name"):
+                                stage_desc = f"Loading Checkpoint ({inputs['ckpt_name']})..."
+                            else:
+                                stage_desc = f"{meta_title}..."
+                        elif class_type == "LoraLoader":
+                            stage_desc = f"Loading LoRA ({inputs.get('lora_name', 'weights')})..."
+                        elif class_type == "CheckpointLoaderSimple":
+                            stage_desc = f"Loading Checkpoint ({inputs.get('ckpt_name', 'model')})..."
+                        elif class_type == "CLIPTextEncode":
+                            stage_desc = "Encoding text prompt with CLIP..."
+                        elif class_type == "VAEDecode":
+                            stage_desc = "Decoding latent image with VAE..."
+                        elif class_type == "SaveImage":
+                            stage_desc = "Saving generated image..."
+                        else:
+                            stage_desc = NODE_STAGE_NAMES.get(node_str, f"Processing stage {node_str}...")
+
+                        pct = 5 if class_type in ("CheckpointLoaderSimple", "EmptyLatentImage") else (
+                            12 if class_type == "LoraLoader" else (
+                                18 if class_type == "CLIPTextEncode" else (
+                                    85 if class_type == "VAEDecode" else (
+                                        95 if class_type == "SaveImage" else (
+                                            max(20, round((current_step / max(1, total_steps)) * 100)) if is_sampler else round((current_step / max(1, total_steps)) * 100)
+                                        )
+                                    )
+                                )
+                            )
+                        )
+
                         progress_callback({
                             "status": "generating",
+                            "node": node_str,
+                            "class_type": class_type,
+                            "is_sampler": is_sampler,
+                            "sampler": "KSampler" if is_sampler else None,
                             "step": current_step,
                             "max_steps": total_steps,
                             "stage_text": stage_desc,
@@ -230,6 +300,17 @@ async def execute_image_workflow(
 
     total_duration = round(time.time() - start_time, 1)
     logger.info(f"Image saved successfully to {target_path} in {total_duration}s")
+
+    meta_path = f"{target_path}.meta.json"
+    try:
+        with open(meta_path, "w", encoding="utf-8") as mf:
+            json.dump({
+                "duration_seconds": total_duration,
+                "filename": saved_filename,
+                "url": f"/images/{saved_filename}"
+            }, mf)
+    except Exception as e:
+        logger.warning(f"Failed to write image meta: {e}")
 
     result_data = {
         "filename": saved_filename,

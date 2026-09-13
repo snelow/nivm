@@ -76,6 +76,13 @@ def compute_dimensions(
                         w = round((w / h) * max_dimension)
                         h = max_dimension
 
+                # Cap total pixels to 1MP (1024*1024) to preserve fast generation speed on 4GB VRAM
+                max_pixels = 1024 * 1024
+                if (w * h) > max_pixels:
+                    ratio = math.sqrt(max_pixels / (w * h))
+                    w = round(w * ratio)
+                    h = round(h * ratio)
+
                 # Round to nearest multiple of 16
                 w = max(256, round(w / 16) * 16)
                 h = max(256, round(h / 16) * 16)

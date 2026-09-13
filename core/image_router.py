@@ -10,7 +10,7 @@ import uuid
 import asyncio
 import logging
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Request, UploadFile, File, Form
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 
@@ -60,7 +60,21 @@ class EditRequest(BaseModel):
 
 def _resolve_image_path(filename_or_path: str) -> str:
     """Finds absolute path of an image in uploads, images, or direct path."""
-    clean = filename_or_path.strip().replace("file://", "")
+    clean = (filename_or_path or "").strip().replace("file://", "")
+
+    # Fallback if filename is empty, generic pronoun, or "latest"
+    if not clean or clean.lower() in ("latest", "recent", "last", "current", "image", "it", "this", "this_image", "default", "photo", "picture"):
+        candidates = []
+        for d in (IMAGES_OUTPUT_DIR, UPLOADS_DIR):
+            if os.path.isdir(d):
+                for f in os.listdir(d):
+                    fp = os.path.join(d, f)
+                    if os.path.isfile(fp) and f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                        candidates.append((os.path.getmtime(fp), fp))
+        if candidates:
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            return candidates[0][1]
+
     if os.path.isabs(clean) and os.path.isfile(clean):
         return clean
 
@@ -137,6 +151,69 @@ async def generate_image_endpoint(req: GenerateRequest):
     """
     Generate an image from pure text description.
     """
+    # Auto-detect if request targets a registered anime character
+    try:
+        from .image_engine.illustrious.characters import get_characters
+        from .image_engine.illustrious.config import ILLUSTRIOUS_CHECKPOINT
+        from .image_engine.config import get_comfy_dir
+
+        ckpt_path = os.path.join(get_comfy_dir(), "models", "checkpoints", ILLUSTRIOUS_CHECKPOINT)
+        if os.path.isfile(ckpt_path):
+            chars = get_characters(nsfw_enabled=True)
+            prompt_l = req.prompt.lower()
+            matched_char = None
+            for ck, cv in chars.items():
+                disp_lower = cv.get("display_name", "").lower()
+                key_clean = ck.replace("_", " ")
+                name_tokens = [tok for tok in disp_lower.split() if len(tok) >= 3]
+                if disp_lower in prompt_l or key_clean in prompt_l or (name_tokens and any(tok in prompt_l for tok in name_tokens)):
+                    matched_char = ck
+                    break
+
+            # Check for registered pose in prompt
+            matched_pose = "none"
+            from .image_engine.illustrious.characters import POSE_OPTIONS, CONCEPT_OPTIONS
+            for pk, pv in POSE_OPTIONS.items():
+                if pk == "none":
+                    continue
+                pk_clean = pk.replace("_", " ")
+                p_disp = pv.get("display_name", "").lower()
+                p_tokens = [tok for tok in p_disp.split() if len(tok) >= 4 and not tok.startswith("&")]
+                if pk in prompt_l or pk_clean in prompt_l or (p_tokens and any(tok in prompt_l for tok in p_tokens)):
+                    matched_pose = pk
+                    break
+
+            # Check for registered concept in prompt
+            matched_concept = "none"
+            for ck_opt, cv_opt in CONCEPT_OPTIONS.items():
+                if ck_opt == "none":
+                    continue
+                ck_clean = ck_opt.replace("_", " ")
+                c_disp = cv_opt.get("display_name", "").lower()
+                c_tokens = [tok for tok in c_disp.split() if len(tok) >= 4 and not tok.startswith("&")]
+                if ck_opt in prompt_l or ck_clean in prompt_l or (c_tokens and any(tok in prompt_l for tok in c_tokens)):
+                    matched_concept = ck_opt
+                    break
+
+            is_anime_prompt = bool(matched_char) or (matched_pose != "none") or (matched_concept != "none") or any(
+                w in prompt_l for w in ("anime", "illustrious", "waifu", "manga", "vtuber")
+            )
+
+            if is_anime_prompt:
+                is_turbo = any(w in prompt_l for w in ("turbo", "fast", "faster", "quick", "lcm", "speed"))
+                anime_req = AnimeGenerateRequest(
+                    character=matched_char or "none",
+                    concept=matched_concept,
+                    pose=matched_pose,
+                    user_prompt=req.prompt,
+                    resolution=req.aspect_ratio if req.aspect_ratio in ("portrait", "landscape", "square") else "portrait",
+                    seed=req.seed,
+                    use_lcm=is_turbo,
+                )
+                return await generate_anime_endpoint(anime_req)
+    except Exception as e:
+        logger.debug(f"Anime auto-detect check passed: {e}")
+
     model_status = check_image_models_status()
     if not model_status.get("installed"):
         raise HTTPException(
@@ -232,6 +309,8 @@ async def generate_image_endpoint(req: GenerateRequest):
         "task_id": task_id,
         "prompt": req.prompt,
         "aspect_ratio": req.aspect_ratio,
+        "steps": req.steps,
+        "max_steps": req.steps,
     }
 
 
@@ -388,6 +467,8 @@ async def edit_image_endpoint(req: EditRequest):
         "prompt": req.prompt,
         "denoise_strength": req.denoise_strength,
         "aspect_ratio": req.aspect_ratio,
+        "steps": req.steps,
+        "max_steps": req.steps,
     }
 
 
@@ -459,11 +540,503 @@ async def get_image_history():
 
     for f in files[:100]:
         fpath = os.path.join(IMAGES_OUTPUT_DIR, f)
+        meta_fpath = f"{fpath}.meta.json"
+        dur = None
+        if os.path.isfile(meta_fpath):
+            try:
+                with open(meta_fpath, "r", encoding="utf-8") as mf:
+                    dur = json.load(mf).get("duration_seconds")
+            except Exception:
+                pass
+
         items.append({
             "filename": f,
             "url": f"/images/{f}",
             "timestamp": int(os.path.getmtime(fpath) * 1000),
             "size_bytes": os.path.getsize(fpath),
+            "duration_seconds": dur,
         })
 
     return items
+
+
+@router.get("/meta/{filename}")
+async def get_image_metadata(filename: str):
+    """Returns metadata for an image including generation duration."""
+    base = os.path.basename(filename)
+    img_path = os.path.join(IMAGES_OUTPUT_DIR, base)
+    meta_path = f"{img_path}.meta.json"
+    if os.path.isfile(meta_path):
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"filename": base, "duration_seconds": None}
+
+
+# ── Illustrious Anime Pipeline Endpoints ─────────────────────────
+
+class AnimeGenerateRequest(BaseModel):
+    character: str
+    hairstyle: Optional[str] = None
+    outfit: Optional[str] = None
+    expression: Optional[str] = "smile"
+    concept: Optional[str] = "none"
+    pose: Optional[str] = "none"
+    background: Optional[str] = "auto"
+    user_prompt: Optional[str] = ""
+    negative_prompt: Optional[str] = None
+    resolution: Optional[str] = "portrait"
+    seed: Optional[int] = None
+    steps: Optional[int] = None
+    cfg: Optional[float] = None
+    batch_count: int = 1
+    use_lcm: bool = False
+
+
+class CharacterSaveRequest(BaseModel):
+    key: str
+    data: Dict[str, Any]
+
+
+@router.get("/anime/registry")
+async def get_anime_registry(nsfw_enabled: bool = False, include_all: bool = False):
+    """Returns catalog for character, hairstyle, outfit, expression, concept, pose selectors."""
+    from .image_engine.illustrious.characters import serialize_registry
+    return serialize_registry(nsfw_enabled=nsfw_enabled, include_all=include_all)
+
+
+@router.get("/anime/characters")
+async def get_anime_characters(nsfw_enabled: bool = False):
+    """Returns available characters and styling presets."""
+    from .image_engine.illustrious.characters import get_characters
+    return get_characters(nsfw_enabled=nsfw_enabled)
+
+
+@router.post("/anime/characters")
+async def save_anime_character(req: CharacterSaveRequest):
+    """Adds or updates a character profile in the JSON registry."""
+    from .image_engine.illustrious.characters import save_character
+    clean_key = req.key.strip().lower().replace(" ", "_")
+    if not clean_key:
+        raise HTTPException(status_code=400, detail="Invalid character key")
+    saved = save_character(clean_key, req.data)
+    return {"success": True, "key": clean_key, "character": saved}
+
+
+@router.delete("/anime/characters/{char_key}")
+async def delete_anime_character(char_key: str):
+    """Removes a character entry from the registry and deletes its LoRA file."""
+    from .image_engine.illustrious.characters import delete_character
+    ok = delete_character(char_key, delete_file=True)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Character not found")
+    return {"success": True, "key": char_key}
+
+
+
+@router.post("/anime/generate")
+async def generate_anime_endpoint(req: AnimeGenerateRequest):
+    """Generate an anime illustration using Illustrious SDXL with dynamic LoRA chaining."""
+    from .image_engine.illustrious.characters import get_characters
+    from .image_engine.illustrious.workflow_builder import (
+        build_illustrious_workflow,
+        build_lcm_workflow,
+    )
+    from .image_engine.illustrious.config import (
+        ILLUSTRIOUS_CHECKPOINT,
+        DEFAULT_STEPS,
+        DEFAULT_CFG,
+        LCM_STEPS,
+        LCM_CFG,
+    )
+    from .image_engine.config import get_comfy_dir
+
+    chars = get_characters(nsfw_enabled=True)
+    if req.character and req.character not in ("none", "base", "prompt_only") and req.character not in chars:
+        raise HTTPException(status_code=400, detail=f"Character '{req.character}' not found.")
+
+    ckpt_path = os.path.join(get_comfy_dir(), "models", "checkpoints", ILLUSTRIOUS_CHECKPOINT)
+    if not os.path.isfile(ckpt_path):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Illustrious checkpoint '{ILLUSTRIOUS_CHECKPOINT}' not found in ComfyUI models/checkpoints."
+        )
+
+    task_id = str(uuid.uuid4())
+    steps = req.steps or (LCM_STEPS if req.use_lcm else DEFAULT_STEPS)
+    cfg = req.cfg or (LCM_CFG if req.use_lcm else DEFAULT_CFG)
+
+    _active_tasks[task_id] = {
+        "status": "queued",
+        "step": 0,
+        "max_steps": steps,
+        "percentage": 0,
+        "time_elapsed": 0.0,
+        "preview_url": None,
+        "result": None,
+        "error": None,
+    }
+    queue = asyncio.Queue()
+    _task_queues[task_id] = queue
+
+    def on_progress(event_data: Dict[str, Any]):
+        if task_id in _active_tasks:
+            _active_tasks[task_id].update(event_data)
+        try:
+            queue.put_nowait(event_data)
+        except Exception:
+            pass
+
+    builder_fn = build_lcm_workflow if req.use_lcm else build_illustrious_workflow
+    workflow, positive_prompt = builder_fn(
+        char_key=req.character,
+        hairstyle_key=req.hairstyle,
+        outfit_key=req.outfit,
+        expr_key=req.expression,
+        concept_key=req.concept or "none",
+        pose_key=req.pose or "none",
+        bg_key=req.background or "auto",
+        user_prompt=req.user_prompt or "",
+        negative_prompt=req.negative_prompt,
+        seed=req.seed if req.seed is not None else -1,
+        steps=steps,
+        cfg=cfg,
+        resolution=req.resolution or "portrait",
+        batch_count=req.batch_count or 1,
+    )
+
+    async def _run_anime_task():
+        saved_vram_state = prepare_vram_for_image_generation()
+        try:
+            result = await execute_image_workflow(workflow, progress_callback=on_progress)
+
+            if saved_vram_state:
+                on_progress({
+                    "stage_text": "Restoring language model into memory...",
+                    "percentage": 98,
+                })
+                await restore_vram_after_image_generation_async(saved_vram_state)
+                saved_vram_state = None
+
+            _active_tasks[task_id]["result"] = result
+            _active_tasks[task_id]["image"] = result
+            _active_tasks[task_id]["status"] = "complete"
+            _active_tasks[task_id]["percentage"] = 100
+            try:
+                queue.put_nowait({
+                    "status": "complete",
+                    "percentage": 100,
+                    "image": result,
+                })
+            except Exception:
+                pass
+        except Exception as e:
+            logger.error(f"Anime generation failed: {e}")
+            _active_tasks[task_id]["status"] = "error"
+            _active_tasks[task_id]["error"] = str(e)
+            try:
+                queue.put_nowait({
+                    "status": "error",
+                    "error": str(e),
+                })
+            except Exception:
+                pass
+        finally:
+            if saved_vram_state:
+                try:
+                    await restore_vram_after_image_generation_async(saved_vram_state)
+                except Exception:
+                    pass
+
+    asyncio.create_task(_run_anime_task())
+
+    return {
+        "success": True,
+        "task_id": task_id,
+        "character": req.character,
+        "prompt": positive_prompt,
+        "use_lcm": req.use_lcm,
+        "steps": steps,
+        "max_steps": steps,
+    }
+
+
+@router.post("/anime/loras/import")
+async def import_lora_file(
+    file: UploadFile = File(...),
+    category: str = Form("character"),
+    name: str = Form(...),
+    trigger_word: str = Form(""),
+    appearance: str = Form(""),
+    strength: float = Form(0.9),
+    is_nsfw: bool = Form(False),
+    outfit_name: str = Form("Default"),
+    outfit_trigger: str = Form(""),
+    outfit_is_nsfw: bool = Form(False),
+):
+    """Saves uploaded LoRA into models/image/loras and registers it in the JSON catalog."""
+    from .image_engine.illustrious.config import LORAS_DIR
+    from .image_engine.illustrious.characters import save_character, _load_options
+
+    if not file.filename.lower().endswith((".safetensors", ".pt")):
+        raise HTTPException(status_code=400, detail="Only .safetensors files are supported.")
+
+    os.makedirs(LORAS_DIR, exist_ok=True)
+
+    def _parse_bool(v: Any) -> bool:
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.strip().lower() in ("true", "1", "yes", "on")
+        return bool(v)
+
+    parsed_is_nsfw = _parse_bool(is_nsfw)
+    parsed_outfit_is_nsfw = _parse_bool(outfit_is_nsfw)
+
+    clean_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in name.strip().lower())
+    prefix_map = {
+        "character": "char_",
+        "concept": "concept_",
+        "pose": "pose_",
+    }
+    prefix = prefix_map.get(category, "lora_")
+    if clean_name.startswith(prefix):
+        clean_name = clean_name[len(prefix):]
+    clean_name = clean_name.strip("_-") or "custom_lora"
+
+    target_filename = f"{prefix}{clean_name}.safetensors"
+    target_path = os.path.join(LORAS_DIR, target_filename)
+
+    with open(target_path, "wb") as f:
+        content = await file.read()
+        f.write(content)
+
+    clean_key = clean_name
+    if category == "character":
+        resolved_outfit_name = outfit_name.strip() or "Default"
+        outfit_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in resolved_outfit_name.lower()) or "default"
+        char_data = {
+            "display_name": name.strip(),
+            "lora_file": target_filename,
+            "lora_strength_model": float(strength),
+            "lora_strength_clip": float(strength),
+            "trigger_word": trigger_word.strip(),
+            "appearance": appearance.strip(),
+            "nsfw": parsed_is_nsfw,
+            "outfits": {
+                outfit_key: {
+                    "display_name": resolved_outfit_name,
+                    "trigger": outfit_trigger.strip(),
+                    "nsfw": parsed_outfit_is_nsfw,
+                }
+            },
+        }
+        save_character(clean_key, char_data)
+        return {"success": True, "category": category, "key": clean_key, "filename": target_filename, "data": char_data}
+    else:
+        from .image_engine.illustrious.characters import OPTIONS_JSON
+        opts = _load_options()
+        plural_map = {
+            "concept": "concepts",
+            "pose": "poses",
+        }
+        group_key = plural_map.get(category, "concepts")
+        if group_key not in opts:
+            opts[group_key] = {}
+        entry = {
+            "display_name": name.strip(),
+            "trigger": trigger_word.strip(),
+            "lora_file": target_filename,
+            "strength": float(strength),
+            "nsfw": parsed_is_nsfw,
+        }
+        opts[group_key][clean_key] = entry
+        try:
+            with open(OPTIONS_JSON, "w", encoding="utf-8") as f:
+                json.dump(opts, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"Failed to update options.json: {e}")
+        return {"success": True, "category": category, "key": clean_key, "filename": target_filename, "data": entry}
+
+
+@router.post("/anime/loras/sync")
+async def sync_installed_loras():
+    """Triggers bidirectional sync: removes registered items whose LoRA files were deleted on disk."""
+    from .image_engine.illustrious.characters import sync_lora_files_with_disk
+    result = sync_lora_files_with_disk()
+    return {"success": True, "sync": result}
+
+
+@router.delete("/anime/options/{category}/{item_key}")
+async def delete_anime_option(category: str, item_key: str):
+    """Delete a concept or pose from options.json and deletes its LoRA file."""
+    from .image_engine.illustrious.characters import delete_option_item
+    if category not in ("concepts", "poses"):
+        raise HTTPException(status_code=400, detail="Invalid category")
+    ok = delete_option_item(category, item_key, delete_file=True)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return {"success": True, "category": category, "key": item_key}
+
+
+class AnimeOptionSaveRequest(BaseModel):
+    key: str
+    data: Dict[str, Any]
+
+
+@router.post("/anime/options/{category}")
+async def save_anime_option(category: str, req: AnimeOptionSaveRequest):
+    """Save or update a concept or pose in options.json."""
+    from .image_engine.illustrious.characters import save_option_item
+    if category not in ("concepts", "poses"):
+        raise HTTPException(status_code=400, detail="Invalid category")
+    if req.key == "none":
+        raise HTTPException(status_code=400, detail="Cannot edit default item")
+    ok = save_option_item(category, req.key, req.data)
+    if not ok:
+        raise HTTPException(status_code=500, detail="Failed to save option item")
+    return {"success": True, "category": category, "key": req.key, "data": req.data}
+
+
+class HostLoraImportRequest(BaseModel):
+    source_path: str
+    category: str = "character"
+    name: str
+    trigger_word: str = ""
+    appearance: str = ""
+    strength: float = 0.9
+    is_nsfw: bool = False
+    outfit_name: str = "Default"
+    outfit_trigger: str = ""
+    outfit_is_nsfw: bool = False
+
+
+@router.post("/anime/loras/import-host-file")
+async def import_host_lora_file(req: HostLoraImportRequest):
+    """Imports an existing LoRA file from the host filesystem into models/image/loras and registers it."""
+    import shutil
+    from .image_engine.illustrious.config import LORAS_DIR
+    from .image_engine.illustrious.characters import save_character, _load_options, OPTIONS_JSON
+
+    source = req.source_path.strip()
+    if not os.path.isfile(source):
+        raise HTTPException(status_code=404, detail="Source LoRA file not found on host disk.")
+    if not source.lower().endswith((".safetensors", ".pt")):
+        raise HTTPException(status_code=400, detail="Only .safetensors and .pt files are supported.")
+
+    os.makedirs(LORAS_DIR, exist_ok=True)
+
+    clean_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in req.name.strip().lower())
+    prefix_map = {
+        "character": "char_",
+        "concept": "concept_",
+        "pose": "pose_",
+    }
+    prefix = prefix_map.get(req.category, "lora_")
+    if clean_name.startswith(prefix):
+        clean_name = clean_name[len(prefix):]
+    clean_name = clean_name.strip("_-") or "custom_lora"
+
+    target_filename = f"{prefix}{clean_name}.safetensors"
+    target_path = os.path.join(LORAS_DIR, target_filename)
+
+    if os.path.abspath(source) != os.path.abspath(target_path):
+        try:
+            shutil.copy2(source, target_path)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to copy LoRA file: {e}")
+
+    clean_key = clean_name
+    if req.category == "character":
+        resolved_outfit_name = req.outfit_name.strip() or "Default"
+        outfit_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in resolved_outfit_name.lower()) or "default"
+        char_data = {
+            "display_name": req.name.strip(),
+            "lora_file": target_filename,
+            "lora_strength_model": float(req.strength),
+            "lora_strength_clip": float(req.strength),
+            "trigger_word": req.trigger_word.strip(),
+            "appearance": req.appearance.strip(),
+            "nsfw": bool(req.is_nsfw),
+            "outfits": {
+                outfit_key: {
+                    "display_name": resolved_outfit_name,
+                    "trigger": req.outfit_trigger.strip(),
+                    "nsfw": bool(req.outfit_is_nsfw),
+                }
+            },
+        }
+        save_character(clean_key, char_data)
+        return {"success": True, "category": req.category, "key": clean_key, "filename": target_filename, "data": char_data}
+    else:
+        opts = _load_options()
+        plural_map = {"concept": "concepts", "pose": "poses"}
+        group_key = plural_map.get(req.category, "concepts")
+        if group_key not in opts:
+            opts[group_key] = {}
+        entry = {
+            "display_name": req.name.strip(),
+            "trigger": req.trigger_word.strip(),
+            "lora_file": target_filename,
+            "strength": float(req.strength),
+            "nsfw": bool(req.is_nsfw),
+        }
+        opts[group_key][clean_key] = entry
+        try:
+            with open(OPTIONS_JSON, "w", encoding="utf-8") as f:
+                json.dump(opts, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"Failed to update options.json: {e}")
+        return {"success": True, "category": req.category, "key": clean_key, "filename": target_filename, "data": entry}
+
+
+@router.get("/anime/loras")
+async def list_installed_loras():
+    """List all LoRA files currently in models/image/loras."""
+    from .image_engine.illustrious.config import LORAS_DIR
+    if not os.path.isdir(LORAS_DIR):
+        return []
+    files = []
+    for f in sorted(os.listdir(LORAS_DIR)):
+        if f.lower().endswith(".safetensors"):
+            fpath = os.path.join(LORAS_DIR, f)
+            files.append({
+                "filename": f,
+                "size_bytes": os.path.getsize(fpath),
+                "modified": os.path.getmtime(fpath),
+            })
+    return files
+
+
+class EnsureLoraFileRequest(BaseModel):
+    source_path: str
+
+
+@router.post("/anime/loras/ensure-file")
+async def ensure_lora_file_endpoint(req: EnsureLoraFileRequest):
+    """Ensure a LoRA file from any location on host disk is available in models/image/loras."""
+    import shutil
+    from .image_engine.illustrious.config import LORAS_DIR
+
+    src = req.source_path.strip()
+    if not os.path.isfile(src):
+        raise HTTPException(status_code=404, detail="Source file not found")
+    if not src.lower().endswith((".safetensors", ".pt")):
+        raise HTTPException(status_code=400, detail="Only .safetensors and .pt files are supported")
+
+    os.makedirs(LORAS_DIR, exist_ok=True)
+    filename = os.path.basename(src)
+    dst = os.path.join(LORAS_DIR, filename)
+
+    if os.path.abspath(src) != os.path.abspath(dst):
+        try:
+            shutil.copy2(src, dst)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to copy file into loras directory: {e}")
+
+    return {"success": True, "filename": filename, "path": dst}
+
+
+

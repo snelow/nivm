@@ -1,5 +1,5 @@
 // Service Worker for nivm PWA
-const CACHE_NAME = 'nivm-shell-v30';
+const CACHE_NAME = 'nivm-shell-v45';
 const STATIC_ASSETS = [
     '/',
     '/static/index.html',
@@ -37,6 +37,8 @@ const STATIC_ASSETS = [
     '/static/js/modals/file_browser.js',
     '/static/js/modals/sentinel_modal.js',
     '/static/js/modals/tools_settings.js',
+    '/static/css/modals/image_studio.css',
+    '/static/js/modals/image_studio_modal.js',
     '/static/js/chat/chat_messages.js',
     '/static/js/chat/chat_history.js',
     '/static/js/chat/chat_stream.js',

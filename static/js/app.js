@@ -12,6 +12,7 @@ import { setupSettingsUI, refreshEngineStatusUI, refreshScannedModelsList, updat
 import { setupPersonalityUI } from './modals/personality_modal.js';
 import { setupFileBrowserUI } from './modals/file_browser.js';
 import { setupSentinelUI } from './modals/sentinel_modal.js';
+import { setupImageStudioUI, openImageStudio, switchStudioTab } from './modals/image_studio_modal.js';
 
 // Global references for UI modules and HTML onclick handlers
 window.__nivm_state = state;
@@ -22,6 +23,8 @@ window.checkAndResumeActiveGeneration = checkAndResumeActiveGeneration;
 window.handleUnloadAllModels = handleUnloadAllModels;
 window.refreshEngineStatusUI = refreshEngineStatusUI;
 window.updateModelAvailabilityUI = updateModelAvailabilityUI;
+window.openImageStudio = openImageStudio;
+window.switchStudioTab = switchStudioTab;
 
 const startApp = async () => {
     // Markdown parser options
@@ -70,6 +73,7 @@ const startApp = async () => {
             setupPersonalityUI();
             setupFileBrowserUI();
             setupSentinelUI();
+            setupImageStudioUI();
 
             if (dom.userNameInput) {
                 dom.userNameInput.value = state.userName;

@@ -1926,7 +1926,7 @@
                         <input type="file" id="loraFileInput" accept=".safetensors,.pt" style="position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none;">
                     </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 10px; margin-bottom: 10px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 10px; margin-bottom: 10px;">
                         <div>
                             <label for="loraImportCategorySelect" style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">Category</label>
                             <select id="loraImportCategorySelect" class="modal-select" style="font-size: 0.78rem; width: 100%;">
@@ -1934,6 +1934,10 @@
                                 <option value="concept">Concept LoRA</option>
                                 <option value="pose">Pose LoRA</option>
                             </select>
+                        </div>
+                        <div>
+                            <label for="loraImportKeyInput" style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">Unique Key (slug)</label>
+                            <input type="text" id="loraImportKeyInput" placeholder="e.g. megumin or custom_concept" style="width: 100%; font-size: 0.78rem; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #fff; box-sizing: border-box;">
                         </div>
                         <div>
                             <label for="loraImportNameInput" style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: 600;">Display Name</label>

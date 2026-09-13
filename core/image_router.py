@@ -19,7 +19,7 @@ from .image_engine.config import IMAGES_OUTPUT_DIR
 from .image_engine.model_checker import check_image_models_status
 from .image_engine.downloader import start_models_download, get_download_status
 from .image_engine.workflow_builder import build_qwen_workflow, compute_dimensions
-from .image_engine.client import execute_image_workflow, upload_image_to_comfy
+from .image_engine.client import execute_image_workflow, upload_image_to_comfy, interrupt_comfy_generation
 from .vram_coordinator import (
     prepare_vram_for_image_generation,
     restore_vram_after_image_generation,
@@ -292,6 +292,19 @@ async def generate_image_endpoint(req: GenerateRequest):
                 })
             except Exception:
                 pass
+        except InterruptedError:
+            logger.info(f"Image generation {task_id} was interrupted by user.")
+            _active_tasks[task_id]["status"] = "interrupted"
+            _active_tasks[task_id]["stage_text"] = "Generation stopped by user"
+            _active_tasks[task_id]["error"] = "Generation stopped by user"
+            try:
+                queue.put_nowait({
+                    "status": "interrupted",
+                    "stage_text": "Generation stopped by user",
+                    "error": "Generation stopped by user",
+                })
+            except Exception:
+                pass
         except Exception as e:
             logger.error(f"Image generation failed: {e}")
             _active_tasks[task_id]["status"] = "error"
@@ -447,6 +460,19 @@ async def edit_image_endpoint(req: EditRequest):
                 })
             except Exception:
                 pass
+        except InterruptedError:
+            logger.info(f"Image edit {task_id} was interrupted by user.")
+            _active_tasks[task_id]["status"] = "interrupted"
+            _active_tasks[task_id]["stage_text"] = "Generation stopped by user"
+            _active_tasks[task_id]["error"] = "Generation stopped by user"
+            try:
+                queue.put_nowait({
+                    "status": "interrupted",
+                    "stage_text": "Generation stopped by user",
+                    "error": "Generation stopped by user",
+                })
+            except Exception:
+                pass
         except Exception as e:
             logger.error(f"Image edit failed: {e}")
             _active_tasks[task_id]["status"] = "error"
@@ -489,6 +515,60 @@ async def get_task_status(task_id: str):
 
 
 
+class InterruptRequest(BaseModel):
+    task_id: Optional[str] = None
+
+
+@router.post("/interrupt")
+async def interrupt_image_generation(req: Optional[InterruptRequest] = None):
+    """
+    Interrupts ongoing ComfyUI image generation and transitions active task to interrupted.
+    """
+    target_task_id = req.task_id if req else None
+    prompt_id = None
+
+    if target_task_id and target_task_id in _active_tasks:
+        prompt_id = _active_tasks[target_task_id].get("prompt_id")
+        _active_tasks[target_task_id]["status"] = "interrupted"
+        _active_tasks[target_task_id]["stage_text"] = "Generation stopped by user"
+        _active_tasks[target_task_id]["error"] = "Generation stopped by user"
+        if target_task_id in _task_queues:
+            try:
+                _task_queues[target_task_id].put_nowait({
+                    "status": "interrupted",
+                    "stage_text": "Generation stopped by user",
+                    "error": "Generation stopped by user",
+                })
+            except Exception:
+                pass
+    elif not target_task_id:
+        for tid, tinfo in _active_tasks.items():
+            if tinfo.get("status") in ("queued", "generating", "starting"):
+                tinfo["status"] = "interrupted"
+                tinfo["stage_text"] = "Generation stopped by user"
+                tinfo["error"] = "Generation stopped by user"
+                if tid in _task_queues:
+                    try:
+                        _task_queues[tid].put_nowait({
+                            "status": "interrupted",
+                            "stage_text": "Generation stopped by user",
+                            "error": "Generation stopped by user",
+                        })
+                    except Exception:
+                        pass
+                if not prompt_id:
+                    prompt_id = tinfo.get("prompt_id")
+
+    success = await interrupt_comfy_generation(prompt_id=prompt_id)
+    return {"status": "interrupted" if success else "failed", "task_id": target_task_id}
+
+
+@router.post("/interrupt/{task_id}")
+async def interrupt_task_image_generation(task_id: str):
+    """Interrupts specific task by task_id."""
+    return await interrupt_image_generation(InterruptRequest(task_id=task_id))
+
+
 # ── Live Progress Stream (SSE) ────────────────────────────────────
 
 @router.get("/progress/{task_id}")
@@ -515,7 +595,7 @@ async def stream_progress_events(task_id: str):
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=10.0)
                     yield f"data: {json.dumps(event)}\n\n"
-                    if event.get("status") in ("complete", "error"):
+                    if event.get("status") in ("complete", "error", "interrupted"):
                         break
                 except asyncio.TimeoutError:
                     # Keep-alive heartbeat
@@ -739,6 +819,19 @@ async def generate_anime_endpoint(req: AnimeGenerateRequest):
                 })
             except Exception:
                 pass
+        except InterruptedError:
+            logger.info(f"Anime generation {task_id} was interrupted by user.")
+            _active_tasks[task_id]["status"] = "interrupted"
+            _active_tasks[task_id]["stage_text"] = "Generation stopped by user"
+            _active_tasks[task_id]["error"] = "Generation stopped by user"
+            try:
+                queue.put_nowait({
+                    "status": "interrupted",
+                    "stage_text": "Generation stopped by user",
+                    "error": "Generation stopped by user",
+                })
+            except Exception:
+                pass
         except Exception as e:
             logger.error(f"Anime generation failed: {e}")
             _active_tasks[task_id]["status"] = "error"
@@ -775,6 +868,7 @@ async def import_lora_file(
     file: UploadFile = File(...),
     category: str = Form("character"),
     name: str = Form(...),
+    key: Optional[str] = Form(None),
     trigger_word: str = Form(""),
     appearance: str = Form(""),
     strength: float = Form(0.9),
@@ -785,7 +879,7 @@ async def import_lora_file(
 ):
     """Saves uploaded LoRA into models/image/loras and registers it in the JSON catalog."""
     from .image_engine.illustrious.config import LORAS_DIR
-    from .image_engine.illustrious.characters import save_character, _load_options
+    from .image_engine.illustrious.characters import save_character, save_option_item
 
     if not file.filename.lower().endswith((".safetensors", ".pt")):
         raise HTTPException(status_code=400, detail="Only .safetensors files are supported.")
@@ -802,7 +896,14 @@ async def import_lora_file(
     parsed_is_nsfw = _parse_bool(is_nsfw)
     parsed_outfit_is_nsfw = _parse_bool(outfit_is_nsfw)
 
-    clean_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in name.strip().lower())
+    raw_key = (key or "").strip()
+    if raw_key:
+        clean_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in raw_key.lower()).strip("_-")
+    else:
+        clean_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in name.strip().lower()).strip("_-")
+    clean_key = clean_key or "custom_lora"
+
+    clean_name = clean_key
     prefix_map = {
         "character": "char_",
         "concept": "concept_",
@@ -820,10 +921,9 @@ async def import_lora_file(
         content = await file.read()
         f.write(content)
 
-    clean_key = clean_name
     if category == "character":
         resolved_outfit_name = outfit_name.strip() or "Default"
-        outfit_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in resolved_outfit_name.lower()) or "default"
+        outfit_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in resolved_outfit_name.lower()).strip("_-") or "default"
         char_data = {
             "display_name": name.strip(),
             "lora_file": target_filename,
@@ -843,15 +943,11 @@ async def import_lora_file(
         save_character(clean_key, char_data)
         return {"success": True, "category": category, "key": clean_key, "filename": target_filename, "data": char_data}
     else:
-        from .image_engine.illustrious.characters import OPTIONS_JSON
-        opts = _load_options()
         plural_map = {
             "concept": "concepts",
             "pose": "poses",
         }
         group_key = plural_map.get(category, "concepts")
-        if group_key not in opts:
-            opts[group_key] = {}
         entry = {
             "display_name": name.strip(),
             "trigger": trigger_word.strip(),
@@ -859,12 +955,7 @@ async def import_lora_file(
             "strength": float(strength),
             "nsfw": parsed_is_nsfw,
         }
-        opts[group_key][clean_key] = entry
-        try:
-            with open(OPTIONS_JSON, "w", encoding="utf-8") as f:
-                json.dump(opts, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            logger.error(f"Failed to update options.json: {e}")
+        save_option_item(group_key, clean_key, entry)
         return {"success": True, "category": category, "key": clean_key, "filename": target_filename, "data": entry}
 
 
@@ -911,6 +1002,7 @@ class HostLoraImportRequest(BaseModel):
     source_path: str
     category: str = "character"
     name: str
+    key: Optional[str] = None
     trigger_word: str = ""
     appearance: str = ""
     strength: float = 0.9
@@ -925,7 +1017,7 @@ async def import_host_lora_file(req: HostLoraImportRequest):
     """Imports an existing LoRA file from the host filesystem into models/image/loras and registers it."""
     import shutil
     from .image_engine.illustrious.config import LORAS_DIR
-    from .image_engine.illustrious.characters import save_character, _load_options, OPTIONS_JSON
+    from .image_engine.illustrious.characters import save_character, save_option_item
 
     source = req.source_path.strip()
     if not os.path.isfile(source):
@@ -935,7 +1027,14 @@ async def import_host_lora_file(req: HostLoraImportRequest):
 
     os.makedirs(LORAS_DIR, exist_ok=True)
 
-    clean_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in req.name.strip().lower())
+    raw_key = (req.key or "").strip()
+    if raw_key:
+        clean_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in raw_key.lower()).strip("_-")
+    else:
+        clean_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in req.name.strip().lower()).strip("_-")
+    clean_key = clean_key or "custom_lora"
+
+    clean_name = clean_key
     prefix_map = {
         "character": "char_",
         "concept": "concept_",
@@ -955,10 +1054,9 @@ async def import_host_lora_file(req: HostLoraImportRequest):
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to copy LoRA file: {e}")
 
-    clean_key = clean_name
     if req.category == "character":
         resolved_outfit_name = req.outfit_name.strip() or "Default"
-        outfit_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in resolved_outfit_name.lower()) or "default"
+        outfit_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in resolved_outfit_name.lower()).strip("_-") or "default"
         char_data = {
             "display_name": req.name.strip(),
             "lora_file": target_filename,
@@ -978,11 +1076,8 @@ async def import_host_lora_file(req: HostLoraImportRequest):
         save_character(clean_key, char_data)
         return {"success": True, "category": req.category, "key": clean_key, "filename": target_filename, "data": char_data}
     else:
-        opts = _load_options()
         plural_map = {"concept": "concepts", "pose": "poses"}
         group_key = plural_map.get(req.category, "concepts")
-        if group_key not in opts:
-            opts[group_key] = {}
         entry = {
             "display_name": req.name.strip(),
             "trigger": req.trigger_word.strip(),
@@ -990,12 +1085,7 @@ async def import_host_lora_file(req: HostLoraImportRequest):
             "strength": float(req.strength),
             "nsfw": bool(req.is_nsfw),
         }
-        opts[group_key][clean_key] = entry
-        try:
-            with open(OPTIONS_JSON, "w", encoding="utf-8") as f:
-                json.dump(opts, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            logger.error(f"Failed to update options.json: {e}")
+        save_option_item(group_key, clean_key, entry)
         return {"success": True, "category": req.category, "key": clean_key, "filename": target_filename, "data": entry}
 
 

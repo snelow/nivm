@@ -261,6 +261,7 @@ export const tools = [
                 const data = await resp.json();
                 const taskId = data.task_id;
                 if (!taskId) throw new Error('No task_id returned from server');
+                progressCard.setTaskId(taskId);
                 if (data.max_steps || data.steps) {
                     progressCard.update({ max_steps: data.max_steps || data.steps });
                 }
@@ -279,7 +280,16 @@ export const tools = [
                         const filename = imgData.filename || (imgData.url ? imgData.url.split('/').pop() : 'anime_generated.png');
                         state.lastGeneratedImage = filename;
                         const durStr = durationSec ? ` (Duration: ${durationSec}s)` : '';
-                        resolve(`[Generated Image: ${filename}]${durStr} Anime illustration synthesized successfully: ${imgData.url} - Display this image to the user, note filename "${filename}", and describe the character depiction.`);
+                        resolve(`[GENERATION SUCCESSFUL: ${filename}]${durStr} Anime illustration synthesized successfully: ${imgData.url} - Display this image to the user, note filename "${filename}", and describe the character depiction.`);
+                    };
+
+                    const finishInterrupted = (reason) => {
+                        if (completed) return;
+                        completed = true;
+                        if (pollTimer) clearInterval(pollTimer);
+                        if (evtSource) try { evtSource.close(); } catch (_) {}
+                        progressCard.stop(reason || 'Generation stopped by user');
+                        resolve(`[GENERATION INTERRUPTED] Anime image generation was explicitly stopped/cancelled by the user. No image was generated.`);
                     };
 
                     const finishFail = (errMsg) => {
@@ -288,8 +298,12 @@ export const tools = [
                         if (pollTimer) clearInterval(pollTimer);
                         if (evtSource) try { evtSource.close(); } catch (_) {}
                         progressCard.fail(errMsg || 'Generation failed');
-                        resolve(`Anime generation failed: ${errMsg || 'Unknown error'}`);
+                        resolve(`[GENERATION FAILED] Anime generation failed: ${errMsg || 'Unknown error'}. No image was produced.`);
                     };
+
+                    progressCard.onStop(() => {
+                        finishInterrupted();
+                    });
 
                     if (evtSource) {
                         evtSource.onmessage = (e) => {
@@ -298,6 +312,8 @@ export const tools = [
                                 progressCard.update(evData);
                                 if (evData.status === 'complete' && (evData.image || evData.url)) {
                                     finishSuccess(evData.image || { url: evData.url, filename: evData.filename || 'anime_generated.png' });
+                                } else if (evData.status === 'interrupted') {
+                                    finishInterrupted(evData.stage_text || evData.error);
                                 } else if (evData.status === 'error') {
                                     finishFail(evData.error);
                                 }
@@ -314,6 +330,8 @@ export const tools = [
                                 progressCard.update(pData);
                                 if (pData.status === 'complete' && (pData.image || pData.result)) {
                                     finishSuccess(pData.image || pData.result);
+                                } else if (pData.status === 'interrupted') {
+                                    finishInterrupted(pData.stage_text || pData.error);
                                 } else if (pData.status === 'error') {
                                     finishFail(pData.error);
                                 }
@@ -323,7 +341,7 @@ export const tools = [
                 });
             } catch (err) {
                 progressCard.fail(err.message);
-                return `Anime generation failed: ${err.message}`;
+                return `[GENERATION FAILED] Anime generation failed: ${err.message}. No image was produced.`;
             }
         }
     },
@@ -372,6 +390,7 @@ export const tools = [
                 const data = await resp.json();
                 const taskId = data.task_id;
                 if (!taskId) throw new Error('No task_id returned from server');
+                progressCard.setTaskId(taskId);
                 if (data.max_steps || data.steps) {
                     progressCard.update({ max_steps: data.max_steps || data.steps });
                 }
@@ -390,7 +409,16 @@ export const tools = [
                         const filename = imgData.filename || (imgData.url ? imgData.url.split('/').pop() : 'generated.png');
                         state.lastGeneratedImage = filename;
                         const durStr = durationSec ? ` (Duration: ${durationSec}s)` : '';
-                        resolve(`[Generated Image: ${filename}]${durStr} Image synthesized successfully: ${imgData.url} - Display this image to the user, note filename "${filename}", and describe the visual scene.`);
+                        resolve(`[GENERATION SUCCESSFUL: ${filename}]${durStr} Image synthesized successfully: ${imgData.url} - Display this image to the user, note filename "${filename}", and describe the visual scene.`);
+                    };
+
+                    const finishInterrupted = (reason) => {
+                        if (completed) return;
+                        completed = true;
+                        if (pollTimer) clearInterval(pollTimer);
+                        if (evtSource) try { evtSource.close(); } catch (_) {}
+                        progressCard.stop(reason || 'Generation stopped by user');
+                        resolve(`[GENERATION INTERRUPTED] Image generation was explicitly stopped/cancelled by the user. No image was generated.`);
                     };
 
                     const finishFail = (errMsg) => {
@@ -399,8 +427,12 @@ export const tools = [
                         if (pollTimer) clearInterval(pollTimer);
                         if (evtSource) try { evtSource.close(); } catch (_) {}
                         progressCard.fail(errMsg || 'Generation failed');
-                        resolve(`Image generation failed: ${errMsg || 'Unknown error'}`);
+                        resolve(`[GENERATION FAILED] Image generation failed: ${errMsg || 'Unknown error'}. No image was produced.`);
                     };
+
+                    progressCard.onStop(() => {
+                        finishInterrupted();
+                    });
 
                     if (evtSource) {
                         evtSource.onmessage = (e) => {
@@ -409,6 +441,8 @@ export const tools = [
                                 progressCard.update(evData);
                                 if (evData.status === 'complete' && (evData.image || evData.url)) {
                                     finishSuccess(evData.image || { url: evData.url, filename: evData.filename || 'generated.png' });
+                                } else if (evData.status === 'interrupted') {
+                                    finishInterrupted(evData.stage_text || evData.error);
                                 } else if (evData.status === 'error') {
                                     finishFail(evData.error);
                                 }
@@ -428,6 +462,8 @@ export const tools = [
                                 progressCard.update(pData);
                                 if (pData.status === 'complete' && (pData.image || pData.result)) {
                                     finishSuccess(pData.image || pData.result);
+                                } else if (pData.status === 'interrupted') {
+                                    finishInterrupted(pData.stage_text || pData.error);
                                 } else if (pData.status === 'error') {
                                     finishFail(pData.error);
                                 }
@@ -437,7 +473,7 @@ export const tools = [
                 });
             } catch (err) {
                 progressCard.fail(err.message);
-                return `Image generation failed: ${err.message}`;
+                return `[GENERATION FAILED] Image generation failed: ${err.message}. No image was produced.`;
             }
         }
     },
@@ -539,6 +575,7 @@ export const tools = [
                 const taskId = data.task_id;
                 const origUrl = data.original_url || null;
                 if (!taskId) throw new Error('No task_id returned from server');
+                progressCard.setTaskId(taskId);
                 if (data.max_steps || data.steps) {
                     progressCard.update({ max_steps: data.max_steps || data.steps });
                 }
@@ -557,7 +594,16 @@ export const tools = [
                         const filename = imgData.filename || (imgData.url ? imgData.url.split('/').pop() : 'edited.png');
                         state.lastGeneratedImage = filename;
                         const durStr = durationSec ? ` (Duration: ${durationSec}s)` : '';
-                        resolve(`[Generated Image: ${filename}]${durStr} Image edited successfully: ${imgData.url} (original: ${finalOrigUrl || origUrl}). Note filename "${filename}". Show the updated image and explain the changes applied.`);
+                        resolve(`[GENERATION SUCCESSFUL: ${filename}]${durStr} Image edited successfully: ${imgData.url} (original: ${finalOrigUrl || origUrl}). Note filename "${filename}". Show the updated image and explain the changes applied.`);
+                    };
+
+                    const finishInterrupted = (reason) => {
+                        if (completed) return;
+                        completed = true;
+                        if (pollTimer) clearInterval(pollTimer);
+                        if (evtSource) try { evtSource.close(); } catch (_) {}
+                        progressCard.stop(reason || 'Generation stopped by user');
+                        resolve(`[GENERATION INTERRUPTED] Image editing was explicitly stopped/cancelled by the user. No edited image was generated.`);
                     };
 
                     const finishFail = (errMsg) => {
@@ -566,8 +612,12 @@ export const tools = [
                         if (pollTimer) clearInterval(pollTimer);
                         if (evtSource) try { evtSource.close(); } catch (_) {}
                         progressCard.fail(errMsg || 'Edit failed');
-                        resolve(`Image editing failed: ${errMsg || 'Unknown error'}`);
+                        resolve(`[GENERATION FAILED] Image editing failed: ${errMsg || 'Unknown error'}. No edited image was produced.`);
                     };
+
+                    progressCard.onStop(() => {
+                        finishInterrupted();
+                    });
 
                     if (evtSource) {
                         evtSource.onmessage = (e) => {
@@ -576,6 +626,8 @@ export const tools = [
                                 progressCard.update(evData);
                                 if (evData.status === 'complete' && (evData.image || evData.url)) {
                                     finishSuccess(evData.image || { url: evData.url, filename: evData.filename || 'edited.png' }, evData.original_url || origUrl);
+                                } else if (evData.status === 'interrupted') {
+                                    finishInterrupted(evData.stage_text || evData.error);
                                 } else if (evData.status === 'error') {
                                     finishFail(evData.error);
                                 }
@@ -595,6 +647,8 @@ export const tools = [
                                 progressCard.update(pData);
                                 if (pData.status === 'complete' && (pData.image || pData.result)) {
                                     finishSuccess(pData.image || pData.result, pData.original_url || origUrl);
+                                } else if (pData.status === 'interrupted') {
+                                    finishInterrupted(pData.stage_text || pData.error);
                                 } else if (pData.status === 'error') {
                                     finishFail(pData.error);
                                 }
@@ -604,7 +658,7 @@ export const tools = [
                 });
             } catch (err) {
                 progressCard.fail(err.message);
-                return `Image editing failed: ${err.message}`;
+                return `[GENERATION FAILED] Image editing failed: ${err.message}. No edited image was produced.`;
             }
         }
     }

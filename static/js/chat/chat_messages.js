@@ -210,10 +210,11 @@ export function buildToolTraceHtml(command, argsStr, resultStr = null) {
 
     const isConcluded = isEndConvo;
     const isDenied = !isConcluded && resultStr && resultStr.toLowerCase().includes('denied');
-    const isError = !isDenied && !isConcluded && resultStr && (resultStr.toLowerCase().includes('error') || resultStr.toLowerCase().includes('failed'));
-    const statusClass = isConcluded ? 'warning' : (isDenied ? 'warning' : (isError ? 'error' : 'success'));
-    const statusText = isConcluded ? 'Concluded' : (isDenied ? 'Denied' : (isError ? 'Failed' : 'Executed'));
-    const statusIcon = isConcluded ? 'fa-lock' : (isDenied ? 'fa-ban' : (isError ? 'fa-triangle-exclamation' : 'fa-check'));
+    const isInterrupted = !isDenied && !isConcluded && resultStr && (resultStr.includes('INTERRUPTED') || resultStr.toLowerCase().includes('stopped by user'));
+    const isError = !isInterrupted && !isDenied && !isConcluded && resultStr && (resultStr.toLowerCase().includes('error') || resultStr.toLowerCase().includes('failed'));
+    const statusClass = isConcluded ? 'warning' : (isDenied ? 'warning' : (isInterrupted ? 'warning' : (isError ? 'error' : 'success')));
+    const statusText = isConcluded ? 'Concluded' : (isDenied ? 'Denied' : (isInterrupted ? 'Stopped' : (isError ? 'Failed' : 'Executed')));
+    const statusIcon = isConcluded ? 'fa-lock' : (isDenied ? 'fa-ban' : (isInterrupted ? 'fa-circle-stop' : (isError ? 'fa-triangle-exclamation' : 'fa-check')));
 
     const fullInvocation = `${command}(${cleanArgs})`;
     const escapedInvocation = escapeHtml(fullInvocation).replace(/'/g, "\\'");

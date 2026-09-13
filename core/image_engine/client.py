@@ -26,6 +26,33 @@ from .daemon import get_api_base_url, is_running, start_daemon
 
 logger = logging.getLogger("nivm.image_engine.client")
 
+_current_active_prompt_id: Optional[str] = None
+_interrupted_prompt_ids: set = set()
+
+
+async def interrupt_comfy_generation(prompt_id: Optional[str] = None) -> bool:
+    """
+    Sends an interrupt signal to the ComfyUI daemon to immediately abort execution.
+    """
+    global _current_active_prompt_id, _interrupted_prompt_ids
+    target_id = prompt_id or _current_active_prompt_id
+    if target_id:
+        _interrupted_prompt_ids.add(target_id)
+
+    base_url = get_api_base_url()
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            payload = {}
+            if target_id:
+                payload["prompt_id"] = target_id
+            resp = await client.post(f"{base_url}/interrupt", json=payload)
+            logger.info(f"ComfyUI interrupt signal sent (target={target_id}, status={resp.status_code})")
+            return resp.status_code == 200
+    except Exception as e:
+        logger.warning(f"Failed to send interrupt to ComfyUI: {e}")
+        return False
+
+
 NODE_STAGE_NAMES = {
     "19": "Loading VAE...",
     "21": "Loading Qwen2.5-VL text encoder...",
@@ -101,7 +128,14 @@ async def execute_image_workflow(
         if not prompt_id:
             raise RuntimeError(f"No prompt_id returned from ComfyUI: {result}")
 
+    global _current_active_prompt_id
+    _current_active_prompt_id = prompt_id
     logger.info(f"Queued image generation job {prompt_id} (client_id: {client_id})")
+    if progress_callback:
+        try:
+            progress_callback({"prompt_id": prompt_id})
+        except Exception:
+            pass
 
     # Connect to WebSocket and monitor progress
     output_images: List[Dict[str, Any]] = []
@@ -255,13 +289,29 @@ async def execute_image_workflow(
                         if "images" in output:
                             output_images.extend(output["images"])
 
+                elif event_type == "execution_interrupted":
+                    ev_pid = data.get("prompt_id")
+                    if not ev_pid or ev_pid == prompt_id:
+                        logger.info(f"ComfyUI execution_interrupted received for {prompt_id}")
+                        raise InterruptedError("Generation stopped by user.")
+
                 elif event_type == "execution_error":
                     if data.get("prompt_id") == prompt_id:
                         err_msg = data.get("exception_message", "Unknown diffusion error")
                         raise RuntimeError(f"ComfyUI diffusion error: {err_msg}")
 
+                if prompt_id in _interrupted_prompt_ids:
+                    logger.info(f"Job {prompt_id} recognized as interrupted.")
+                    raise InterruptedError("Generation stopped by user.")
+
+    except InterruptedError:
+        logger.info(f"Workflow execution aborted: job {prompt_id} was interrupted.")
+        raise
     except Exception as ws_err:
         logger.warning(f"WebSocket tracking event: {ws_err}")
+
+    if prompt_id in _interrupted_prompt_ids:
+        raise InterruptedError("Generation stopped by user.")
 
     # Fallback to check history if WebSocket closed or images not captured
     if not output_images:

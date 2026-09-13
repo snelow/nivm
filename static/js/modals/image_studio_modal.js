@@ -106,8 +106,27 @@ export function setupImageStudioUI() {
             const isChar = catSelect.value === 'character';
             const appField = document.getElementById('loraImportAppearanceField');
             const outfitSec = document.getElementById('loraImportOutfitSection');
+            const fieldsRow = document.getElementById('loraImportFieldsRow');
             if (appField) appField.style.display = isChar ? 'block' : 'none';
             if (outfitSec) outfitSec.style.display = isChar ? 'flex' : 'none';
+            if (fieldsRow) fieldsRow.style.gridTemplateColumns = isChar ? '1fr 1fr 0.5fr' : '1.5fr 0.5fr';
+
+            const trigInput = document.getElementById('loraImportTriggerInput');
+            const keyInput = document.getElementById('loraImportKeyInput');
+            const nameInput = document.getElementById('loraImportNameInput');
+            if (catSelect.value === 'character') {
+                if (trigInput) trigInput.placeholder = 'e.g. megumin, red eyes';
+                if (keyInput) keyInput.placeholder = 'e.g. megumin';
+                if (nameInput) nameInput.placeholder = 'e.g. Megumin';
+            } else if (catSelect.value === 'concept') {
+                if (trigInput) trigInput.placeholder = 'e.g. breasts on tray, carried breast rest';
+                if (keyInput) keyInput.placeholder = 'e.g. breasts_on_tray';
+                if (nameInput) nameInput.placeholder = 'e.g. Breasts on Tray';
+            } else if (catSelect.value === 'pose') {
+                if (trigInput) trigInput.placeholder = 'e.g. slav squatting, full body, squatting';
+                if (keyInput) keyInput.placeholder = 'e.g. slav_squat';
+                if (nameInput) nameInput.placeholder = 'e.g. Slav Squat';
+            }
         });
     }
 
@@ -1041,6 +1060,19 @@ function setupLoraDropZone() {
         }
     });
 
+    const nameInput = document.getElementById('loraImportNameInput');
+    const keyInput = document.getElementById('loraImportKeyInput');
+    if (nameInput && keyInput) {
+        nameInput.addEventListener('input', () => {
+            if (!keyInput.dataset.manualEdit) {
+                keyInput.value = nameInput.value.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
+            }
+        });
+        keyInput.addEventListener('input', () => {
+            keyInput.dataset.manualEdit = 'true';
+        });
+    }
+
     submitBtn.addEventListener('click', handleUploadLora);
 }
 
@@ -1048,9 +1080,15 @@ function handleLoraFileSelected(file) {
     _selectedLoraFile = file;
     _selectedLoraHostPath = null;
     const nameInput = document.getElementById('loraImportNameInput');
+    const keyInput = document.getElementById('loraImportKeyInput');
     const label = document.getElementById('loraDropZoneLabel');
     if (label) {
         label.innerHTML = `<span style="color: #4ade80; font-weight: 600;"><i class="fa-solid fa-circle-check"></i> Selected:</span> <strong>${escapeHtml(file.name)}</strong> <span style="color: var(--text-muted); font-size: 0.72rem;">(${(file.size / 1024 / 1024).toFixed(1)} MB)</span>`;
+    }
+    const cleanSlug = file.name.replace(/\.(safetensors|pt)$/i, '').replace(/^(char_|concept_|pose_|expr_)/i, '').toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
+    if (keyInput && !keyInput.value.trim()) {
+        keyInput.value = cleanSlug;
+        delete keyInput.dataset.manualEdit;
     }
     if (nameInput && !nameInput.value.trim()) {
         const clean = file.name.replace(/\.(safetensors|pt)$/i, '').replace(/^(char_|concept_|pose_|expr_)/i, '').replace(/[_-]/g, ' ');
@@ -1062,9 +1100,15 @@ function handleLoraHostFileSelected(file) {
     _selectedLoraHostPath = file.path;
     _selectedLoraFile = null;
     const nameInput = document.getElementById('loraImportNameInput');
+    const keyInput = document.getElementById('loraImportKeyInput');
     const label = document.getElementById('loraDropZoneLabel');
     if (label) {
         label.innerHTML = `<span style="color: #38bdf8; font-weight: 600;"><i class="fa-solid fa-server"></i> Host File:</span> <strong>${escapeHtml(file.name)}</strong> <span style="color: var(--text-muted); font-size: 0.72rem;">(${escapeHtml(file.path)})</span>`;
+    }
+    const cleanSlug = file.name.replace(/\.(safetensors|pt)$/i, '').replace(/^(char_|concept_|pose_|expr_)/i, '').toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
+    if (keyInput && !keyInput.value.trim()) {
+        keyInput.value = cleanSlug;
+        delete keyInput.dataset.manualEdit;
     }
     if (nameInput && !nameInput.value.trim()) {
         const clean = file.name.replace(/\.(safetensors|pt)$/i, '').replace(/^(char_|concept_|pose_|expr_)/i, '').replace(/[_-]/g, ' ');
@@ -1078,6 +1122,7 @@ async function handleUploadLora() {
         return;
     }
     const category = document.getElementById('loraImportCategorySelect')?.value || 'character';
+    const key = document.getElementById('loraImportKeyInput')?.value?.trim();
     const name = document.getElementById('loraImportNameInput')?.value?.trim();
     const triggerWord = document.getElementById('loraImportTriggerInput')?.value?.trim() || '';
     const appearance = document.getElementById('loraImportAppearanceInput')?.value?.trim() || '';
@@ -1105,6 +1150,7 @@ async function handleUploadLora() {
                 body: JSON.stringify({
                     source_path: _selectedLoraHostPath,
                     category: category,
+                    key: key || undefined,
                     name: name,
                     trigger_word: triggerWord,
                     appearance: appearance,
@@ -1128,6 +1174,7 @@ async function handleUploadLora() {
             const formData = new FormData();
             formData.append('file', _selectedLoraFile);
             formData.append('category', category);
+            if (key) formData.append('key', key);
             formData.append('name', name);
             formData.append('trigger_word', triggerWord);
             formData.append('appearance', appearance);
@@ -1157,6 +1204,11 @@ async function handleUploadLora() {
         if (fileInput) fileInput.value = '';
         const label = document.getElementById('loraDropZoneLabel');
         if (label) label.textContent = 'Drop .safetensors LoRA file here or browse';
+        const keyInput = document.getElementById('loraImportKeyInput');
+        if (keyInput) {
+            keyInput.value = '';
+            delete keyInput.dataset.manualEdit;
+        }
         const nameInput = document.getElementById('loraImportNameInput');
         if (nameInput) nameInput.value = '';
         const trigInput = document.getElementById('loraImportTriggerInput');

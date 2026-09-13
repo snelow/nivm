@@ -12,6 +12,7 @@ _BASE_DIR = os.path.dirname(_CORE_DIR)
 
 # Single unified user registry in User files/
 USER_ANIME_REGISTRY_JSON = os.path.join(_BASE_DIR, "User files", "anime_registry.json")
+OPTIONS_JSON = USER_ANIME_REGISTRY_JSON
 
 # Built-in tag definitions (prompt modifiers) fallback
 DEFAULT_REGISTRY = {

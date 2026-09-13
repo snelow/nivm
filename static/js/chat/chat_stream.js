@@ -507,6 +507,18 @@ RESPONSE REQUIREMENTS (MANDATORY):
             const isEndConvo = interceptedToolCall.command === 'end_conversation';
             const isImageTool = interceptedToolCall.command === 'generate_image' || interceptedToolCall.command === 'edit_image' || interceptedToolCall.command === 'generate_anime_image';
             const isDenied = typeof resultStr === 'string' && resultStr.toLowerCase().includes('denied by user');
+            const isInterrupted = typeof resultStr === 'string' && (
+                resultStr.includes('[GENERATION INTERRUPTED]') ||
+                resultStr.toLowerCase().includes('stopped by user') ||
+                resultStr.toLowerCase().includes('generation was stopped') ||
+                resultStr.toLowerCase().includes('editing was stopped')
+            );
+            const isImageFailed = isImageTool && typeof resultStr === 'string' && (
+                resultStr.includes('[GENERATION FAILED]') ||
+                resultStr.toLowerCase().startsWith('error') ||
+                resultStr.toLowerCase().includes('generation failed:') ||
+                resultStr.toLowerCase().includes('editing failed:')
+            );
 
             let toolAdvice = "";
             let sysNotificationHeader = "[SYSTEM NOTIFICATION] Tool executed successfully.";
@@ -514,6 +526,12 @@ RESPONSE REQUIREMENTS (MANDATORY):
             if (isDenied) {
                 sysNotificationHeader = "[SYSTEM NOTIFICATION] Tool execution was DENIED by the user.";
                 toolAdvice = "IMPORTANT: The user explicitly denied permission to run this command. Acknowledge the denial politely in character, do NOT re-attempt this command, and ask the user how they would like you to proceed instead.";
+            } else if (isInterrupted) {
+                sysNotificationHeader = "[SYSTEM NOTIFICATION] Image generation was CANCELLED / STOPPED by the user.";
+                toolAdvice = "IMPORTANT: The user explicitly clicked STOP to cancel this image generation while it was running. No completed image was generated. Acknowledge that the generation was stopped as requested in your active persona/character. Do NOT describe or pretend an image was generated, and do NOT hallucinate visual details.";
+            } else if (isImageFailed) {
+                sysNotificationHeader = "[SYSTEM NOTIFICATION] Image generation FAILED.";
+                toolAdvice = `IMPORTANT: Image generation failed due to an error. Inform the user in character that generation could not complete. Do NOT describe or pretend an image was generated. Error details: ${resultStr}`;
             } else if (isEndConvo) {
                 activeChat.isEnded = true;
                 let cleanReason = interceptedToolCall.argsStr ? interceptedToolCall.argsStr.trim().replace(/^['"]|['"]$/g, '') : 'Conversation concluded.';
@@ -527,6 +545,7 @@ RESPONSE REQUIREMENTS (MANDATORY):
                 toolAdvice = "IMPORTANT: Memory saved successfully. NEVER mention memory files, keys, categories, or technical storage to the user (do NOT say 'stored in profile memory' or similar). Acknowledge naturally in character (e.g. 'Got it, I\\'ll remember that!', 'Noted!', or seamlessly continue).";
             } else if (isImageTool) {
                 const imgFilename = assistantMsg.toolExecution?.imageFilename || state.lastGeneratedImage || 'the image';
+                sysNotificationHeader = "[SYSTEM NOTIFICATION] Image generated successfully.";
                 toolAdvice = `IMPORTANT: Image processing succeeded. The image filename is "${imgFilename}". The rendered image is already displayed in the UI. Describe the visual scene warmly in your active persona/character without mentioning technical file paths or markdown image tags. Note this filename: if the user later asks to edit, alter, or transform this image, call edit_image("${imgFilename}", "<edit instruction>", "original").`;
             } else if (interceptedToolCall.command === 'execute_terminal') {
                 const isEmpty = !resultStr || resultStr.includes('no output produced') || resultStr.trim() === '';

@@ -152,10 +152,31 @@ export function createImageProgressCard(promptText, isEdit = false, requestedAsp
     card.innerHTML = `
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
             <div style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; color: var(--accent-purple, #c084fc);">
-                <i class="fa-solid fa-wand-magic-sparkles fa-spin" style="--fa-animation-duration: 3s;"></i>
-                <span>${isEdit ? 'Refining Image' : 'Synthesizing Image'}</span>
+                <i class="card-status-icon fa-solid fa-wand-magic-sparkles fa-spin" style="--fa-animation-duration: 3s;"></i>
+                <span class="card-title-text">${isEdit ? 'Refining Image' : 'Synthesizing Image'}</span>
             </div>
-            <span class="gen-timer" style="font-size: 0.75rem; color: #94a3b8; font-variant-numeric: tabular-nums;">0.0s</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="gen-timer" style="font-size: 0.75rem; color: #94a3b8; font-variant-numeric: tabular-nums;">0.0s</span>
+                <button type="button" class="gen-stop-btn" title="Stop image generation" style="
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+                    padding: 3px 8px;
+                    font-size: 0.72rem;
+                    font-weight: 600;
+                    color: #f87171;
+                    background: rgba(239, 68, 68, 0.12);
+                    border: 1px solid rgba(239, 68, 68, 0.32);
+                    border-radius: 6px;
+                    cursor: pointer;
+                    line-height: 1.2;
+                    user-select: none;
+                    transition: all 0.2s ease;
+                ">
+                    <i class="fa-solid fa-stop" style="font-size: 0.65rem;"></i>
+                    <span>Stop</span>
+                </button>
+            </div>
         </div>
 
         <div class="gen-prompt-wrapper" style="margin-bottom: 12px; cursor: pointer; user-select: none;" title="Click to expand/collapse full prompt">
@@ -189,6 +210,7 @@ export function createImageProgressCard(promptText, isEdit = false, requestedAsp
     `;
 
     const timerEl = card.querySelector('.gen-timer');
+    const stopBtn = card.querySelector('.gen-stop-btn');
     const previewContainer = card.querySelector('.preview-container');
     const previewPlaceholder = card.querySelector('.preview-placeholder');
     const previewImg = card.querySelector('.preview-img');
@@ -210,6 +232,59 @@ export function createImageProgressCard(promptText, isEdit = false, requestedAsp
             } else {
                 promptTextEl.style.whiteSpace = 'nowrap';
                 promptChevron.style.transform = 'rotate(0deg)';
+            }
+        };
+    }
+
+    let currentTaskId = null;
+    let onStopCallback = null;
+    let isInterrupted = false;
+
+    if (stopBtn) {
+        stopBtn.onmouseenter = () => {
+            if (!stopBtn.disabled) {
+                stopBtn.style.background = 'rgba(239, 68, 68, 0.25)';
+                stopBtn.style.borderColor = 'rgba(239, 68, 68, 0.6)';
+                stopBtn.style.color = '#fca5a5';
+            }
+        };
+        stopBtn.onmouseleave = () => {
+            if (!stopBtn.disabled) {
+                stopBtn.style.background = 'rgba(239, 68, 68, 0.12)';
+                stopBtn.style.borderColor = 'rgba(239, 68, 68, 0.32)';
+                stopBtn.style.color = '#f87171';
+            }
+        };
+
+        stopBtn.onclick = async (e) => {
+            e.stopPropagation();
+            if (isInterrupted) return;
+            isInterrupted = true;
+            stopBtn.disabled = true;
+            stopBtn.style.opacity = '0.7';
+            stopBtn.style.cursor = 'not-allowed';
+            stopBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="font-size: 0.65rem;"></i><span>Stopping...</span>`;
+
+            if (stepText) {
+                stepText.innerHTML = `<span style="color: #f59e0b;"><i class="fa-solid fa-spinner fa-spin"></i> Stopping generation...</span>`;
+            }
+
+            try {
+                await fetch('/api/image/interrupt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ task_id: currentTaskId })
+                });
+            } catch (err) {
+                console.warn('Failed to call interrupt endpoint:', err);
+            }
+
+            if (typeof onStopCallback === 'function') {
+                try {
+                    onStopCallback();
+                } catch (cbErr) {
+                    console.error('Error in onStop callback:', cbErr);
+                }
             }
         };
     }
@@ -276,8 +351,13 @@ export function createImageProgressCard(promptText, isEdit = false, requestedAsp
 
     return {
         element: card,
-        update: (eventData) => {
+        update: function(eventData) {
             if (!eventData) return;
+
+            if (eventData.status === 'interrupted') {
+                this.stop(eventData.stage_text || eventData.error || 'Generation stopped by user');
+                return;
+            }
 
             if (eventData.max_steps) {
                 maxSteps = eventData.max_steps;
@@ -351,6 +431,7 @@ export function createImageProgressCard(promptText, isEdit = false, requestedAsp
         },
         finish: (finalImageUrl, originalUrl = null) => {
             clearInterval(timerInterval);
+            if (stopBtn) stopBtn.remove();
             const finalElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
             saveImageDuration(finalImageUrl, finalElapsed);
 
@@ -365,6 +446,7 @@ export function createImageProgressCard(promptText, isEdit = false, requestedAsp
         },
         error: (errorMsg) => {
             clearInterval(timerInterval);
+            if (stopBtn) stopBtn.remove();
             card.style.borderColor = 'rgba(239, 68, 68, 0.4)';
             card.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 8px; color: #f87171; font-weight: 600; font-size: 0.85rem; margin-bottom: 6px;">
@@ -375,6 +457,72 @@ export function createImageProgressCard(promptText, isEdit = false, requestedAsp
                     ${escapeHtml(errorMsg)}
                 </div>
             `;
+        },
+        fail: function(errorMsg) {
+            this.error(errorMsg);
+        },
+        setTaskId: (taskId) => {
+            currentTaskId = taskId;
+        },
+        onStop: (cb) => {
+            onStopCallback = cb;
+        },
+        stop: function(reason = 'Generation stopped by user') {
+            clearInterval(timerInterval);
+            isInterrupted = true;
+            const finalElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            if (timerEl) {
+                timerEl.innerHTML = `<span style="font-size: 0.72rem; color: #f59e0b; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.28); border-radius: 4px; padding: 2px 7px; font-variant-numeric: tabular-nums;"><i class="fa-regular fa-clock" style="font-size: 0.65rem; margin-right: 4px;"></i>${finalElapsed}s</span>`;
+            }
+
+            card.style.borderColor = 'rgba(245, 158, 11, 0.35)';
+            card.style.background = 'rgba(22, 18, 14, 0.9)';
+            card.style.padding = '10px 14px';
+            if (stopBtn) stopBtn.remove();
+
+            const statusIcon = card.querySelector('.card-status-icon');
+            if (statusIcon) {
+                statusIcon.className = 'card-status-icon fa-solid fa-circle-stop';
+                statusIcon.style.color = '#f59e0b';
+                statusIcon.style.animation = 'none';
+            }
+            const titleEl = card.querySelector('.card-title-text');
+            if (titleEl) {
+                titleEl.textContent = 'Generation Stopped';
+                titleEl.style.color = '#f59e0b';
+            }
+
+            if (promptWrapper) {
+                promptWrapper.style.marginBottom = '6px';
+            }
+
+            // Always remove the progress bar track when stopped
+            const progressTrack = progressBar ? progressBar.parentElement : null;
+            if (progressTrack) progressTrack.remove();
+
+            // Handle preview container: keep compact preview if frame arrived, else remove completely
+            const hasPreview = previewImg && previewImg.style.display !== 'none' && previewImg.src && !previewImg.src.endsWith('/') && !previewImg.src.includes('undefined');
+            if (hasPreview) {
+                if (previewBadge) {
+                    previewBadge.style.display = 'block';
+                    previewBadge.innerHTML = `<i class="fa-solid fa-circle-stop"></i> STOPPED FRAME (${currentStep > 0 ? `Step ${currentStep}/${maxSteps}` : `${finalElapsed}s`})`;
+                    previewBadge.style.color = '#f59e0b';
+                }
+                if (previewContainer) {
+                    previewContainer.style.maxHeight = '200px';
+                    previewContainer.style.height = 'auto';
+                    previewContainer.style.marginBottom = '6px';
+                }
+            } else {
+                if (previewContainer) previewContainer.remove();
+            }
+
+            if (stepText) {
+                stepText.innerHTML = `<span style="color: #f59e0b; display: inline-flex; align-items: center; gap: 5px; font-size: 0.75rem;"><i class="fa-solid fa-hand"></i> ${escapeHtml(reason)}</span>`;
+            }
+            if (percentText) {
+                percentText.textContent = '';
+            }
         }
     };
 }

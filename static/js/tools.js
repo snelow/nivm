@@ -876,7 +876,7 @@ export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume 
         instruction += `   - Always specify a single subject. If characters are registered, pick a valid character and outfit. If no characters exist or general anime illustration is requested, use 'character': 'none'.\n`;
         instruction += `   - Use JSON format with the character's key: TOOL_CALL: generate_anime_image('{"character": "character_key", "outfit": "outfit_key", "expression": "smile", "prompt": "rich scene and lighting description"}')\n`;
         instruction += `   - Concepts & Poses: Only pass concept or pose when explicitly requested by the user. If unrequested, omit them.\n`;
-        instruction += `   - Fast/Turbo Mode: Set "use_lcm": true if the user requests fast or quick generation (6 steps).\n`;
+        instruction += `   - Fast/Turbo Mode: Set "use_lcm": true if the user requests fast or quick generation (8 steps).\n`;
         instruction += `   - User Inquiry: When the user asks what anime characters or outfits are available, report the live list above accurately.\n`;
     }
 

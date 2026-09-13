@@ -66,12 +66,14 @@ def get_active_checkpoint_name() -> str:
 # Full FP16 checkpoint — resolves dynamically, falling back to default
 ILLUSTRIOUS_CHECKPOINT = get_active_checkpoint_name()
 
-# LCM turbo (fast 6-step generation)
+# LCM turbo (fast 8-step generation with tuned CFG to prevent black clipping)
 LCM_LORA_FILE = "turbo_lcm_sdxl.safetensors"
 LCM_SAMPLER = "lcm"
 LCM_SCHEDULER = "sgm_uniform"
-LCM_STEPS = 6
-LCM_CFG = 1.5
+LCM_STEPS = 8
+LCM_CFG = 1.1
+LCM_LORA_STRENGTH_MODEL = 0.8
+LCM_LORA_STRENGTH_CLIP = 0.8
 
 DEFAULT_NEGATIVE = (
     "worst quality, low quality, bad anatomy, missing fingers, "

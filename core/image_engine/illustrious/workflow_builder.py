@@ -19,6 +19,8 @@ from .config import (
     ILLUSTRIOUS_CHECKPOINT,
     LCM_CFG,
     LCM_LORA_FILE,
+    LCM_LORA_STRENGTH_MODEL,
+    LCM_LORA_STRENGTH_CLIP,
     LCM_SAMPLER,
     LCM_SCHEDULER,
     LCM_STEPS,
@@ -196,15 +198,24 @@ def build_lcm_workflow(
         wf["2"]["inputs"]["text"] = edited_prompt.strip()
         pos_prompt = edited_prompt.strip()
 
+    # When running fast LCM, scale down any preceding LoRAs (character, concept, pose)
+    # slightly to prevent weight saturation and dynamic range clipping in 8 steps
+    for node_id in ("9", "11", "12"):
+        if node_id in wf:
+            sm = wf[node_id]["inputs"].get("strength_model", 0.9)
+            sc = wf[node_id]["inputs"].get("strength_clip", 0.9)
+            wf[node_id]["inputs"]["strength_model"] = min(sm, 0.8)
+            wf[node_id]["inputs"]["strength_clip"] = min(sc, 0.8)
+
     last_model = wf["6"]["inputs"]["model"]
     last_clip = wf["2"]["inputs"]["clip"]
 
-    # Tack LCM LoRA onto the end of whatever chain we built
+    # Tack LCM LoRA onto the end of whatever chain we built with tuned 0.8 strength
     wf["20"] = {
         "inputs": {
             "lora_name": LCM_LORA_FILE,
-            "strength_model": 1.0,
-            "strength_clip": 1.0,
+            "strength_model": LCM_LORA_STRENGTH_MODEL,
+            "strength_clip": LCM_LORA_STRENGTH_CLIP,
             "model": last_model,
             "clip": last_clip,
         },

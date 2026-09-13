@@ -488,6 +488,10 @@ export function setupAudioRecording() {
     dom.micRecordBtn.addEventListener('click', async () => {
         if (state.inferenceMode === 'api' && !isVisionSupported()) return;
         
+        if (typeof window.stopSpeaking === 'function' && window.isSpeaking && window.isSpeaking()) {
+            window.stopSpeaking();
+        }
+
         if (mediaRecorder && mediaRecorder.state === 'recording') {
             // Stop recording
             mediaRecorder.stop();

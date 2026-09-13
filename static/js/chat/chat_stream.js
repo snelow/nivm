@@ -210,6 +210,18 @@ RESPONSE REQUIREMENTS (MANDATORY):
    - If rejecting: [DECISION: REJECT_RESUME]
 3. NEVER output only the decision tag without spoken dialogue.
 4. Do NOT call any tools (including end_conversation) during this turn.`;
+    const isVoiceMode = Boolean(
+        document.body?.classList.contains('voice-mode-active') ||
+        dom.chatViewport?.classList.contains('voice-mode-active')
+    );
+    if (isVoiceMode) {
+        dynamicSystemPrompt += `\n\n[Voice Conversation Mode - ACTIVE]:
+The user is conversing with you via real-time spoken voice (your reply will be read aloud via text-to-speech audio).
+CRITICAL SPOKEN CONVERSATION RULES:
+1. Concise & Spoken: Keep replies brief, natural, and conversational (1 to 3 sentences maximum). Do NOT yap, recite lengthy essays, or over-explain unless the user explicitly asks for a detailed breakdown or story.
+2. Natural Spoken Tone: Speak naturally and warmly like a live phone call or spoken dialogue.
+3. Zero Markdown or Formatting: NEVER use markdown headers (#), bullet lists (*, -), tables, or code fences in voice mode. Output clean, flowing sentences that sound natural when spoken aloud.
+4. Fast Back-and-Forth: Favor brisk turn-taking over long monologues so the user can easily respond or ask follow-ups.`;
     }
 
     payloadMessages.push({ role: 'system', content: dynamicSystemPrompt });

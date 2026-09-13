@@ -337,6 +337,9 @@
                         <span id="voiceModeName">Voice Mode</span>
                     </div>
                     <div class="voice-stage-actions">
+                        <button class="voice-mode-dock-btn" id="voiceSttToggleBtn" title="Click to toggle STT Engine (Web Speech vs Faster-Whisper)" type="button">
+                            <i class="fa-solid fa-bolt" id="voiceSttToggleIcon" style="color: #38bdf8;"></i> <span id="voiceSttToggleLabel">Web Speech</span>
+                        </button>
                         <button class="voice-mode-dock-btn" id="voiceStageSettingsBtn" title="Voice & Speech Settings"
                             type="button">
                             <i class="fa-solid fa-sliders"></i> <span id="voiceStageSettingsLabel">Settings</span>
@@ -364,6 +367,7 @@
                     </div>
 
                     <div class="voice-stage-status" id="voiceStageStatus">Tap orb or Space to speak</div>
+                    <div class="voice-live-transcript hidden" id="voiceLiveTranscript"></div>
                 </div>
             </div>
 
@@ -2519,6 +2523,43 @@
                             style="font-size: 0.8rem; color: var(--text-muted); cursor: pointer;">Auto-Speak
                             Responses</label>
                         <input type="checkbox" id="autoSpeakToggle" class="custom-toggle">
+                    </div>
+                </div>
+
+                <!-- Speech-to-Text (STT) Input Engine Selection -->
+                <div class="voice-stt-section" style="margin-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 12px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-microphone-lines" style="color: var(--voice-accent, #38bdf8); font-size: 0.85rem;"></i>
+                            <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);">Speech-to-Text (STT)</span>
+                        </div>
+                        <span id="activeSttBadge" style="font-size: 0.68rem; padding: 2px 7px; border-radius: 6px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-weight: 600;">Web Speech</span>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <div class="stt-engine-segmented" style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: rgba(0,0,0,0.25); padding: 4px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                            <button type="button" class="stt-engine-pill-btn active" id="sttEngineWebBtn" style="padding: 7px 8px; font-size: 0.74rem; font-weight: 600; border-radius: 6px; border: none; background: rgba(255,255,255,0.1); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; transition: all 0.2s ease;">
+                                <i class="fa-solid fa-bolt" style="color: #38bdf8;"></i>
+                                <span>Web Speech (Real-time)</span>
+                            </button>
+                            <button type="button" class="stt-engine-pill-btn" id="sttEngineWhisperBtn" style="padding: 7px 8px; font-size: 0.74rem; font-weight: 600; border-radius: 6px; border: none; background: transparent; color: #94a3b8; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; transition: all 0.2s ease;">
+                                <i class="fa-solid fa-shield-halved" style="color: #a855f7;"></i>
+                                <span>Local Whisper (Offline)</span>
+                            </button>
+                        </div>
+
+                        <!-- Whisper Model Selector (Visible when Whisper is active) -->
+                        <div id="whisperModelConfig" class="hidden" style="margin-top: 4px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <label for="whisperModelSelect" style="font-size: 0.75rem; color: #cbd5e1; font-weight: 500;">Whisper Model</label>
+                                <span style="font-size: 0.68rem; color: #94a3b8;">INT8 on CPU</span>
+                            </div>
+                            <select id="whisperModelSelect" class="form-select" style="width: 100%; font-size: 0.78rem; padding: 6px 10px; background: rgba(18, 18, 26, 0.9); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; color: #f1f5f9;">
+                                <option value="base.en" selected>base.en (Ultra-fast, ~1.2s)</option>
+                                <option value="small.en">small.en (High accuracy, ~3.0s)</option>
+                                <option value="distil-medium.en">distil-medium.en (Deep, ~8.5s)</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 

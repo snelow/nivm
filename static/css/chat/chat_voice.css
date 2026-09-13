@@ -530,3 +530,41 @@ body.voice-mode-active.voice-mode-collapsed .voice-stage-status {
     text-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
 }
 
+.voice-live-transcript {
+    max-width: 580px;
+    width: 90%;
+    margin: 12px auto 0 auto;
+    padding: 8px 16px;
+    font-size: 0.92rem;
+    font-weight: 500;
+    line-height: 1.5;
+    color: #f8fafc;
+    text-align: center;
+    background: rgba(15, 18, 28, 0.65);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    animation: fadeInTranscript 0.2s ease-out;
+    transition: all 0.2s ease;
+    word-break: break-word;
+}
+
+.voice-live-transcript.interim {
+    color: #cbd5e1;
+    font-style: italic;
+    border-color: rgba(56, 189, 248, 0.25);
+}
+
+.voice-live-transcript.final {
+    color: #f1f5f9;
+    font-style: normal;
+    border-color: rgba(34, 197, 94, 0.35);
+}
+
+@keyframes fadeInTranscript {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+

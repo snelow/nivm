@@ -737,6 +737,8 @@ export function stopSpeaking() {
         dom.previewVoiceBtn.classList.remove('btn-active-speaking');
     }
 }
+window.stopSpeaking = stopSpeaking;
+window.isSpeaking = isSpeaking;
 
 function setSpeakerButtonState(btn, active) {
     if (!btn) return;
@@ -1041,6 +1043,142 @@ export async function setupVoiceUI() {
     // Custom Pronunciation dictionary accordion & live preview
     setupPronunciationsUI();
 
+    // Speech-to-Text (STT) Engine & Model Configuration
+    let sttEngine = localStorage.getItem('nivm_stt_engine') || 'web';
+    let whisperModel = localStorage.getItem('nivm_whisper_model') || 'base.en';
+
+    function updateSttUIState() {
+        const toggleBtn = document.getElementById('voiceSttToggleBtn');
+        const toggleIcon = document.getElementById('voiceSttToggleIcon');
+        const toggleLabel = document.getElementById('voiceSttToggleLabel');
+        const badge = document.getElementById('activeSttBadge');
+        const webBtn = document.getElementById('sttEngineWebBtn');
+        const whisperBtn = document.getElementById('sttEngineWhisperBtn');
+        const whisperConfig = document.getElementById('whisperModelConfig');
+        const modelSelect = document.getElementById('whisperModelSelect');
+
+        const isWeb = sttEngine === 'web';
+
+        if (toggleIcon && toggleLabel) {
+            if (isWeb) {
+                toggleIcon.className = 'fa-solid fa-bolt';
+                toggleIcon.style.color = '#38bdf8';
+                toggleLabel.textContent = 'Web Speech';
+            } else {
+                toggleIcon.className = 'fa-solid fa-shield-halved';
+                toggleIcon.style.color = '#a855f7';
+                toggleLabel.textContent = `Whisper (${whisperModel})`;
+            }
+        }
+
+        if (badge) {
+            if (isWeb) {
+                badge.textContent = 'Web Speech (Real-time)';
+                badge.style.background = 'rgba(56, 189, 248, 0.15)';
+                badge.style.color = '#38bdf8';
+            } else {
+                badge.textContent = `Whisper (${whisperModel})`;
+                badge.style.background = 'rgba(168, 85, 247, 0.15)';
+                badge.style.color = '#c084fc';
+            }
+        }
+
+        if (webBtn && whisperBtn) {
+            if (isWeb) {
+                webBtn.classList.add('active');
+                webBtn.style.background = 'rgba(255,255,255,0.12)';
+                webBtn.style.color = '#fff';
+                whisperBtn.classList.remove('active');
+                whisperBtn.style.background = 'transparent';
+                whisperBtn.style.color = '#94a3b8';
+            } else {
+                whisperBtn.classList.add('active');
+                whisperBtn.style.background = 'rgba(255,255,255,0.12)';
+                whisperBtn.style.color = '#fff';
+                webBtn.classList.remove('active');
+                webBtn.style.background = 'transparent';
+                webBtn.style.color = '#94a3b8';
+            }
+        }
+
+        if (whisperConfig) {
+            whisperConfig.classList.toggle('hidden', isWeb);
+        }
+
+        if (modelSelect) {
+            modelSelect.value = whisperModel;
+        }
+    }
+
+    function setupSttUI() {
+        const toggleBtn = document.getElementById('voiceSttToggleBtn');
+        const webBtn = document.getElementById('sttEngineWebBtn');
+        const whisperBtn = document.getElementById('sttEngineWhisperBtn');
+        const modelSelect = document.getElementById('whisperModelSelect');
+
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                sttEngine = sttEngine === 'web' ? 'whisper' : 'web';
+                localStorage.setItem('nivm_stt_engine', sttEngine);
+                updateSttUIState();
+                if (window.showNotification) {
+                    window.showNotification(
+                        sttEngine === 'web'
+                            ? 'Voice Input: Web Speech (Real-time streaming, zero lag)'
+                            : `Voice Input: Local Faster-Whisper (${whisperModel}, sovereign on-device)`,
+                        'info'
+                    );
+                }
+            });
+        }
+
+        if (webBtn) {
+            webBtn.addEventListener('click', () => {
+                sttEngine = 'web';
+                localStorage.setItem('nivm_stt_engine', sttEngine);
+                updateSttUIState();
+            });
+        }
+
+        if (whisperBtn) {
+            whisperBtn.addEventListener('click', () => {
+                sttEngine = 'whisper';
+                localStorage.setItem('nivm_stt_engine', sttEngine);
+                updateSttUIState();
+            });
+        }
+
+        if (modelSelect) {
+            modelSelect.addEventListener('change', async () => {
+                whisperModel = modelSelect.value;
+                localStorage.setItem('nivm_whisper_model', whisperModel);
+                updateSttUIState();
+                try {
+                    await fetch('/api/stt/config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ model: whisperModel })
+                    });
+                } catch (_) {}
+            });
+        }
+
+        // Detect if Brave browser is being used (Brave disables Google cloud Web Speech API by default)
+        if (navigator.brave && typeof navigator.brave.isBrave === 'function') {
+            navigator.brave.isBrave().then(isBrave => {
+                if (isBrave && !localStorage.getItem('nivm_stt_engine')) {
+                    sttEngine = 'whisper';
+                    localStorage.setItem('nivm_stt_engine', 'whisper');
+                    updateSttUIState();
+                }
+            }).catch(() => {});
+        }
+
+        updateSttUIState();
+    }
+    setupSttUI();
+
     // Docked Speech Orb Stop Listener
     if (dom.dockedOrbStopBtn) {
         dom.dockedOrbStopBtn.addEventListener('click', (e) => {
@@ -1207,23 +1345,62 @@ export async function setupVoiceUI() {
                 voiceModeStream = null;
             }
 
+            const liveTranscriptEl = document.getElementById('voiceLiveTranscript');
             if (!sendAfterStop) {
                 if (statusEl) statusEl.textContent = 'Tap orb to speak';
+                if (liveTranscriptEl) {
+                    liveTranscriptEl.textContent = '';
+                    liveTranscriptEl.className = 'voice-live-transcript hidden';
+                }
                 return;
             }
 
             let promptText = '';
+            const hasWebSpeechRec = Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
+            const useWebSpeech = sttEngine === 'web' && hasWebSpeechRec;
 
-            // ALWAYS prioritize sovereign offline Faster-Whisper via /api/stt directly from recorded audio
-            if (voiceModeAudioChunks.length > 0) {
+            // 1. If Web Speech Mode: resolve immediately from real-time stream (0ms delay)
+            if (useWebSpeech && voiceModeTranscript.trim()) {
+                promptText = voiceModeTranscript.trim();
+                if (liveTranscriptEl) {
+                    liveTranscriptEl.textContent = promptText;
+                    liveTranscriptEl.className = 'voice-live-transcript final';
+                }
+
+                if (state.visionEnabled && voiceModeAudioChunks.length > 0) {
+                    try {
+                        const mimeType = voiceModeMediaRecorder?.mimeType || 'audio/webm';
+                        const audioBlob = new Blob(voiceModeAudioChunks, { type: mimeType });
+                        if (audioBlob.size > 500) {
+                            const ext = mimeType.includes('wav') ? '.wav' : (mimeType.includes('ogg') ? '.ogg' : '.webm');
+                            const audioFile = new File([audioBlob], `voice_input_${Date.now()}${ext}`, { type: audioBlob.type });
+                            state.attachedImages.push({
+                                file: audioFile,
+                                type: audioBlob.type,
+                                url: URL.createObjectURL(audioBlob)
+                            });
+                            if (window.renderImagePreviews) window.renderImagePreviews();
+                        }
+                    } catch (_) {}
+                }
+            } else if (voiceModeAudioChunks.length > 0) {
+                // 2. Whisper STT route (chosen engine or fallback when Web Speech produced empty result)
                 try {
-                    if (statusEl) statusEl.textContent = 'Transcribing with Whisper...';
+                    const activeModelName = whisperModel || 'base.en';
+                    if (statusEl) statusEl.textContent = `Transcribing with Whisper (${activeModelName})...`;
+                    if (liveTranscriptEl && !liveTranscriptEl.textContent) {
+                        liveTranscriptEl.textContent = `Transcribing audio (${activeModelName})...`;
+                        liveTranscriptEl.className = 'voice-live-transcript interim';
+                    }
+
                     const mimeType = voiceModeMediaRecorder?.mimeType || 'audio/webm';
                     const audioBlob = new Blob(voiceModeAudioChunks, { type: mimeType });
                     const ext = mimeType.includes('wav') ? '.wav' : (mimeType.includes('ogg') ? '.ogg' : '.webm');
                     const formData = new FormData();
                     formData.append('audio', audioBlob, `voice_recording${ext}`);
-                    const res = await fetch('/api/stt', {
+                    formData.append('model', activeModelName);
+
+                    const res = await fetch(`/api/stt?model=${encodeURIComponent(activeModelName)}`, {
                         method: 'POST',
                         body: formData
                     });
@@ -1231,6 +1408,10 @@ export async function setupVoiceUI() {
                         const data = await res.json();
                         if (data && data.text) {
                             promptText = data.text.trim();
+                            if (liveTranscriptEl) {
+                                liveTranscriptEl.textContent = promptText;
+                                liveTranscriptEl.className = 'voice-live-transcript final';
+                            }
                         }
                     }
 
@@ -1249,7 +1430,7 @@ export async function setupVoiceUI() {
                 }
             }
 
-            // Fallback only if /api/stt returned nothing
+            // Fallback only if both returned nothing
             if (!promptText && voiceModeTranscript) {
                 promptText = voiceModeTranscript.trim();
             }
@@ -1266,9 +1447,11 @@ export async function setupVoiceUI() {
             } else if (promptText && isFillerOnly(promptText)) {
                 // Hesitation or filler only, do not send empty filler to model
                 if (statusEl) statusEl.textContent = 'Tap orb to speak';
+                if (liveTranscriptEl) liveTranscriptEl.className = 'voice-live-transcript hidden';
             } else {
                 // No words recognized
                 if (statusEl) statusEl.textContent = 'Tap orb to speak';
+                if (liveTranscriptEl) liveTranscriptEl.className = 'voice-live-transcript hidden';
             }
         };
 
@@ -1319,7 +1502,17 @@ export async function setupVoiceUI() {
             }
 
             const statusEl = document.getElementById('voiceStageStatus');
-            if (statusEl) statusEl.textContent = 'Listening... say something';
+            const liveTranscriptEl = document.getElementById('voiceLiveTranscript');
+            if (liveTranscriptEl) {
+                liveTranscriptEl.textContent = '';
+                liveTranscriptEl.className = 'voice-live-transcript hidden';
+            }
+
+            if (statusEl) {
+                statusEl.textContent = sttEngine === 'web'
+                    ? 'Listening... speak now'
+                    : `Listening... (${whisperModel || 'Whisper'})`;
+            }
 
             // Real-time audio analyser for orb & waveform visual modulation + Time-Domain VAD
             try {
@@ -1457,6 +1650,14 @@ export async function setupVoiceUI() {
                             voiceModeTranscript = trimmed;
                             voiceModeHasSpoken = true;
 
+                            // Live subtitle display below the glowing orb
+                            if (liveTranscriptEl) {
+                                liveTranscriptEl.textContent = trimmed;
+                                liveTranscriptEl.classList.remove('hidden');
+                                liveTranscriptEl.classList.toggle('interim', !hasFinal);
+                                liveTranscriptEl.classList.toggle('final', hasFinal);
+                            }
+
                             // If only filler ("uh", "um"), show as hesitation without triggering auto-send
                             if (isFillerOnly(trimmed)) {
                                 if (statusEl) statusEl.textContent = `Listening... "${trimmed}..."`;
@@ -1464,15 +1665,14 @@ export async function setupVoiceUI() {
                                 return;
                             }
 
-                            if (statusEl) statusEl.textContent = `Listening... ("${voiceModeTranscript}")`;
+                            if (statusEl) statusEl.textContent = 'Listening...';
                             // Reset silence timer on every new speech chunk
                             clearVoiceSilenceTimer();
 
-                            // Natural conversational pause: wait 2.2s after final phrase before auto-sending
-                            // Giving the user ample time to pause, breathe, or continue
+                            // Natural conversational pause before auto-sending
                             if (hasFinal) {
                                 const words = trimmed.split(/\s+/).filter(Boolean);
-                                const pauseMs = words.length <= 2 ? 2600 : 2200;
+                                const pauseMs = words.length <= 2 ? 2200 : 1800;
                                 voiceModeSilenceTimer = setTimeout(() => {
                                     if (voiceModeIsRecording && voiceModeHasSpoken) {
                                         stopVoiceModeRecording(true);
@@ -1483,7 +1683,23 @@ export async function setupVoiceUI() {
                     };
 
                     voiceModeSpeechRec.onerror = (e) => {
-                        console.warn('Web Speech Recognition non-fatal error:', e.error);
+                        console.warn('Web Speech Recognition error:', e.error);
+                        if (e.error === 'network' || e.error === 'service-not-allowed' || e.error === 'not-allowed') {
+                            if (sttEngine === 'web') {
+                                sttEngine = 'whisper';
+                                localStorage.setItem('nivm_stt_engine', 'whisper');
+                                updateSttUIState();
+                                if (window.showNotification) {
+                                    window.showNotification(
+                                        `Browser blocked cloud speech service (${e.error}). Switched to Local Faster-Whisper (${whisperModel})!`,
+                                        'info'
+                                    );
+                                }
+                                if (statusEl && voiceModeIsRecording) {
+                                    statusEl.textContent = `Listening... (${whisperModel} on-device)`;
+                                }
+                            }
+                        }
                     };
 
                     voiceModeSpeechRec.start();

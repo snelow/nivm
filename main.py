@@ -161,15 +161,18 @@ async def stt_transcribe(request: Request):
     """
     Transcribes uploaded voice speech (WebM, WAV, Ogg, MP3) using offline Faster-Whisper on CPU.
     Accepts raw audio bytes or multipart form-data.
-    Returns JSON: {"text": "transcribed speech"}
+    Returns JSON: {"text": "transcribed speech", "duration_ms": 120, "model": "base.en"}
     """
-    from core.multimodal import transcribe_speech_bytes
+    from core.multimodal import transcribe_speech_bytes, get_active_whisper_model_name
     content_type = request.headers.get("content-type", "").lower()
     audio_bytes = b""
+    model_param = request.query_params.get("model")
 
     try:
         if "multipart/form-data" in content_type:
             form = await request.form()
+            if not model_param and form.get("model"):
+                model_param = str(form.get("model"))
             for key in ["audio", "file", "voice"]:
                 upload = form.get(key)
                 if upload and hasattr(upload, "read"):
@@ -179,13 +182,45 @@ async def stt_transcribe(request: Request):
             audio_bytes = await request.body()
     except Exception as e:
         logger.warning(f"Error reading STT request body: {e}")
-        return JSONResponse(status_code=200, content={"text": ""})
+        return JSONResponse(status_code=200, content={"text": "", "duration_ms": 0, "model": get_active_whisper_model_name()})
 
     if not audio_bytes:
-        return JSONResponse(status_code=200, content={"text": ""})
+        return JSONResponse(status_code=200, content={"text": "", "duration_ms": 0, "model": get_active_whisper_model_name()})
 
-    transcribed_text = await asyncio.to_thread(transcribe_speech_bytes, audio_bytes)
-    return JSONResponse(status_code=200, content={"text": transcribed_text})
+    t0 = time.time()
+    transcribed_text = await asyncio.to_thread(transcribe_speech_bytes, audio_bytes, 60, model_param)
+    dur_ms = int((time.time() - t0) * 1000)
+    return JSONResponse(status_code=200, content={
+        "text": transcribed_text,
+        "duration_ms": dur_ms,
+        "model": get_active_whisper_model_name()
+    })
+
+
+@app.get("/api/stt/config")
+async def get_stt_config():
+    """Returns available Whisper models and currently active selection."""
+    from core.multimodal import get_active_whisper_model_name, AVAILABLE_WHISPER_MODELS
+    return {
+        "active_model": get_active_whisper_model_name(),
+        "available_models": AVAILABLE_WHISPER_MODELS,
+        "engines": ["web", "whisper"]
+    }
+
+
+@app.post("/api/stt/config")
+async def set_stt_config(request: Request):
+    """Sets the active Whisper model preference."""
+    from core.multimodal import set_active_whisper_model, get_active_whisper_model_name, AVAILABLE_WHISPER_MODELS
+    try:
+        body = await request.json()
+        model_name = body.get("model")
+        if model_name:
+            success = set_active_whisper_model(model_name)
+            return {"success": success, "active_model": get_active_whisper_model_name()}
+    except Exception as e:
+        logger.warning(f"Error updating STT config: {e}")
+    return {"success": False, "active_model": get_active_whisper_model_name(), "available_models": AVAILABLE_WHISPER_MODELS}
 
 
 @app.get("/api/tts/pronunciations")

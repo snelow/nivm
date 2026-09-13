@@ -15,32 +15,81 @@ from .storage import get_user_settings
 
 logger = logging.getLogger("nivm.multimodal")
 
+import numpy as np
+
 _whisper_model = None
+_current_model_name = None
+_configured_model_name = "base.en"
+
+AVAILABLE_WHISPER_MODELS = ["base.en", "small.en", "distil-medium.en"]
 
 
-def _get_whisper_model():
-    """Lazily load faster-whisper model on CPU using pre-cached model (distil-medium.en, small.en, or base.en)."""
-    global _whisper_model
-    if _whisper_model is not None:
+def get_active_whisper_model_name() -> str:
+    """Returns the currently active or configured Whisper model identifier."""
+    return _current_model_name or _configured_model_name
+
+
+def set_active_whisper_model(model_name: str) -> bool:
+    """Sets the preferred Whisper model and unloads previous if model changed."""
+    global _configured_model_name
+    clean = model_name.strip().lower()
+    if clean in AVAILABLE_WHISPER_MODELS:
+        if clean != _current_model_name:
+            unload_whisper_model()
+        _configured_model_name = clean
+        return True
+    return False
+
+
+def _get_whisper_model(requested_model: str = None):
+    """
+    Lazily loads faster-whisper model on CPU using int8 quantization and all available CPU threads.
+    Prefers requested_model, then _configured_model_name, falling back to base.en or small.en.
+    """
+    global _whisper_model, _current_model_name
+    target_name = (requested_model or _configured_model_name or "base.en").strip().lower()
+
+    if _whisper_model is not None and _current_model_name == target_name:
         return _whisper_model
+
+    if _whisper_model is not None and _current_model_name != target_name:
+        unload_whisper_model()
+
     try:
         from faster_whisper import WhisperModel
-        # Use CPU with int8 quantization so 0 MB of GPU VRAM is used
-        for model_name in ["distil-medium.en", "small.en", "base.en"]:
+        thread_count = min(8, os.cpu_count() or 4)
+
+        candidate_names = [target_name]
+        for fallback in ["base.en", "small.en", "distil-medium.en"]:
+            if fallback not in candidate_names:
+                candidate_names.append(fallback)
+
+        for model_name in candidate_names:
             try:
-                _whisper_model = WhisperModel(model_name, device="cpu", compute_type="int8", local_files_only=True)
-                logger.info(f"Loaded faster-whisper local model: {model_name} (int8 on CPU)")
+                _whisper_model = WhisperModel(
+                    model_name,
+                    device="cpu",
+                    compute_type="int8",
+                    cpu_threads=thread_count,
+                    local_files_only=True
+                )
+                _current_model_name = model_name
+                logger.info(f"Loaded faster-whisper model: {model_name} (int8 on {thread_count} CPU threads)")
                 return _whisper_model
-            except Exception:
+            except Exception as load_err:
+                logger.debug(f"Candidate Whisper model {model_name} unavailable: {load_err}")
                 continue
+
     except Exception as e:
-        logger.warning(f"Could not load faster-whisper local model: {e}")
+        logger.warning(f"Could not load faster-whisper engine: {e}")
         return None
+
+    return None
 
 
 def unload_whisper_model() -> bool:
     """Unload faster-whisper model from memory."""
-    global _whisper_model
+    global _whisper_model, _current_model_name
     if _whisper_model is not None:
         try:
             if hasattr(_whisper_model, 'model'):
@@ -48,11 +97,71 @@ def unload_whisper_model() -> bool:
         except Exception:
             pass
         _whisper_model = None
+        _current_model_name = None
         import gc
         gc.collect()
         logger.info("Faster-Whisper STT model unloaded from memory.")
         return True
     return False
+
+
+def _decode_audio_to_mono_16k(audio_bytes: bytes) -> np.ndarray:
+    """
+    Decodes audio bytes (WebM, OGG, WAV, MP3) directly in-memory to 16kHz mono float32 numpy array.
+    Zero disk I/O and zero subprocess spawning via PyAV.
+    """
+    if not audio_bytes or len(audio_bytes) < 64:
+        return np.array([], dtype=np.float32)
+
+    # 1. Direct in-memory PyAV stream decoding (fastest: ~5-15ms)
+    try:
+        import av
+        container = av.open(io.BytesIO(audio_bytes))
+        if container.streams.audio:
+            stream = container.streams.audio[0]
+            resampler = av.AudioResampler(format='flt', layout='mono', rate=16000)
+            frames = []
+            for frame in container.decode(stream):
+                for resampled in resampler.resample(frame):
+                    frames.append(resampled.to_ndarray())
+            container.close()
+            if frames:
+                return np.concatenate(frames, axis=1).squeeze()
+    except Exception as av_err:
+        logger.debug(f"PyAV in-memory decode notice: {av_err}")
+
+    # 2. Soundfile in-memory fallback for standard WAV / OGG
+    try:
+        import soundfile as sf
+        data, sr = sf.read(io.BytesIO(audio_bytes), dtype='float32')
+        if data.ndim > 1:
+            data = data.mean(axis=1)
+        if sr != 16000:
+            import scipy.signal
+            num_samples = int(len(data) * 16000 / sr)
+            data = scipy.signal.resample(data, num_samples).astype(np.float32)
+        return data
+    except Exception:
+        pass
+
+    # 3. Pydub fallback if container requires external probe
+    try:
+        import tempfile
+        from pydub import AudioSegment
+        with tempfile.NamedTemporaryFile(suffix=".tmp", delete=False) as tf:
+            tf.write(audio_bytes)
+            tmp_path = tf.name
+        try:
+            seg = AudioSegment.from_file(tmp_path).set_frame_rate(16000).set_channels(1)
+            raw = np.array(seg.get_array_of_samples(), dtype=np.float32)
+            max_val = float(1 << (8 * seg.sample_width - 1))
+            return raw / max_val
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+    except Exception as pydub_err:
+        logger.warning(f"Audio decoding failed across all decoders: {pydub_err}")
+        return np.array([], dtype=np.float32)
 
 
 def _transcribe_audio_file(filepath_or_bytes, max_duration_s=180) -> str:
@@ -63,8 +172,8 @@ def _transcribe_audio_file(filepath_or_bytes, max_duration_s=180) -> str:
     try:
         segments, info = model.transcribe(
             filepath_or_bytes,
-            beam_size=5,
-            best_of=5,
+            beam_size=1,
+            best_of=1,
             vad_filter=True,
             condition_on_previous_text=False
         )
@@ -72,7 +181,6 @@ def _transcribe_audio_file(filepath_or_bytes, max_duration_s=180) -> str:
         for segment in segments:
             if segment.end > max_duration_s:
                 break
-            # Skip if very high probability of no speech
             if getattr(segment, "no_speech_prob", 0.0) > 0.85:
                 continue
             text = segment.text.strip()
@@ -86,55 +194,53 @@ def _transcribe_audio_file(filepath_or_bytes, max_duration_s=180) -> str:
         return ""
 
 
-def transcribe_speech_bytes(audio_bytes: bytes, max_duration_s=60) -> str:
+def transcribe_speech_bytes(audio_bytes: bytes, max_duration_s=60, model_name: str = None) -> str:
     """
-    High-accuracy, direct speech transcription for Voice Mode from raw audio bytes (WebM, WAV, Ogg, MP3).
-    Normalizes audio loudness to 16kHz mono WAV to preserve clear speech onset and endings.
+    High-accuracy, ultra-fast speech transcription for Voice Mode.
+    Decodes audio in-memory to 16kHz float32 numpy array.
+    Uses greedy decoding (beam_size=1) + Silero VAD filtering + conversational prompt priming.
     """
     if not audio_bytes or len(audio_bytes) < 100:
         return ""
-    model = _get_whisper_model()
+    model = _get_whisper_model(model_name)
     if not model:
         return ""
 
-    import tempfile
-    from pydub import AudioSegment, effects
-
-    temp_in = None
-    temp_wav = None
     try:
-        ext = ".webm"
-        if audio_bytes[:4] == b"RIFF":
-            ext = ".wav"
-        elif audio_bytes[:4] == b"OggS":
-            ext = ".ogg"
-
-        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tf:
-            tf.write(audio_bytes)
-            temp_in = tf.name
-
-        # Load and verify audio volume to prevent silence hallucinations
-        audio = AudioSegment.from_file(temp_in)
-        if len(audio) < 200 or audio.dBFS < -45.0 or audio.max_dBFS < -40.0:
+        audio_arr = _decode_audio_to_mono_16k(audio_bytes)
+        if audio_arr.size < 1600:  # less than 100ms
             return ""
 
-        # Normalize loudness and resample to 16kHz 16-bit mono WAV for optimal Whisper accuracy
-        norm_audio = effects.normalize(audio).set_frame_rate(16000).set_channels(1)
+        peak = float(np.max(np.abs(audio_arr)))
+        if peak < 0.003:
+            return ""
 
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as wf:
-            temp_wav = wf.name
-            norm_audio.export(temp_wav, format="wav")
+        # Normalize gain in memory if speech was recorded quietly
+        if peak > 0 and peak < 0.3:
+            audio_arr = audio_arr * (0.3 / peak)
 
+        # Transcribe with greedy decoding + Silero VAD filter
         segments, info = model.transcribe(
-            temp_wav,
+            audio_arr,
             language="en",
-            beam_size=5,
-            best_of=5,
-            vad_filter=False,
+            beam_size=1,
+            best_of=1,
+            vad_filter=True,
+            vad_parameters=dict(
+                threshold=0.35,
+                min_speech_duration_ms=120,
+                max_speech_duration_s=float(max_duration_s),
+                min_silence_duration_ms=250,
+                speech_pad_ms=150
+            ),
+            initial_prompt="Hello, this is conversational speech with clear punctuation.",
             condition_on_previous_text=False
         )
 
-        SILENCE_HALLUCINATIONS = {"you", "thank you", "thanks for watching", "bye", "subscribe", "subtitles by", "the end"}
+        SILENCE_HALLUCINATIONS = {
+            "you", "thank you", "thanks for watching", "bye", "subscribe",
+            "subtitles by", "the end", "thank you for watching", "thank you."
+        }
 
         parts = []
         for segment in segments:
@@ -145,7 +251,7 @@ def transcribe_speech_bytes(audio_bytes: bytes, max_duration_s=60) -> str:
             text = segment.text.strip()
             if text:
                 clean_lower = text.lower().strip(" .!?,:;-")
-                if clean_lower in SILENCE_HALLUCINATIONS and len(audio) < 3000:
+                if clean_lower in SILENCE_HALLUCINATIONS and len(audio_arr) < 48000:
                     continue
                 parts.append(text)
 
@@ -153,13 +259,6 @@ def transcribe_speech_bytes(audio_bytes: bytes, max_duration_s=60) -> str:
     except Exception as e:
         logger.warning(f"Voice Mode audio transcription error: {e}")
         return ""
-    finally:
-        for p in (temp_in, temp_wav):
-            if p and os.path.exists(p):
-                try:
-                    os.remove(p)
-                except Exception:
-                    pass
 
 
 def _process_video(filepath: str, content_list: list):

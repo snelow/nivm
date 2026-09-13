@@ -44,13 +44,19 @@ async def browse_file_dialog_endpoint(req: Optional[BrowseDialogRequest] = None)
     dialog_title = req.title if req and req.title else "Select GGUF Model File"
 
     def _run_native_picker():
+        is_lora = "lora" in dialog_title.lower() or "safetensors" in dialog_title.lower()
         # 1. Try zenity (standard on GNOME/GTK Linux)
         if shutil.which("zenity"):
+            filter_arg = (
+                "--file-filter=LoRA Weight Files (*.safetensors, *.pt) | *.safetensors *.pt"
+                if is_lora
+                else "--file-filter=GGUF Model Files (*.gguf) | *.gguf *.GGUF"
+            )
             cmd = [
                 "zenity",
                 "--file-selection",
                 f"--title={dialog_title}",
-                "--file-filter=GGUF Model Files (*.gguf) | *.gguf *.GGUF",
+                filter_arg,
                 "--file-filter=All Files | *"
             ]
             if initial_dir and os.path.exists(initial_dir):
@@ -85,11 +91,16 @@ async def browse_file_dialog_endpoint(req: Optional[BrowseDialogRequest] = None)
 
         # 2. Try kdialog (KDE Linux)
         if shutil.which("kdialog"):
+            kfilter = (
+                "*.safetensors *.pt|LoRA Weights\n*|All Files"
+                if is_lora
+                else "*.gguf *.GGUF|GGUF Models\n*|All Files"
+            )
             cmd = [
                 "kdialog",
                 "--getopenfilename",
                 initial_dir if (initial_dir and os.path.exists(initial_dir)) else os.path.expanduser("~"),
-                "*.gguf *.GGUF|GGUF Models\n*|All Files",
+                kfilter,
                 "--title",
                 dialog_title
             ]
@@ -117,9 +128,14 @@ async def browse_file_dialog_endpoint(req: Optional[BrowseDialogRequest] = None)
             root = tk.Tk()
             root.withdraw()
             root.attributes('-topmost', True)
+            tkfilters = (
+                [("LoRA Weight Files", "*.safetensors *.pt"), ("All Files", "*.*")]
+                if is_lora
+                else [("GGUF Model Files", "*.gguf *.GGUF"), ("All Files", "*.*")]
+            )
             selected_path = filedialog.askopenfilename(
                 title=dialog_title,
-                filetypes=[("GGUF Model Files", "*.gguf *.GGUF"), ("All Files", "*.*")],
+                filetypes=tkfilters,
                 initialdir=initial_dir if (initial_dir and os.path.exists(initial_dir)) else os.path.expanduser("~")
             )
             root.destroy()
@@ -201,6 +217,9 @@ async def list_directory_endpoint(path: Optional[str] = None):
             {"name": "Models Dir", "path": MODELS_DIR, "icon": "fa-cube"},
             {"name": "Home", "path": home_dir, "icon": "fa-house"},
         ]
+        loras_dir = os.path.abspath("models/image/loras")
+        if os.path.exists(loras_dir):
+            shortcuts.insert(1, {"name": "LoRAs Dir", "path": loras_dir, "icon": "fa-wand-magic-sparkles"})
         if os.path.exists(downloads_dir):
             shortcuts.append({"name": "Downloads", "path": downloads_dir, "icon": "fa-download"})
         if os.path.exists(desktop_dir):

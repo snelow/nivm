@@ -16,18 +16,26 @@ export async function openFileBrowserModal(target = 'model') {
     if (dom.fileBrowserModalTitle) {
         dom.fileBrowserModalTitle.textContent = target === 'mmproj'
             ? 'Browse & Select Vision Projector (mmproj)'
-            : 'Browse & Select GGUF Model';
+            : (target === 'lora' ? 'Browse & Select LoRA (.safetensors)' : 'Browse & Select GGUF Model');
     }
     if (dom.fileBrowserSelectBtn) {
         dom.fileBrowserSelectBtn.disabled = true;
-        dom.fileBrowserSelectBtn.textContent = target === 'mmproj' ? 'Select Projector' : 'Select Model';
+        dom.fileBrowserSelectBtn.textContent = target === 'mmproj'
+            ? 'Select Projector'
+            : (target === 'lora' ? 'Select LoRA' : 'Select Model');
+    }
+    if (dom.fileBrowserOnlyGguf && dom.fileBrowserOnlyGguf.parentElement) {
+        dom.fileBrowserOnlyGguf.parentElement.style.display = target === 'lora' ? 'none' : '';
     }
     if (dom.fileBrowserSelectionInfo) {
         dom.fileBrowserSelectionInfo.innerHTML = '<span class="file-browser-none-selected">No file selected</span>';
     }
     if (dom.fileBrowserSearchInput) dom.fileBrowserSearchInput.value = '';
 
-    if (dom.fileBrowserModal) dom.fileBrowserModal.classList.remove('hidden');
+    if (dom.fileBrowserModal) {
+        dom.fileBrowserModal.style.zIndex = '1200';
+        dom.fileBrowserModal.classList.remove('hidden');
+    }
 
     const win = dom.fileBrowserWindow || document.getElementById('fileBrowserWindow');
     const header = dom.fileBrowserHeader || document.getElementById('fileBrowserHeader');
@@ -37,9 +45,13 @@ export async function openFileBrowserModal(target = 'model') {
     }
 
     let initialPath = null;
-    const inputVal = target === 'mmproj' ? dom.customMmprojInput?.value.trim() : dom.customModelPathInput?.value.trim();
-    if (inputVal && inputVal.includes('/')) {
-        initialPath = inputVal.substring(0, inputVal.lastIndexOf('/'));
+    if (target === 'lora') {
+        initialPath = 'models/image/loras';
+    } else {
+        const inputVal = target === 'mmproj' ? dom.customMmprojInput?.value.trim() : dom.customModelPathInput?.value.trim();
+        if (inputVal && inputVal.includes('/')) {
+            initialPath = inputVal.substring(0, inputVal.lastIndexOf('/'));
+        }
     }
     await loadBrowserDirectory(initialPath);
 }
@@ -106,7 +118,9 @@ export function renderBrowserFileList() {
     });
 
     let files = currentBrowserData.files || [];
-    if (onlyGguf) {
+    if (fileBrowserTarget === 'lora') {
+        files = files.filter(f => f.name.toLowerCase().endsWith('.safetensors') || f.name.toLowerCase().endsWith('.pt'));
+    } else if (onlyGguf) {
         files = files.filter(f => f.is_gguf);
     }
     if (query) {
@@ -125,13 +139,16 @@ export function renderBrowserFileList() {
             item.classList.add('active');
         }
 
-        const iconHtml = f.is_gguf
-            ? '<i class="fa-solid fa-cube" style="color: var(--accent-purple);"></i>'
-            : '<i class="fa-regular fa-file" style="color: var(--text-tertiary);"></i>';
+        const isLora = fileBrowserTarget === 'lora' || f.name.toLowerCase().endsWith('.safetensors');
+        const iconHtml = isLora
+            ? '<i class="fa-solid fa-wand-magic-sparkles" style="color: #a78bfa;"></i>'
+            : (f.is_gguf
+                ? '<i class="fa-solid fa-cube" style="color: var(--accent-purple);"></i>'
+                : '<i class="fa-regular fa-file" style="color: var(--text-tertiary);"></i>');
 
-        const badgeHtml = f.is_gguf
-            ? `<span class="file-browser-gguf-badge">GGUF</span>`
-            : '';
+        const badgeHtml = isLora
+            ? `<span class="file-browser-gguf-badge" style="background: rgba(139, 92, 246, 0.2); color: #c4b5fd; border-color: rgba(139, 92, 246, 0.4);">LoRA</span>`
+            : (f.is_gguf ? `<span class="file-browser-gguf-badge">GGUF</span>` : '');
 
         const sizeStr = f.size_gb >= 1 ? `${f.size_gb} GB` : `${f.size_mb || 0} MB`;
 
@@ -169,6 +186,22 @@ export function renderBrowserFileList() {
 
 export async function applyBrowserSelection() {
     if (!selectedBrowserFile) return;
+
+    if (fileBrowserTarget === 'lora') {
+        if (window._onLoraFileSelectedCallback) {
+            window._onLoraFileSelectedCallback(selectedBrowserFile);
+            window._onLoraFileSelectedCallback = null;
+        }
+        if (dom.fileBrowserModal) dom.fileBrowserModal.classList.add('hidden');
+        showNotification({
+            title: 'LoRA Selected',
+            message: `${selectedBrowserFile.name}`,
+            type: 'success',
+            icon: 'fa-wand-magic-sparkles'
+        });
+        return;
+    }
+
     const p = selectedBrowserFile.path;
     const isMmproj = fileBrowserTarget === 'mmproj';
 
@@ -197,6 +230,42 @@ export async function handleBrowseFile(target = 'model') {
     if (window.innerWidth <= 768) {
         openFileBrowserModal(target);
         return;
+    }
+
+    if (target === 'lora') {
+        try {
+            const title = 'Select LoRA File (.safetensors)';
+            const initialDir = 'models/image/loras';
+            const result = await openNativeFileDialog(initialDir, title);
+            if (result && result.success && result.path) {
+                if (dom.fileBrowserModal) dom.fileBrowserModal.classList.add('hidden');
+                const fObj = {
+                    name: result.filename || result.path.split('/').pop(),
+                    path: result.path,
+                };
+                if (window._onLoraFileSelectedCallback) {
+                    window._onLoraFileSelectedCallback(fObj);
+                    window._onLoraFileSelectedCallback = null;
+                }
+                showNotification({
+                    title: 'LoRA Selected',
+                    message: `${fObj.name}`,
+                    type: 'success',
+                    icon: 'fa-wand-magic-sparkles'
+                });
+                return;
+            } else if (result && result.cancelled) {
+                // User explicitly cancelled the native dialog; do not force open the explorer modal
+                return;
+            } else if (result && result.fallback) {
+                openFileBrowserModal(target);
+                return;
+            }
+        } catch (err) {
+            console.warn('Native LoRA browse error, opening explorer modal:', err);
+            openFileBrowserModal(target);
+            return;
+        }
     }
 
     const btn = target === 'mmproj' ? dom.browseMmprojBtn : dom.browseCustomPathBtn;

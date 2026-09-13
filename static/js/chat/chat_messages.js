@@ -3,7 +3,7 @@
 import { state, saveConversations } from '../state.js';
 import { dom } from '../dom.js';
 import { tools, parseToolCall, stripToolCallFromText } from '../tools.js';
-import { createSingleImageCard, createBeforeAfterSlider } from '../image_editor.js';
+import { createSingleImageCard, createBeforeAfterSlider, getImageDuration, saveImageDuration } from '../image_editor.js';
 import { escapeHtml, showNotification } from '../modals/dialogs.js';
 import { openLightbox, openVideoPreview } from '../media/media_manager.js';
 import { switchChat, createNewChat } from './chat_history.js';
@@ -637,14 +637,18 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
                     } else if (resultStr.includes("terminal") || resultStr.includes("Linux") || resultStr.includes("Directory")) {
                         toolCommand = 'execute_terminal';
                         argsStr = 'terminal';
+                    } else if (resultStr.includes("Anime illustration synthesized successfully")) {
+                        toolCommand = 'generate_anime_image';
+                    } else if (resultStr.includes("Image synthesized successfully")) {
+                        toolCommand = 'generate_image';
                     }
                 }
             }
         }
 
         if (toolCommand) {
-            // Restore rich image card in history for generate_image and edit_image
-            if (toolCommand === 'generate_image' || toolCommand === 'edit_image') {
+            // Restore rich image card in history for generate_image, edit_image, and generate_anime_image
+            if (toolCommand === 'generate_image' || toolCommand === 'edit_image' || toolCommand === 'generate_anime_image') {
                 let imgUrl = null;
                 if (resultStr) {
                     const match = resultStr.match(/(?:\/images\/|\/uploads\/)[a-zA-Z0-9_\-\./]+/i) || resultStr.match(/(?:\/images\/|\/uploads\/)[^\s,)"';:]+/i);
@@ -658,13 +662,38 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
                     let promptText = '';
                     try {
                         const parsed = JSON.parse(argsStr);
-                        promptText = parsed.prompt || '';
+                        if (toolCommand === 'generate_anime_image') {
+                            const charName = parsed.character ? parsed.character.replace(/_/g, ' ') : '';
+                            const outfit = parsed.outfit ? ` (${parsed.outfit})` : '';
+                            const details = parsed.prompt ? `: ${parsed.prompt}` : '';
+                            promptText = `Anime: ${charName}${outfit}${details}`.trim();
+                        } else {
+                            promptText = parsed.prompt || '';
+                        }
                     } catch (_) {
                         const parts = (argsStr || '').match(/(?:[^\s,"']+|"[^"]*"|'[^']*')+/g) || [];
                         if (toolCommand === 'edit_image' && parts.length > 1) {
                             promptText = (parts[1] || '').replace(/^['"]|['"]$/g, '');
                         } else if (parts.length > 0) {
                             promptText = (parts[0] || '').replace(/^['"]|['"]$/g, '');
+                        }
+                    }
+
+                    let durationSec = msg.toolExecution?.duration || null;
+                    if (!durationSec && resultStr) {
+                        const durMatch = resultStr.match(/Duration:\s*([0-9.]+)\s*s/i);
+                        if (durMatch) {
+                            durationSec = parseFloat(durMatch[1]);
+                        }
+                    }
+                    if (!durationSec && imgUrl) {
+                        durationSec = getImageDuration(imgUrl);
+                    }
+                    if (durationSec) {
+                        saveImageDuration(imgUrl, durationSec);
+                        if (msg.toolExecution && !msg.toolExecution.duration) {
+                            msg.toolExecution.duration = parseFloat(durationSec);
+                            saveConversations();
                         }
                     }
 
@@ -678,9 +707,9 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
                     }
 
                     if (toolCommand === 'edit_image' && beforeUrl && imgUrl) {
-                        imgCard = createBeforeAfterSlider(beforeUrl, imgUrl, promptText);
+                        imgCard = createBeforeAfterSlider(beforeUrl, imgUrl, promptText, durationSec);
                     } else {
-                        imgCard = createSingleImageCard(imgUrl, promptText);
+                        imgCard = createSingleImageCard(imgUrl, promptText, durationSec);
                     }
                     imgCard.style.margin = '6px 0 8px 0';
 
@@ -925,6 +954,56 @@ function stopThinkingPhraseRotation() {
     }
 }
 
+export function sealUnclosedThoughts(text) {
+    if (!text || typeof text !== 'string') return text;
+    if (!text.includes('<think>') || text.includes('</think>')) return text;
+
+    const thinkIdx = text.indexOf('<think>');
+    const before = text.substring(0, thinkIdx);
+    const body = text.substring(thinkIdx + 7);
+
+    // 1. Glued transition after Tone/reasoning where period is immediately followed by uppercase response
+    // e.g. "Tone: Crisp, direct, collaborative, in character. No fluff.Yeah, I see it..."
+    const gluedMatch = body.match(/^(.*?\b(?:tone|fluff|plan|reasoning|character):?.*?\.)([A-Z][a-z]+[,! ]|[A-Z]'\w+.*)$/is);
+    if (gluedMatch) {
+        return `${before}<think>${gluedMatch[1].trim()}</think>\n\n${gluedMatch[2].trim()}`;
+    }
+
+    // 2. Transition where sentence ends with period glued directly to capitalized word (e.g. "done.Sure")
+    const dotNoSpace = body.match(/^(.*?\b[a-z0-9]+\.)([A-Z][a-z]+[,! ].*)$/s);
+    if (dotNoSpace) {
+        return `${before}<think>${dotNoSpace[1].trim()}</think>\n\n${dotNoSpace[2].trim()}`;
+    }
+
+    // 3. Explicit transition markers: "Response:", "Final Answer:", "Answer:"
+    const markerMatch = body.match(/^(.*?)\n+(?:Final Answer|Response|Answer|Direct response):\s*(.*)$/is);
+    if (markerMatch) {
+        return `${before}<think>${markerMatch[1].trim()}</think>\n\n${markerMatch[2].trim()}`;
+    }
+
+    // 4. Double newline transition from reasoning to dialogue/first-person
+    const paragraphs = body.split(/\n\s*\n/);
+    if (paragraphs.length >= 2) {
+        let splitIdx = -1;
+        for (let i = 1; i < paragraphs.length; i++) {
+            const p = paragraphs[i].trim();
+            const isReasoning = /^(the user|let's|i need to|i should|looking at|first,|step \d|we need to|note:|thinking|query:|plan:)/i.test(p);
+            const isDialogue = /^("|'|yeah|yes|sure|okay|ok|hey|hi|hello|no,|of course|well,|i see|certainly|[A-Z][a-z]+,)/i.test(p);
+            if (!isReasoning && isDialogue) {
+                splitIdx = i;
+                break;
+            }
+        }
+        if (splitIdx !== -1) {
+            const thoughts = paragraphs.slice(0, splitIdx).join('\n\n').trim();
+            const answer = paragraphs.slice(splitIdx).join('\n\n').trim();
+            return `${before}<think>${thoughts}</think>\n\n${answer}`;
+        }
+    }
+
+    return text;
+}
+
 export function updateAssistantBubble(bubbleElement, rawText, isGenerating = false, thinkStartTimeOrDuration = null) {
     let processedText = rawText || '';
 
@@ -952,6 +1031,11 @@ export function updateAssistantBubble(bubbleElement, rawText, isGenerating = fal
     // If model closed </think> without an explicit opening <think> tag (common with prefilled prompt templates like Qwen), prepend <think>
     if (processedText.includes('</think>') && !processedText.includes('<think>')) {
         processedText = '<think>' + processedText;
+    }
+
+    // If generation is complete and model forgot to output </think>, recover thoughts and separate the spoken dialogue
+    if (!isGenerating && processedText.includes('<think>') && !processedText.includes('</think>')) {
+        processedText = sealUnclosedThoughts(processedText);
     }
 
     // Hide and strip tool calls and decision codes from the user UI

@@ -3,7 +3,7 @@
 import { state, saveConversations, saveUsageStats } from '../state.js';
 import { dom } from '../dom.js';
 import { tools, buildToolsInstruction, parseToolCall, stripToolCallFromText } from '../tools.js';
-import { renderActiveChat, appendMessageToDOM, scrollToBottom, toggleSendStopButtons, updateAssistantBubble, updateMessageActionIcons, buildToolTraceHtml, updateChatInputState } from './chat_messages.js';
+import { renderActiveChat, appendMessageToDOM, scrollToBottom, toggleSendStopButtons, updateAssistantBubble, updateMessageActionIcons, buildToolTraceHtml, updateChatInputState, sealUnclosedThoughts } from './chat_messages.js';
 import { renderChatHistory, createNewChat } from './chat_history.js';
 import { clearAttachedImage, isVisionSupported } from '../media/media_manager.js';
 import { generateChatTitle, uploadImage } from '../api.js';
@@ -11,6 +11,7 @@ import { voiceConfig, speakText, stopSpeaking, setVoiceOrbGeneratingState } from
 import { showAlert, showNotification } from '../modals/dialogs.js';
 import { populateStatsModal } from '../modals/tools_settings.js';
 import { openCreatorModal } from '../extras.js';
+import { saveImageDuration } from '../image_editor.js';
 
 export function sanitizeAssistantText(text) {
     if (!text) return '';
@@ -20,6 +21,9 @@ export function sanitizeAssistantText(text) {
     cleaned = cleaned.replace(/<think>\s*<\/think>/gi, '');
     if (cleaned.includes('</think>') && !cleaned.includes('<think>')) {
         cleaned = '<think>' + cleaned;
+    }
+    if (cleaned.includes('<think>') && !cleaned.includes('</think>')) {
+        cleaned = sealUnclosedThoughts(cleaned);
     }
     return cleaned;
 }
@@ -480,15 +484,28 @@ RESPONSE REQUIREMENTS (MANDATORY):
                 resultStr: resultStr
             };
 
-            if (interceptedToolCall.command === 'generate_image' || interceptedToolCall.command === 'edit_image') {
+            if (interceptedToolCall.command === 'generate_image' || interceptedToolCall.command === 'edit_image' || interceptedToolCall.command === 'generate_anime_image') {
                 const imgMatch = resultStr.match(/(?:\/images\/|\/uploads\/)[^\s,)"';:]+/i);
                 if (imgMatch) {
                     assistantMsg.toolExecution.imageUrl = imgMatch[0].replace(/[.,:;]+$/, '');
+                    const fn = assistantMsg.toolExecution.imageUrl.split('/').pop();
+                    if (fn) {
+                        state.lastGeneratedImage = fn;
+                        assistantMsg.toolExecution.imageFilename = fn;
+                    }
+                }
+                const durMatch = resultStr.match(/Duration:\s*([0-9.]+)\s*s/i);
+                if (durMatch) {
+                    assistantMsg.toolExecution.duration = parseFloat(durMatch[1]);
+                    if (assistantMsg.toolExecution.imageUrl) {
+                        saveImageDuration(assistantMsg.toolExecution.imageUrl, assistantMsg.toolExecution.duration);
+                    }
                 }
             }
 
             const isWriteMem = interceptedToolCall.command === 'write_memory';
             const isEndConvo = interceptedToolCall.command === 'end_conversation';
+            const isImageTool = interceptedToolCall.command === 'generate_image' || interceptedToolCall.command === 'edit_image' || interceptedToolCall.command === 'generate_anime_image';
             const isDenied = typeof resultStr === 'string' && resultStr.toLowerCase().includes('denied by user');
 
             let toolAdvice = "";
@@ -508,6 +525,15 @@ RESPONSE REQUIREMENTS (MANDATORY):
                 toolAdvice = "IMPORTANT: This conversation is now permanently ended. Deliver a single, short closing remark in character (or firm boundary if abusive), then conclude. Do not ask questions or offer further help—the conversation is closed.";
             } else if (isWriteMem) {
                 toolAdvice = "IMPORTANT: Memory saved successfully. NEVER mention memory files, keys, categories, or technical storage to the user (do NOT say 'stored in profile memory' or similar). Acknowledge naturally in character (e.g. 'Got it, I\\'ll remember that!', 'Noted!', or seamlessly continue).";
+            } else if (isImageTool) {
+                const imgFilename = assistantMsg.toolExecution?.imageFilename || state.lastGeneratedImage || 'the image';
+                toolAdvice = `IMPORTANT: Image processing succeeded. The image filename is "${imgFilename}". The rendered image is already displayed in the UI. Describe the visual scene warmly in your active persona/character without mentioning technical file paths or markdown image tags. Note this filename: if the user later asks to edit, alter, or transform this image, call edit_image("${imgFilename}", "<edit instruction>", "original").`;
+            } else if (interceptedToolCall.command === 'execute_terminal') {
+                const isEmpty = !resultStr || resultStr.includes('no output produced') || resultStr.trim() === '';
+                toolAdvice = `CRITICAL INSTRUCTION FOR TERMINAL OUTPUT:
+1. The user CANNOT see this terminal output directly! You MUST state, summarize, or explain the terminal output and findings to the user in character.
+2. ${isEmpty ? 'The command returned empty or silent output (exit code 0 with no stdout text). You MUST explicitly tell the user that the command ran cleanly with exit status 0, and explain WHY it returned empty (e.g. it was a silent command that produces no stdout unless an error occurs, or there were no matching items).' : 'Clearly state and explain the output and metrics to the user.'}
+3. Always stay in character.`;
             } else {
                 toolAdvice = "IMPORTANT: The user CANNOT see this internal tool output directly! You must convey, explain, or display the output and findings to the user. Maintain and speak in your active persona/character without breaking character.";
             }
@@ -516,7 +542,6 @@ RESPONSE REQUIREMENTS (MANDATORY):
             activeChat.messages.push(sysMsg);
 
             const sysBubbleHtml = buildToolTraceHtml(interceptedToolCall.command, interceptedToolCall.argsStr, resultStr);
-            const isImageTool = interceptedToolCall.command === 'generate_image' || interceptedToolCall.command === 'edit_image';
 
             if (state.activeChatId === turnChatId) {
                 if (isImageTool) {

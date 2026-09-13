@@ -17,11 +17,22 @@
 }
 
 /* Cleanly group consecutive assistant steps, tool calls, and thoughts in a multi-step chain */
-.message-row.assistant-row + .message-row.assistant-row,
+.message-row.assistant-row + .message-row.assistant-row {
+    margin-top: -14px;
+}
+
+.assistant-row:has(.tool-trace-block) + .assistant-row {
+    margin-top: -15px;
+}
+
+.assistant-row:has(.tool-trace-block) + .assistant-row .thinking-block {
+    margin-top: 2px;
+}
+
 .message-row.assistant-row + .tool-trace-block,
 .tool-trace-block + .message-row.assistant-row,
 .tool-trace-block + .tool-trace-block {
-    margin-top: -6px;
+    margin-top: -12px;
 }
 
 @keyframes messageReveal {

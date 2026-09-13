@@ -7,80 +7,172 @@ import { fetchModelDetailsAPI } from '../api.js';
 import { showNotification, showAlert, escapeHtml } from './dialogs.js';
 
 export async function populateStatsModal() {
-    if (state.engineMode === 'native') {
-        const activeRole = state.inferenceMode === 'single'
-            ? (dom.singleModelRoleSelect?.value || 'coder')
-            : 'coder';
-        dom.statsModelName.textContent = `Local Engine (${activeRole})`;
-        dom.statsArchitecture.textContent = dom[activeRole + 'FlashAttn']?.checked ? 'GGUF (Flash Attn)' : 'GGUF';
-        dom.statsModelType.textContent = 'LOCAL_NATIVE';
-        dom.statsQuantization.textContent = dom[activeRole + 'KvSelect'] ? dom[activeRole + 'KvSelect'].value.toUpperCase() + ' (KV Cache)' : '-';
-        dom.statsContextLimit.textContent = dom[activeRole + 'CtxSlider'] ? dom[activeRole + 'CtxSlider'].value : '8192';
-        
-        dom.statsTotalTokens.textContent = state.usageStats.totalTokens.toLocaleString();
-        dom.statsTotalTime.textContent = state.usageStats.totalDurationSec.toFixed(1) + 's';
-        dom.statsTotalCost.textContent = '$0.0000';
-        return;
-    }
+    const isApi = state.inferenceMode === 'api';
+    const isRouting = state.inferenceMode === 'routing';
 
-    dom.statsModelName.textContent = state.selectedModel || '-';
-    dom.statsArchitecture.textContent = 'Loading...';
-    dom.statsModelType.textContent = 'Loading...';
-    dom.statsQuantization.textContent = 'Loading...';
-    dom.statsContextLimit.textContent = 'Loading...';
+    const modeBadge = dom.statsModeBadge || document.getElementById('statsModeBadge');
+    const modeBadgeText = dom.statsModeBadgeText || document.getElementById('statsModeBadgeText');
+    const statsProviderTag = dom.statsProviderTag || document.getElementById('statsProviderTag');
+    const statsModelIcon = dom.statsModelIcon || document.getElementById('statsModelIcon');
+    const avgSpeedEl = dom.statsAvgSpeed || document.getElementById('statsAvgSpeed');
 
-    // Fetch deep model metadata
-    const modelDetails = await fetchModelDetailsAPI(state.selectedModel);
-    
-    if (modelDetails) {
-        dom.statsArchitecture.textContent = modelDetails.arch;
-        dom.statsModelType.textContent = modelDetails.type.toUpperCase();
-        dom.statsQuantization.textContent = modelDetails.quantization;
-        
-        if (typeof modelDetails.loadedContextLength === 'number') {
-            dom.statsContextLimit.textContent = modelDetails.loadedContextLength.toLocaleString();
-        } else {
-            dom.statsContextLimit.textContent = modelDetails.loadedContextLength || 'Unknown';
-        }
-    } else {
-        dom.statsArchitecture.textContent = 'Unknown';
-        dom.statsModelType.textContent = 'Unknown';
-        dom.statsQuantization.textContent = 'Unknown';
-        dom.statsContextLimit.textContent = 'Unknown';
-        
-        // Fallback to basic state data
-        const modelData = state.models.find(m => m.id === state.selectedModel);
-        if (modelData) {
-            if (modelData.context_window) {
-                dom.statsContextLimit.textContent = `${modelData.context_window.toLocaleString()} tokens`;
-            } else if (modelData.context_length) {
-                dom.statsContextLimit.textContent = `${modelData.context_length.toLocaleString()} tokens`;
-            } else {
-                dom.statsContextLimit.textContent = 'Unknown / Unlimited';
+    if (isApi) {
+        const apiModel = dom.apiModelInput?.value?.trim() 
+            || dom.apiModelSelect?.value 
+            || state.selectedModel 
+            || 'gemini-3.8-flash';
+
+        const baseUrl = dom.apiBaseUrl?.value?.trim() || '';
+        const lowerBase = baseUrl.toLowerCase();
+        const lowerModel = apiModel.toLowerCase();
+
+        let providerName = 'Cloud API';
+        let isLocalApi = false;
+
+        if (lowerBase.includes('generativelanguage.googleapis.com') || lowerModel.startsWith('gemini')) {
+            providerName = 'Google Gemini';
+        } else if (lowerBase.includes('api.groq.com') || lowerModel.includes('groq')) {
+            providerName = 'Groq Cloud';
+        } else if (lowerBase.includes('api.openai.com')) {
+            providerName = 'OpenAI';
+        } else if (lowerBase.includes('openrouter.ai')) {
+            providerName = 'OpenRouter';
+        } else if (lowerBase.includes('11434') || lowerBase.includes('ollama')) {
+            providerName = 'Ollama API';
+            isLocalApi = true;
+        } else if (lowerBase.includes('together')) {
+            providerName = 'Together AI';
+        } else if (lowerBase.includes('mistral')) {
+            providerName = 'Mistral AI';
+        } else if (lowerBase.includes('anthropic')) {
+            providerName = 'Anthropic';
+        } else if (baseUrl) {
+            try {
+                const u = new URL(baseUrl);
+                providerName = u.hostname || 'OpenAI-Compatible';
+            } catch (_) {
+                providerName = 'Custom API';
             }
+        }
+
+        if (modeBadge) modeBadge.className = `stats-mode-badge ${isLocalApi ? 'mode-local-api' : 'mode-api'}`;
+        if (modeBadgeText) modeBadgeText.textContent = isLocalApi ? 'Local API' : 'API Cloud';
+
+        if (statsModelIcon) {
+            statsModelIcon.className = isLocalApi ? 'fa-solid fa-network-wired' : (providerName.includes('Groq') ? 'fa-solid fa-bolt' : 'fa-solid fa-cloud');
+        }
+
+        const cleanModelName = apiModel.replace(/^models\//i, '');
+        if (dom.statsModelName) {
+            dom.statsModelName.textContent = cleanModelName;
+            dom.statsModelName.title = apiModel;
+        }
+
+        const visionSupported = window.isVisionSupported ? window.isVisionSupported() : Boolean(state.apiMultimodal);
+        if (statsProviderTag) {
+            statsProviderTag.textContent = `${providerName} • ${visionSupported ? 'Multimodal Vision' : 'Text Generation'}`;
+        }
+
+        if (dom.statsArchitecture) {
+            dom.statsArchitecture.textContent = `${providerName} (Stream)`;
+        }
+
+        if (dom.statsModelType) {
+            dom.statsModelType.textContent = isLocalApi ? 'LOCAL_API (Ollama)' : 'EXTERNAL_API';
+        }
+
+        if (dom.statsQuantization) {
+            dom.statsQuantization.textContent = isLocalApi ? 'Local Daemon (Q4/Q8)' : 'Server Managed (FP16/BF16)';
+        }
+
+        if (dom.statsContextLimit) {
+            let ctx = '128,000 tokens (128k)';
+            if (lowerModel.includes('gemini-1.5') || lowerModel.includes('gemini-2') || lowerModel.includes('gemini-3') || lowerModel.includes('gemini-flash') || lowerModel.includes('gemini-pro')) {
+                ctx = '1,048,576 tokens (1M)';
+            } else if (lowerModel.includes('claude')) {
+                ctx = '200,000 tokens (200k)';
+            } else if (lowerModel.includes('llama-3.3') || lowerModel.includes('llama-3.1') || lowerModel.includes('gpt-4o') || lowerModel.includes('o1') || lowerModel.includes('o3')) {
+                ctx = '128,000 tokens (128k)';
+            } else if (lowerModel.includes('deepseek')) {
+                ctx = '64,000 tokens (64k)';
+            }
+            dom.statsContextLimit.textContent = ctx;
+        }
+    } else if (isRouting) {
+        if (modeBadge) modeBadge.className = 'stats-mode-badge mode-routing';
+        if (modeBadgeText) modeBadgeText.textContent = 'Smart Router';
+        if (statsModelIcon) statsModelIcon.className = 'fa-solid fa-shuffle';
+
+        if (dom.statsModelName) dom.statsModelName.textContent = 'Multi-Model Intent Router';
+        if (statsProviderTag) statsProviderTag.textContent = 'Auto Hot-Swap: Coder, Creative, General & Vision';
+        if (dom.statsArchitecture) dom.statsArchitecture.textContent = 'Dynamic GGUF (Flash Attn)';
+        if (dom.statsModelType) dom.statsModelType.textContent = 'LOCAL_ROUTING';
+        if (dom.statsQuantization) dom.statsQuantization.textContent = 'Auto Multi-Slot (q4_k_m / q8_0)';
+        if (dom.statsContextLimit) dom.statsContextLimit.textContent = '8,192 tokens (Per Slot)';
+    } else {
+        if (modeBadge) modeBadge.className = 'stats-mode-badge mode-local';
+        if (modeBadgeText) modeBadgeText.textContent = 'Local Engine';
+        if (statsModelIcon) statsModelIcon.className = 'fa-solid fa-microchip';
+
+        const activeRole = dom.singleModelRoleSelect?.value || 'coder';
+        if (activeRole === 'custom') {
+            const fileName = state.customModelPath ? state.customModelPath.split(/[/\\]/).pop() : 'Custom GGUF Model';
+            if (dom.statsModelName) dom.statsModelName.textContent = fileName;
+            if (statsProviderTag) statsProviderTag.textContent = 'Local Native • Custom GGUF File';
+            if (dom.statsArchitecture) dom.statsArchitecture.textContent = dom.singleFlashAttn?.checked ? 'GGUF (Flash Attn)' : 'GGUF';
+            if (dom.statsModelType) dom.statsModelType.textContent = 'LOCAL_NATIVE';
+            if (dom.statsQuantization) dom.statsQuantization.textContent = dom.singleKvSelect ? `${dom.singleKvSelect.value.toUpperCase()} (KV Cache)` : 'Custom Quant';
+            if (dom.statsContextLimit) dom.statsContextLimit.textContent = `${dom.singleCtxSlider ? dom.singleCtxSlider.value : '8192'} tokens`;
         } else {
-            dom.statsContextLimit.textContent = '-';
+            if (dom.statsModelName) dom.statsModelName.textContent = `Local Engine (${activeRole.toUpperCase()})`;
+            if (statsProviderTag) statsProviderTag.textContent = `Local Native • Dedicated ${activeRole} slot`;
+            if (dom.statsArchitecture) dom.statsArchitecture.textContent = dom[activeRole + 'FlashAttn']?.checked ? 'GGUF (Flash Attn)' : 'GGUF';
+            if (dom.statsModelType) dom.statsModelType.textContent = 'LOCAL_NATIVE';
+            if (dom.statsQuantization) dom.statsQuantization.textContent = dom[activeRole + 'KvSelect'] ? `${dom[activeRole + 'KvSelect'].value.toUpperCase()} (KV Cache)` : 'Q4_K_M / Q8_0';
+            if (dom.statsContextLimit) dom.statsContextLimit.textContent = `${dom[activeRole + 'CtxSlider'] ? dom[activeRole + 'CtxSlider'].value : '8192'} tokens`;
         }
     }
 
-    // Populate Global Usage
-    dom.statsTotalTokens.textContent = state.usageStats.totalTokens.toLocaleString();
-    
-    const totalSecs = state.usageStats.totalDurationSec;
+    // Populate Global Usage Statistics
+    const totalTokens = state.usageStats?.totalTokens || 0;
+    const totalSecs = state.usageStats?.totalDurationSec || 0;
+    const totalCost = state.usageStats?.totalCost || 0;
+
+    if (dom.statsTotalTokens) {
+        dom.statsTotalTokens.textContent = totalTokens.toLocaleString();
+    }
+
     let timeStr = `${totalSecs.toFixed(1)}s`;
-    if (totalSecs > 60) {
+    if (totalSecs >= 3600) {
+        const h = Math.floor(totalSecs / 3600);
+        const m = Math.floor((totalSecs % 3600) / 60);
+        const s = Math.round(totalSecs % 60);
+        timeStr = `${h}h ${m}m ${s}s`;
+    } else if (totalSecs >= 60) {
         const m = Math.floor(totalSecs / 60);
         const s = Math.round(totalSecs % 60);
         timeStr = `${m}m ${s}s`;
     }
-    if (totalSecs > 3600) {
-        const h = Math.floor(totalSecs / 3600);
-        const m = Math.floor((totalSecs % 3600) / 60);
-        timeStr = `${h}h ${m}m`;
+    if (dom.statsTotalTime) {
+        dom.statsTotalTime.textContent = timeStr;
     }
-    dom.statsTotalTime.textContent = timeStr;
-    
-    dom.statsTotalCost.textContent = `$${state.usageStats.totalCost.toFixed(5)}`;
+
+    if (dom.statsTotalCost) {
+        if (state.inferenceMode === 'api' || totalCost > 0) {
+            dom.statsTotalCost.textContent = `$${totalCost.toFixed(5)}`;
+        } else {
+            dom.statsTotalCost.textContent = '$0.0000 (Free)';
+        }
+    }
+
+    if (avgSpeedEl) {
+        if (totalSecs > 0 && totalTokens > 0) {
+            const speed = (totalTokens / totalSecs).toFixed(1);
+            avgSpeedEl.textContent = `${speed} tk/s`;
+        } else {
+            avgSpeedEl.textContent = '— tk/s';
+        }
+    }
 }
 
 
@@ -108,7 +200,7 @@ export async function renderToolsSettings() {
     
     tools.forEach(tool => {
         const isEnabled = state.enabledTools[tool.name] !== false;
-        const isImageTool = (tool.name === 'generate_image' || tool.name === 'edit_image');
+        const isImageTool = (tool.name === 'generate_image' || tool.name === 'edit_image' || tool.name === 'generate_anime_image');
         const isBlocked = isImageTool && (!imageModelsReady || !comfyReady);
         
         const cardContainer = document.createElement('div');

@@ -165,6 +165,9 @@
     }
 
     /* Mobile In-Browser File Explorer (Clean Full-Screen Sheet) */
+    #fileBrowserModal {
+        z-index: 1200 !important;
+    }
     #fileBrowserWindow {
         position: fixed !important;
         top: 0 !important;
@@ -185,6 +188,7 @@
         background: #0d0d12 !important;
         padding-top: env(safe-area-inset-top, 0px);
         transform: none !important;
+        z-index: 1200 !important;
     }
 
     #fileBrowserHeader {

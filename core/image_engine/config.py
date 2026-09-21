@@ -66,10 +66,10 @@ MODEL_DOWNLOAD_URLS = {
 
 ANIME_DOWNLOAD_URLS = {
     "checkpoint": {
-        "filename": ILLUSTRIOUS_V170_FILENAME,
+        "filename": ILLUSTRIOUS_V150_FILENAME,
         "target_dir": CHECKPOINTS_DIR,
         "size_label": "6.5 GB",
-        "url": "https://huggingface.co/LyliaEngine/waiIllustriousSDXL_v170/resolve/main/waiIllustriousSDXL_v170.safetensors"
+        "url": "https://huggingface.co/elias1001/waiIllustriousSDXL_v150/resolve/main/waiIllustriousSDXL_v150.safetensors"
     },
     "lcm_lora": {
         "filename": LCM_LORA_FILENAME,

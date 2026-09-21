@@ -21,8 +21,22 @@ export function setInferenceMode(mode) {
     if (dom.apiModePanel) dom.apiModePanel.classList.toggle('hidden', mode !== 'api');
 
     const isApi = mode === 'api';
-    if (dom.downloadModelSection) dom.downloadModelSection.classList.toggle('hidden', isApi);
-    if (dom.downloadDivider) dom.downloadDivider.classList.toggle('hidden', isApi);
+    if (dom.memoryEstimatorCard) {
+        if (mode === 'single' && dom.customModelCard) {
+            dom.customModelCard.insertAdjacentElement('afterend', dom.memoryEstimatorCard);
+        } else if (mode === 'routing' && dom.routingModePanel) {
+            const section = dom.routingModePanel.querySelector('.settings-section');
+            if (section) {
+                const title = section.querySelector('.section-title');
+                if (title) {
+                    title.insertAdjacentElement('afterend', dom.memoryEstimatorCard);
+                } else {
+                    section.insertAdjacentElement('afterbegin', dom.memoryEstimatorCard);
+                }
+            }
+        }
+        dom.memoryEstimatorCard.classList.toggle('hidden', isApi);
+    }
     if (dom.smartEngineSection) dom.smartEngineSection.classList.toggle('hidden', isApi);
 
     if (isApi) {
@@ -30,6 +44,7 @@ export function setInferenceMode(mode) {
         fetchRemoteModels(true);
     } else {
         refreshEngineStatusUI();
+        updateMemoryEstimator();
     }
 
     updateVisionAvailabilityUI();
@@ -346,16 +361,37 @@ export async function refreshEngineStatusUI() {
                     dom.engineStatusText.textContent = `Active: ${data.active.name}`;
                     dom.engineStatusText.style.color = 'var(--accent-emerald)';
                     if (dom.smartToggleBtn) dom.smartToggleBtn.classList.add('is-loaded');
-                    if (dom.smartToggleLabel) dom.smartToggleLabel.textContent = 'Unload Engine';
+                    if (dom.smartToggleLabel) dom.smartToggleLabel.textContent = 'Unload';
                 } else {
-                    dom.engineStatusText.textContent = 'Status: Not Loaded';
+                    dom.engineStatusText.textContent = 'Not Loaded';
                     dom.engineStatusText.style.color = 'var(--text-tertiary)';
                     if (dom.smartToggleBtn) dom.smartToggleBtn.classList.remove('is-loaded');
                     if (dom.smartToggleLabel) dom.smartToggleLabel.textContent = 'Load Engine';
                 }
             }
 
+            if (dom.engineStatusDot) {
+                dom.engineStatusDot.className = 'engine-status-dot' + (isLoaded ? ' active' : '');
+            }
+
+            if (data.hardware) {
+                state.hardwareInfo = data.hardware;
+                if (dom.engineHardwareSub) {
+                    if (data.hardware.gpu_available && data.hardware.vram_total_gb > 0) {
+                        let name = (data.hardware.gpu_name || 'GPU')
+                            .replace(/^NVIDIA\s+(GeForce\s+)?/i, '')
+                            .replace(/\s+(Laptop\s+)?GPU/i, '')
+                            .trim();
+                        if (name.length > 22) name = name.slice(0, 21) + '…';
+                        dom.engineHardwareSub.textContent = name;
+                    } else {
+                        dom.engineHardwareSub.textContent = 'CPU Mode';
+                    }
+                }
+            }
+
             updateModelAvailabilityUI(isLoaded);
+            updateMemoryEstimator();
 
             if (data.available) {
                 for (const [role, info] of Object.entries(data.available)) {
@@ -379,6 +415,321 @@ export async function refreshEngineStatusUI() {
     }
 }
 window.refreshEngineStatusUI = refreshEngineStatusUI;
+
+/* hardware memory estimator */
+export function updateMemoryEstimator() {
+    if (state.inferenceMode === 'api') {
+        if (dom.memoryEstimatorCard) dom.memoryEstimatorCard.classList.add('hidden');
+        return;
+    }
+    if (dom.memoryEstimatorCard) dom.memoryEstimatorCard.classList.remove('hidden');
+
+    if (!dom.estVramVal || !dom.totalVramVal) return;
+    const hw = state.hardwareInfo;
+    if (!hw) {
+        if (dom.engineHardwareSub) dom.engineHardwareSub.textContent = 'Detecting hardware...';
+        return;
+    }
+
+    const isGpu = Boolean(hw.gpu_available && hw.vram_total_gb > 0);
+    const totalVram = isGpu ? hw.vram_total_gb : 0.0;
+    const totalRam = hw.ram_total_gb > 0 ? hw.ram_total_gb : 16.0;
+    const availRam = hw.ram_available_gb > 0 ? hw.ram_available_gb : (totalRam * 0.7);
+
+    // 1. Determine active model role and size
+    let modelSizeGb = 3.0;
+    let gpuLayers = -1;
+    let ctx = 8192;
+    let kvType = 'q4_0';
+    let offloadKqv = true;
+    let flashAttn = true;
+    let batchSize = 512;
+    let mmprojSizeGb = 0;
+    let mmprojOnCpu = false;
+
+    if (state.inferenceMode === 'single') {
+        const path = dom.customModelPathInput ? dom.customModelPathInput.value.trim() : '';
+        if (path && scannedModelsCache && scannedModelsCache.length > 0) {
+            const found = scannedModelsCache.find(m => m.path === path || m.filename === path.split('/').pop());
+            if (found && found.size_gb) {
+                modelSizeGb = parseFloat(found.size_gb) || 3.0;
+            }
+        }
+        const projPath = dom.customMmprojInput ? dom.customMmprojInput.value.trim() : '';
+        if (projPath && projPath.toLowerCase() !== 'none') {
+            mmprojSizeGb = 1.2;
+            mmprojOnCpu = dom.customMmprojCpu ? dom.customMmprojCpu.checked : false;
+        }
+
+        gpuLayers = dom.singleGpuSlider ? parseInt(dom.singleGpuSlider.value, 10) : -1;
+        ctx = dom.singleCtxSlider ? parseInt(dom.singleCtxSlider.value, 10) : 8192;
+        batchSize = dom.singleBatchSlider ? parseInt(dom.singleBatchSlider.value, 10) : 512;
+        kvType = dom.singleKvSelect ? dom.singleKvSelect.value : 'q4_0';
+        offloadKqv = dom.singleOffloadKqv ? dom.singleOffloadKqv.checked : true;
+        flashAttn = dom.singleFlashAttn ? dom.singleFlashAttn.checked : true;
+    } else if (state.inferenceMode === 'routing') {
+        const residentRole = (state.engineActive && state.engineActive.role) || 'coder';
+        if (state.engineAvailable && state.engineAvailable[residentRole]?.size_gb) {
+            modelSizeGb = parseFloat(state.engineAvailable[residentRole].size_gb) || 4.7;
+        } else {
+            modelSizeGb = 4.7;
+        }
+        gpuLayers = dom.coderGpuSlider ? parseInt(dom.coderGpuSlider.value, 10) : -1;
+        ctx = dom.coderCtxSlider ? parseInt(dom.coderCtxSlider.value, 10) : 8192;
+        batchSize = dom.coderBatchSlider ? parseInt(dom.coderBatchSlider.value, 10) : 512;
+        kvType = dom.coderKvSelect ? dom.coderKvSelect.value : 'q8_0';
+        offloadKqv = dom.coderOffloadKqv ? dom.coderOffloadKqv.checked : true;
+        flashAttn = dom.coderFlashAttn ? dom.coderFlashAttn.checked : true;
+    } else {
+        // API mode: 0 local VRAM
+        dom.estVramVal.textContent = '0.0 GB';
+        dom.totalVramVal.textContent = isGpu ? `${totalVram.toFixed(1)} GB` : 'N/A';
+        if (dom.vramBarFill) {
+            dom.vramBarFill.style.width = '0%';
+            dom.vramBarFill.className = 'memory-bar-fill fill-safe';
+        }
+        if (dom.vramBreakdownText) dom.vramBreakdownText.textContent = 'API Mode: Cloud Inference (0 GB Local VRAM)';
+        dom.estRamVal.textContent = '0.1 GB';
+        dom.totalRamVal.textContent = `${totalRam.toFixed(1)} GB`;
+        if (dom.ramBarFill) {
+            dom.ramBarFill.style.width = '2%';
+            dom.ramBarFill.className = 'memory-bar-fill fill-safe';
+        }
+        if (dom.ramBreakdownText) dom.ramBreakdownText.textContent = `System headroom: ${availRam.toFixed(1)} GB available`;
+        if (dom.memorySafetyPill) {
+            dom.memorySafetyPill.className = 'memory-safety-pill status-safe';
+            dom.memorySafetyPill.textContent = 'Cloud Mode';
+        }
+        if (dom.memoryAdviceText) {
+            dom.memoryAdviceText.innerHTML = '<i class="fa-solid fa-circle-check" style="color: #10b981;"></i> <span>Running in API Cloud mode. No local GPU or system RAM consumed.</span>';
+        }
+        return;
+    }
+
+    // 2. Weights split between GPU and RAM
+    let weightsVram = 0;
+    let weightsRam = 0;
+    const offloadRatio = (gpuLayers === -1 || gpuLayers >= 64) ? 1.0 : Math.min(1.0, Math.max(0.0, gpuLayers / 32));
+    if (!isGpu || gpuLayers === 0) {
+        weightsVram = 0;
+        weightsRam = modelSizeGb;
+    } else if (gpuLayers === -1 || gpuLayers >= 64) {
+        weightsVram = modelSizeGb;
+        weightsRam = 0;
+    } else {
+        weightsVram = modelSizeGb * offloadRatio;
+        weightsRam = modelSizeGb * (1 - offloadRatio);
+    }
+
+    // 3. KV Cache calculation scaled to model parameter class & context
+    let kvElementsPerToken = 49152;
+    if (modelSizeGb < 2.5) {
+        kvElementsPerToken = 32768;
+    } else if (modelSizeGb <= 5.5) {
+        kvElementsPerToken = 49152;
+    } else if (modelSizeGb <= 10.0) {
+        kvElementsPerToken = 65536;
+    } else if (modelSizeGb <= 20.0) {
+        kvElementsPerToken = 98304;
+    } else {
+        kvElementsPerToken = 131072;
+    }
+
+    let bytesPerElem = 0.55;
+    if (kvType === 'f16') bytesPerElem = 2.0;
+    else if (kvType === 'q8_0') bytesPerElem = 1.0;
+    else if (kvType === 'q4_1') bytesPerElem = 0.65;
+
+    if (!flashAttn && kvType !== 'f16') {
+        // Without Flash Attention, llama.cpp forces V cache to FP16
+        bytesPerElem = (bytesPerElem + 2.0) / 2.0;
+    }
+
+    let rawKvGb = (ctx * kvElementsPerToken * bytesPerElem) / (1024 * 1024 * 1024);
+    if (ctx > 8192) {
+        rawKvGb *= 1.15; // Context scratch and attention graph buffer scaling
+    }
+
+    const isCpuOffload = !isGpu || gpuLayers === 0;
+
+    let kvVram = 0;
+    let kvRam = 0;
+    if (!offloadKqv || isCpuOffload) {
+        kvVram = 0;
+        kvRam = rawKvGb;
+    } else {
+        kvVram = rawKvGb * offloadRatio;
+        kvRam = rawKvGb * (1.0 - offloadRatio);
+    }
+
+    // 4. Vision Projector
+    let projVram = 0;
+    let projRam = 0;
+    if (mmprojSizeGb > 0) {
+        if (mmprojOnCpu || isCpuOffload) {
+            projRam = mmprojSizeGb;
+        } else {
+            projVram = mmprojSizeGb;
+        }
+    }
+
+    // 4b. Activation & Compute Graph Scratch Memory (scaled by batch size)
+    let bytesPerBatchToken = 0.28 * 1024 * 1024;
+    if (modelSizeGb < 2.5) {
+        bytesPerBatchToken = 0.15 * 1024 * 1024;
+    } else if (modelSizeGb <= 6.0) {
+        bytesPerBatchToken = 0.28 * 1024 * 1024;
+    } else if (modelSizeGb <= 12.0) {
+        bytesPerBatchToken = 0.45 * 1024 * 1024;
+    } else {
+        bytesPerBatchToken = 0.75 * 1024 * 1024;
+    }
+    const activationGb = (batchSize * bytesPerBatchToken) / (1024 * 1024 * 1024);
+
+    let batchVram = 0;
+    let batchRam = 0;
+    if (isCpuOffload) {
+        batchRam = activationGb;
+    } else if (gpuLayers === -1 || gpuLayers >= 32) {
+        batchVram = activationGb;
+    } else {
+        batchVram = activationGb * offloadRatio;
+        batchRam = activationGb * (1 - offloadRatio);
+    }
+
+    // 5. Backend Overhead
+    const cudaOverhead = !isCpuOffload && (weightsVram > 0 || kvVram > 0) ? 0.35 : 0;
+    const estVram = !isCpuOffload ? (weightsVram + kvVram + projVram + batchVram + cudaOverhead) : 0;
+    const estRam = weightsRam + kvRam + projRam + batchRam + 0.4;
+
+    // 6. Update Gauges
+    if (isGpu) {
+        dom.estVramVal.textContent = `${estVram.toFixed(1)} GB`;
+        dom.totalVramVal.textContent = `${totalVram.toFixed(1)} GB`;
+
+        const vramPct = totalVram > 0 ? Math.min(100, Math.round((estVram / totalVram) * 100)) : 0;
+        if (dom.vramBarFill) {
+            dom.vramBarFill.style.width = `${vramPct}%`;
+            if (vramPct <= 82) {
+                dom.vramBarFill.className = 'memory-bar-fill fill-safe';
+            } else if (vramPct <= 96) {
+                dom.vramBarFill.className = 'memory-bar-fill fill-tight';
+            } else {
+                dom.vramBarFill.className = 'memory-bar-fill fill-danger';
+            }
+        }
+
+        if (dom.vramBreakdownText) {
+            if (gpuLayers === 0) {
+                dom.vramBreakdownText.textContent = '0 layers on GPU (CPU offload)';
+            } else if (!offloadKqv) {
+                if (weightsRam > 0.05) {
+                    dom.vramBreakdownText.textContent = `${gpuLayers}L: ${weightsVram.toFixed(1)} GB • KV in RAM`;
+                } else {
+                    dom.vramBreakdownText.textContent = `Weights: ${weightsVram.toFixed(1)} GB • KV in RAM`;
+                }
+            } else {
+                if (weightsRam > 0.05) {
+                    dom.vramBreakdownText.textContent = `${gpuLayers}L: ${weightsVram.toFixed(1)} GB • KV: ${kvVram.toFixed(1)} GB`;
+                } else {
+                    dom.vramBreakdownText.textContent = `Weights: ${weightsVram.toFixed(1)} GB • KV: ${kvVram.toFixed(1)} GB`;
+                }
+            }
+        }
+    } else {
+        dom.estVramVal.textContent = '0.0 GB';
+        dom.totalVramVal.textContent = 'N/A (CPU)';
+        if (dom.vramBarFill) {
+            dom.vramBarFill.style.width = '0%';
+            dom.vramBarFill.className = 'memory-bar-fill fill-safe';
+        }
+        if (dom.vramBreakdownText) {
+            dom.vramBreakdownText.textContent = 'No GPU available';
+        }
+    }
+
+    dom.estRamVal.textContent = `${estRam.toFixed(1)} GB`;
+    dom.totalRamVal.textContent = `${totalRam.toFixed(1)} GB`;
+
+    const ramPct = totalRam > 0 ? Math.min(100, Math.round((estRam / totalRam) * 100)) : 0;
+    if (dom.ramBarFill) {
+        dom.ramBarFill.style.width = `${ramPct}%`;
+        dom.ramBarFill.className = 'memory-bar-fill ' + (ramPct > 90 ? 'fill-danger' : ramPct > 75 ? 'fill-tight' : 'fill-safe');
+    }
+
+    if (dom.ramBreakdownText) {
+        const remaining = Math.max(0, availRam - estRam);
+        if (isCpuOffload) {
+            dom.ramBreakdownText.textContent = `Weights: ${weightsRam.toFixed(1)} GB • KV: ${kvRam.toFixed(1)} GB`;
+        } else if (weightsRam > 0.05) {
+            if (!offloadKqv || kvRam > 0.05) {
+                dom.ramBreakdownText.textContent = `RAM: ${weightsRam.toFixed(1)} GB • KV: ${kvRam.toFixed(1)} GB`;
+            } else {
+                dom.ramBreakdownText.textContent = `RAM: ${weightsRam.toFixed(1)} GB • ~${remaining.toFixed(1)} GB free`;
+            }
+        } else {
+            if (!offloadKqv && kvRam > 0.05) {
+                dom.ramBreakdownText.textContent = `KV: ${kvRam.toFixed(1)} GB in RAM • ~${remaining.toFixed(1)} GB free`;
+            } else {
+                dom.ramBreakdownText.textContent = `Model & KV in GPU • ~${remaining.toFixed(1)} GB free`;
+            }
+        }
+    }
+
+    // 7. Safety Pill & Advice Banner
+    if (dom.memorySafetyPill && dom.memoryAdviceText) {
+        if (isCpuOffload) {
+            if (estRam > totalRam) {
+                dom.memorySafetyPill.className = 'memory-safety-pill status-danger';
+                dom.memorySafetyPill.textContent = 'RAM Danger';
+                const excess = (estRam - totalRam).toFixed(1);
+                dom.memoryAdviceText.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color: #f87171;"></i> <span>Exceeds system RAM by ~${excess} GB.</span>`;
+            } else if (estRam > availRam) {
+                dom.memorySafetyPill.className = 'memory-safety-pill status-tight';
+                dom.memorySafetyPill.textContent = 'High RAM';
+                dom.memoryAdviceText.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color: #fbbf24;"></i> <span>High RAM allocation (~${ramPct}%).</span>`;
+            } else {
+                dom.memorySafetyPill.className = 'memory-safety-pill status-safe';
+                dom.memorySafetyPill.textContent = 'CPU Mode';
+                dom.memoryAdviceText.innerHTML = `<i class="fa-solid fa-microchip" style="color: #60a5fa;"></i> <span>Pure CPU mode (~${estRam.toFixed(1)} GB System RAM).</span>`;
+            }
+        } else {
+            const vramPct = totalVram > 0 ? Math.round((estVram / totalVram) * 100) : 0;
+            const isPartial = weightsRam > 0.05;
+
+            if (estVram > totalVram) {
+                dom.memorySafetyPill.className = 'memory-safety-pill status-danger';
+                dom.memorySafetyPill.textContent = 'Overflow';
+                const excess = (estVram - totalVram).toFixed(1);
+                dom.memoryAdviceText.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color: #f87171;"></i> <span>Exceeds GPU memory by ~${excess} GB.</span>`;
+            } else if (estRam > totalRam) {
+                dom.memorySafetyPill.className = 'memory-safety-pill status-danger';
+                dom.memorySafetyPill.textContent = 'RAM Danger';
+                const excess = (estRam - totalRam).toFixed(1);
+                dom.memoryAdviceText.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color: #f87171;"></i> <span>Exceeds system RAM by ~${excess} GB.</span>`;
+            } else if (vramPct > 84 || ramPct > 85) {
+                dom.memorySafetyPill.className = 'memory-safety-pill status-tight';
+                dom.memorySafetyPill.textContent = 'Tight';
+                if (isPartial) {
+                    dom.memoryAdviceText.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color: #fbbf24;"></i> <span>High allocation (~${vramPct}% GPU, ~${estRam.toFixed(1)} GB RAM).</span>`;
+                } else {
+                    dom.memoryAdviceText.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color: #fbbf24;"></i> <span>High GPU allocation (~${vramPct}%).</span>`;
+                }
+            } else {
+                dom.memorySafetyPill.className = 'memory-safety-pill status-safe';
+                if (isPartial) {
+                    dom.memorySafetyPill.textContent = 'Hybrid';
+                    dom.memoryAdviceText.innerHTML = `<i class="fa-solid fa-circle-check" style="color: #34d399;"></i> <span>Split across GPU (~${vramPct}%) and System RAM.</span>`;
+                } else {
+                    dom.memorySafetyPill.textContent = 'Optimal';
+                    dom.memoryAdviceText.innerHTML = `<i class="fa-solid fa-circle-check" style="color: #34d399;"></i> <span>Fits comfortably in GPU memory (~${vramPct}%).</span>`;
+                }
+            }
+        }
+    }
+}
+window.updateMemoryEstimator = updateMemoryEstimator;
+
 
 export function updateModelAvailabilityUI(isLoaded) {
     if (state.inferenceMode === 'api') {
@@ -414,14 +765,43 @@ export function updateModelAvailabilityUI(isLoaded) {
 }
 window.updateModelAvailabilityUI = updateModelAvailabilityUI;
 
-export function openSettingsForModelLoad() {
+export function switchSettingsTab(tabName) {
+    if (!tabName) return;
+    const cleanTab = tabName.replace(/Tab$/, '');
+    const tabBtns = document.querySelectorAll('.settings-tab-btn');
+    const tabPanes = document.querySelectorAll('.settings-tab-pane');
+    tabBtns.forEach(btn => {
+        const btnTab = (btn.dataset.tab || '').replace(/Tab$/, '');
+        if (btnTab === cleanTab) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    tabPanes.forEach(pane => {
+        const paneTab = (pane.id || '').replace(/Tab$/, '');
+        if (paneTab === cleanTab) {
+            pane.classList.remove('hidden');
+        } else {
+            pane.classList.add('hidden');
+        }
+    });
+    if (cleanTab === 'inference' && state.inferenceMode !== 'api') {
+        updateMemoryEstimator();
+    }
+}
+window.switchSettingsTab = switchSettingsTab;
+
+export function openSettingsForModelLoad(targetTab = 'inference') {
     if (dom.settingsModal) {
         dom.settingsModal.classList.remove('hidden');
+        switchSettingsTab(targetTab);
         refreshEngineStatusUI();
         refreshScannedModelsList();
         initImageStudioSettings();
     }
 }
+window.openSettingsForModelLoad = openSettingsForModelLoad;
 
 export function setupSettingsUI() {
     const roleSliderSetup = [
@@ -718,7 +1098,7 @@ export function setupSettingsUI() {
                     dom.engineStatusText.textContent = `Active: ${result.info?.name || result.role}`;
                     dom.engineStatusText.style.color = 'var(--accent-emerald)';
                     dom.smartToggleBtn.classList.add('is-loaded');
-                    dom.smartToggleLabel.textContent = 'Unload Engine';
+                    dom.smartToggleLabel.textContent = 'Unload';
                     showNotification({
                         title: 'Engine Loaded',
                         message: `${result.info?.name || result.role} is now active and ready`,
@@ -726,7 +1106,7 @@ export function setupSettingsUI() {
                         icon: 'fa-bolt'
                     });
                 } else {
-                    dom.engineStatusText.textContent = 'Status: Unloaded';
+                    dom.engineStatusText.textContent = 'Not Loaded';
                     dom.engineStatusText.style.color = 'var(--text-tertiary)';
                     dom.smartToggleBtn.classList.remove('is-loaded');
                     dom.smartToggleLabel.textContent = 'Load Engine';
@@ -738,18 +1118,44 @@ export function setupSettingsUI() {
                     });
                 }
             } catch (e) {
-                dom.engineStatusText.textContent = 'Error: ' + e.message;
+                dom.engineStatusText.textContent = 'Load Failed';
                 dom.engineStatusText.style.color = '#ef4444';
                 showNotification({
-                    title: 'Engine Error',
+                    title: 'Engine Load Failed',
                     message: e.message,
                     type: 'error'
                 });
+                const errLower = (e.message || '').toLowerCase();
+                if (errLower.includes('vram') || errLower.includes('llama_context') || errLower.includes('out of memory')) {
+                    showAlert("GPU Memory Allocation Failed", e.message);
+                }
             } finally {
                 dom.smartToggleBtn.disabled = false;
             }
         });
     }
+
+    /* settings tab switching */
+    const tabBtns = document.querySelectorAll('.settings-tab-btn');
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            switchSettingsTab(btn.dataset.tab);
+        });
+    });
+
+    /* reactive memory estimator inputs */
+    const estimatorTriggers = [
+        dom.singleCtxSlider, dom.singleBatchSlider, dom.singleKvSelect, dom.singleGpuSlider,
+        dom.singleOffloadKqv, dom.singleFlashAttn, dom.singleModelRoleSelect, dom.scannedGgufSelect,
+        dom.customModelPathInput, dom.customMmprojInput, dom.customMmprojCpu,
+        dom.inferenceModeSelect, dom.coderGpuSlider, dom.coderCtxSlider, dom.coderBatchSlider,
+        dom.coderKvSelect, dom.coderOffloadKqv, dom.coderFlashAttn
+    ];
+    estimatorTriggers.forEach(elem => {
+        if (!elem) return;
+        elem.addEventListener('input', updateMemoryEstimator);
+        elem.addEventListener('change', updateMemoryEstimator);
+    });
 
     if (dom.unloadAllModelsBtn) {
         dom.unloadAllModelsBtn.addEventListener('click', () => handleUnloadAllModels(dom.unloadAllModelsBtn));
@@ -762,13 +1168,13 @@ export function setupSettingsUI() {
     }
 
     if (dom.chatBoxLoadModelBtn) {
-        dom.chatBoxLoadModelBtn.addEventListener('click', openSettingsForModelLoad);
+        dom.chatBoxLoadModelBtn.addEventListener('click', () => openSettingsForModelLoad('inference'));
     }
     if (dom.sideNotifLoadBtn) {
         dom.sideNotifLoadBtn.addEventListener('click', () => {
             state.sideNotifDismissed = true;
             if (dom.sideModelNotif) dom.sideModelNotif.classList.add('hidden');
-            openSettingsForModelLoad();
+            openSettingsForModelLoad('inference');
         });
     }
     if (dom.sideNotifCloseBtn) {

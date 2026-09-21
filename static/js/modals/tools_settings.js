@@ -593,10 +593,9 @@ export async function initImageStudioSettings() {
             }
 
             if (animeModelsBadge) {
-                const isV170 = animeInfo?.v170_installed || animeInfo?.checkpoint?.is_v170;
                 if (animeInstalled) {
                     const ckptName = animeInfo?.checkpoint?.name || '';
-                    const verLabel = ckptName.includes('v170') ? 'v1.70' : (ckptName.includes('v150') ? 'v1.50' : 'Verified');
+                    const verLabel = ckptName.includes('v150') ? 'v1.50' : (ckptName.includes('v170') ? 'v1.70' : 'Verified');
                     animeModelsBadge.textContent = `Verified (${verLabel})`;
                     animeModelsBadge.style.color = '#34d399';
                     animeModelsBadge.style.background = 'rgba(52, 211, 153, 0.15)';
@@ -604,14 +603,8 @@ export async function initImageStudioSettings() {
 
                     if (animeVerifiedBox) animeVerifiedBox.style.display = 'flex';
 
-                    // If user has v150 (or another checkpoint) but not v170, offer upgrade/download button
-                    if (!isV170 && downloadAnimeBtn && dlRes?.status !== 'downloading') {
-                        downloadAnimeBtn.style.display = 'flex';
-                        downloadAnimeBtn.disabled = false;
-                        downloadAnimeBtn.className = 'btn-secondary';
-                        downloadAnimeBtn.style.marginTop = '8px';
-                        downloadAnimeBtn.innerHTML = `<i class="fa-solid fa-download"></i> Download / Upgrade to v1.70 (6.5 GB)`;
-                    } else if (downloadAnimeBtn && dlRes?.status !== 'downloading') {
+                    // Checkpoint is already installed, hide download/upgrade button
+                    if (downloadAnimeBtn && dlRes?.status !== 'downloading') {
                         downloadAnimeBtn.style.display = 'none';
                     }
                 } else {
@@ -627,7 +620,7 @@ export async function initImageStudioSettings() {
                         downloadAnimeBtn.disabled = false;
                         downloadAnimeBtn.className = 'btn-primary';
                         downloadAnimeBtn.style.marginTop = '0px';
-                        downloadAnimeBtn.innerHTML = `<i class="fa-solid fa-download"></i> Download Anime Checkpoint (v170, 6.5 GB)`;
+                        downloadAnimeBtn.innerHTML = `<i class="fa-solid fa-download"></i> Download Anime Checkpoint (v150, 6.5 GB)`;
                     }
                 }
             }

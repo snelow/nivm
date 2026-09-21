@@ -41,8 +41,8 @@ def find_illustrious_checkpoint() -> Tuple[Optional[str], Optional[str]]:
         pass
 
     preferred_names = [
-        ILLUSTRIOUS_V170_FILENAME,
         ILLUSTRIOUS_V150_FILENAME,
+        ILLUSTRIOUS_V170_FILENAME,
     ]
 
     for name in preferred_names:
@@ -61,7 +61,7 @@ def find_illustrious_checkpoint() -> Tuple[Optional[str], Optional[str]]:
 
 def get_active_checkpoint_name() -> str:
     name, _ = find_illustrious_checkpoint()
-    return name or "waiIllustriousSDXL_v170.safetensors"
+    return name or "waiIllustriousSDXL_v150.safetensors"
 
 # Full FP16 checkpoint — resolves dynamically, falling back to default
 ILLUSTRIOUS_CHECKPOINT = get_active_checkpoint_name()

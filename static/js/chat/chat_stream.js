@@ -19,7 +19,9 @@ export function sanitizeAssistantText(text) {
     cleaned = cleaned.replace(/<thought>/gi, '<think>').replace(/<\/thought>/gi, '</think>');
     cleaned = cleaned.replace(/<reasoning>/gi, '<think>').replace(/<\/reasoning>/gi, '</think>');
     cleaned = cleaned.replace(/<think>\s*<\/think>/gi, '');
-    if (cleaned.includes('</think>') && !cleaned.includes('<think>')) {
+    const firstOpen = cleaned.indexOf('<think>');
+    const firstClose = cleaned.indexOf('</think>');
+    if (firstClose !== -1 && (firstOpen === -1 || firstClose < firstOpen)) {
         cleaned = '<think>' + cleaned;
     }
     if (cleaned.includes('<think>') && !cleaned.includes('</think>')) {
@@ -172,10 +174,16 @@ export async function sendMessage(text, triggerAssistantOnly = false, isHiddenUs
     const timeStr = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     dynamicSystemPrompt += `\n\n[Local Host Environment & System Clock]:\nHost OS: Linux (Local Machine). Current local system time: ${timeStr} on ${dateStr}.`;
 
-    if (dom.forceThinkingToggle && dom.forceThinkingToggle.classList.contains('active')) {
+    const isThinkingEnabled = Boolean(dom.forceThinkingToggle && dom.forceThinkingToggle.classList.contains('active'));
+    if (isThinkingEnabled) {
         dynamicSystemPrompt += `\n\n[Reasoning & Persona Thinking Directive]:
-CRITICAL: You MUST ALWAYS enclose your entire internal reasoning, reflections, persona planning, and step-by-step thinking strictly inside <think> and </think> tags at the very start of your response.
-NEVER leak raw thoughts or meta-commentary directly to the user. Provide your visible dialogue/answer only AFTER closing the </think> tag.`;
+CRITICAL WORKFLOW:
+1. Conduct your internal reflections and persona planning inside <think> and </think> tags at the start of your response.
+2. Immediately upon closing the </think> tag, you MUST write and deliver your actual, complete spoken response directly to the user.
+3. NEVER stop generation inside or immediately after </think>—always proceed to write your response to the user.`;
+    } else {
+        dynamicSystemPrompt += `\n\n[Negative Directive: Reasoning Disabled]:
+Do NOT output any internal monologue, planning, or reasoning. Do NOT output <think> or </think> tags. Respond directly, immediately, and concisely to the user in character.`;
     }
 
     if (state.nsfwMode) {
@@ -277,7 +285,8 @@ CRITICAL SPOKEN CONVERSATION RULES:
                 repeat_penalty: state.repeatPenalty || 1.1,
                 max_tokens: state.maxTokens,
                 stream: true,
-                engine_mode: state.engineMode
+                engine_mode: state.engineMode,
+                enable_thinking: isThinkingEnabled
             }),
             signal: state.abortController.signal
         });
@@ -305,7 +314,15 @@ CRITICAL SPOKEN CONVERSATION RULES:
                 if (trimmed.startsWith('data: ')) {
                     try {
                         const json = JSON.parse(trimmed.substring(6));
-                        if (json.model_info && !modelInfo) modelInfo = json.model_info;
+                        if (json.model_info) {
+                            modelInfo = json.model_info;
+                            if (modelInfo.prefill_think && !fullResponse && !hasStartedReasoning) {
+                                hasStartedReasoning = true;
+                                thinkStartTime = performance.now();
+                                fullResponse = '<think>';
+                                setVoiceOrbGeneratingState(true, 'Thinking…');
+                            }
+                        }
                         const delta = json.choices && json.choices[0] ? json.choices[0].delta : null;
                         if (json.error) {
                             const errLower = json.error.toLowerCase();
@@ -317,6 +334,9 @@ CRITICAL SPOKEN CONVERSATION RULES:
                                 errLower.includes('too many tokens') ||
                                 errLower.includes('prompt is too long') ||
                                 errLower.includes('context length exceeded');
+                            const isVramLimit = errLower.includes('vram') ||
+                                errLower.includes('failed to create llama_context') ||
+                                errLower.includes('out of memory');
                             if (isContextExceeded) {
                                 fullResponse += `\n\n<div class="context-limit-block">
                                     <div style="color: var(--accent-rose); font-weight: 600; margin-bottom: 8px;"><i class="fa-solid fa-triangle-exclamation"></i> Context Limit Reached</div>
@@ -325,6 +345,14 @@ CRITICAL SPOKEN CONVERSATION RULES:
                                         <button class="btn-secondary" onclick="window.exportChat()"><i class="fa-solid fa-download"></i> Export Chat</button>
                                         <button class="btn-secondary" onclick="document.getElementById('newChatBtn').click()"><i class="fa-solid fa-plus"></i> New Chat</button>
                                         <button class="btn-primary" onclick="window.summarizeAndRestart()"><i class="fa-solid fa-wand-magic-sparkles"></i> Summarize & Restart</button>
+                                    </div>
+                                </div>`;
+                            } else if (isVramLimit) {
+                                fullResponse += `\n\n<div class="context-limit-block">
+                                    <div style="color: var(--accent-rose); font-weight: 600; margin-bottom: 8px;"><i class="fa-solid fa-microchip"></i> GPU Memory Allocation Exceeded</div>
+                                    <div style="font-size: 0.9em; margin-bottom: 12px; line-height: 1.4;">${json.error}</div>
+                                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                        <button class="btn-primary" onclick="if (window.openSettingsForModelLoad) { window.openSettingsForModelLoad(); } else { document.getElementById('settingsBtn').click(); }"><i class="fa-solid fa-sliders"></i> Adjust Context & KV in Settings</button>
                                     </div>
                                 </div>`;
                             } else {
@@ -353,8 +381,15 @@ CRITICAL SPOKEN CONVERSATION RULES:
                                     }
                                     setVoiceOrbGeneratingState(true, 'Responding…');
                                 }
+                                // If model pre-fills think tag, make sure we started with <think>
+                                if (modelInfo?.prefill_think && !fullResponse.includes('<think>')) {
+                                    fullResponse = '<think>' + fullResponse;
+                                    if (!thinkStartTime) thinkStartTime = performance.now();
+                                }
                                 fullResponse += delta.content;
-                                if (fullResponse.includes('</think>') && !fullResponse.includes('<think>')) {
+                                const firstOpen = fullResponse.indexOf('<think>');
+                                const firstClose = fullResponse.indexOf('</think>');
+                                if (firstClose !== -1 && (firstOpen === -1 || firstClose < firstOpen)) {
                                     fullResponse = '<think>' + fullResponse;
                                 }
                                 if (fullResponse.includes('<think>') && !thinkStartTime) {

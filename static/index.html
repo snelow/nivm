@@ -289,10 +289,10 @@
                     <i class="fa-solid fa-chart-simple"></i>
                     <span>Stats</span>
                 </button>
-                <button class="drawer-tool-item tool-unload" id="drawerUnloadBtn" title="Free All Models & GPU VRAM"
+                <button class="drawer-tool-item tool-unload" id="drawerUnloadBtn" title="Unload All Models & Free Memory"
                     type="button">
-                    <i class="fa-solid fa-bolt-lightning"></i>
-                    <span>Free VRAM</span>
+                    <i class="fa-solid fa-broom"></i>
+                    <span>Unload All</span>
                 </button>
             </div>
             <div class="resize-handle" id="historyResizeHandle"></div>
@@ -822,77 +822,89 @@
     </div>
 
     <!-- Draggable Settings Window -->
+    <!-- Draggable Settings Window -->
     <div class="window-wrapper hidden" id="settingsModal">
         <div class="draggable-window" id="settingsWindow">
             <div class="window-header" id="settingsWindowHeader">
                 <div class="window-title">
-                    <i class="fa-solid fa-grip-vertical drag-handle-icon"></i>
+                    <i class="fa-solid fa-sliders" style="color: var(--accent-purple, #a78bfa);"></i>
                     <span>Settings</span>
                 </div>
                 <button class="icon-btn-sm" id="closeSettingsBtn"><i class="fa-solid fa-xmark"></i></button>
             </div>
+
+            <!-- Pinned Quick Engine Control Bar (Always visible on Desktop & Mobile) -->
+            <div class="settings-engine-bar" id="settingsEngineBar">
+                <div class="engine-bar-status">
+                    <span class="engine-status-dot" id="engineStatusDot"></span>
+                    <div class="engine-status-info">
+                        <span class="engine-status-label" id="engineStatusText">Not Loaded</span>
+                        <span class="engine-hardware-sub" id="engineHardwareSub">GPU: Detecting...</span>
+                    </div>
+                </div>
+                <div class="engine-bar-actions" id="smartEngineSection">
+                    <button type="button" class="smart-toggle-btn engine-quick-btn" id="smartToggleBtn">
+                        <i class="fa-solid fa-bolt"></i>
+                        <span id="smartToggleLabel">Load Engine</span>
+                    </button>
+                    <button type="button" class="btn-secondary engine-quick-btn-icon" id="unloadAllModelsBtn"
+                        title="Unload all models and free memory">
+                        <i class="fa-solid fa-broom"></i>
+                        <span class="engine-action-text">Unload All</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Settings Navigation Tabs -->
+            <div class="settings-nav-tabs" id="settingsNavTabs">
+                <button type="button" class="settings-tab-btn active" data-tab="inference">
+                    <i class="fa-solid fa-microchip"></i>
+                    <span>Inference</span>
+                </button>
+                <button type="button" class="settings-tab-btn" data-tab="imageStudio">
+                    <i class="fa-solid fa-paintbrush"></i>
+                    <span>Studio</span>
+                </button>
+                <button type="button" class="settings-tab-btn" data-tab="downloader">
+                    <i class="fa-solid fa-cloud-arrow-down"></i>
+                    <span>Downloader</span>
+                </button>
+                <button type="button" class="settings-tab-btn" data-tab="preferences">
+                    <i class="fa-solid fa-user-gear"></i>
+                    <span>Preferences</span>
+                </button>
+            </div>
+
             <div class="window-body">
-                <!-- User Preferences Section -->
-                <div class="settings-section">
-                    <div class="section-title">Preferences</div>
-                    <div class="field-group">
-                        <label for="userNameInput">What should nivm call you?</label>
-                        <input type="text" id="userNameInput" placeholder="Enter your name (optional)">
-                        <div class="pref-quick-grid">
-                            <button type="button" class="pref-quick-btn" id="openPersonalityFromSettingsBtn"
-                                title="Customize Personality & Instructions">
-                                <i class="fa-solid fa-user-pen"></i>
-                                <span>Personality</span>
+                <!-- Tab 1: Inference & Models -->
+                <div class="settings-tab-pane active" id="inferenceTab">
+                    <!-- Inference Mode Selector -->
+                    <div class="settings-section">
+                        <div class="section-title">Inference Mode</div>
+                        <div class="mode-selector">
+                            <button class="mode-btn active" id="singleModeBtn" data-mode="single"
+                                title="One model handles everything">
+                                <i class="fa-solid fa-microchip"></i>
+                                <span class="mode-btn-label">Single</span>
                             </button>
-                            <button type="button" class="pref-quick-btn" id="openVoiceFromSettingsBtn"
-                                title="Customize Voice & Speech Profile">
-                                <i class="fa-solid fa-microphone-lines"></i>
-                                <span>Voice Profile</span>
+                            <button class="mode-btn" id="routingModeBtn" data-mode="routing" title="Auto-route specialists">
+                                <i class="fa-solid fa-route"></i>
+                                <span class="mode-btn-label">Routing</span>
+                            </button>
+                            <button class="mode-btn" id="apiModeBtn" data-mode="api" title="External OpenAI-compatible API">
+                                <i class="fa-solid fa-network-wired"></i>
+                                <span class="mode-btn-label">API <span class="badge-experimental">BETA</span></span>
                             </button>
                         </div>
                     </div>
-                </div>
-
-                <div class="divider"></div>
-
-                <!-- Inference Mode Selector -->
-                <div class="settings-section">
-                    <div class="section-title">Inference Mode</div>
-                    <div class="mode-selector">
-                        <button class="mode-btn active" id="singleModeBtn" data-mode="single"
-                            title="One model handles everything">
-                            <i class="fa-solid fa-microchip"></i>
-                            <span class="mode-btn-label">Single</span>
-                        </button>
-                        <button class="mode-btn" id="routingModeBtn" data-mode="routing" title="Auto-route specialists">
-                            <i class="fa-solid fa-route"></i>
-                            <span class="mode-btn-label">Routing</span>
-                        </button>
-                        <button class="mode-btn" id="apiModeBtn" data-mode="api" title="External OpenAI-compatible API">
-                            <i class="fa-solid fa-network-wired"></i>
-                            <span class="mode-btn-label">API <span class="badge-experimental">BETA</span></span>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="divider"></div>
 
                 <!-- Single Model Mode Panel -->
                 <div id="singleModePanel">
                     <div class="settings-section">
                         <div class="section-title">Single Model Configuration</div>
-                        <div class="field-group" style="margin-bottom: 16px;">
-                            <label style="font-size: 0.8rem;">Model to Use</label>
-                            <select id="singleModelRoleSelect" class="modal-select">
-                                <option value="coder">Coder</option>
-                                <option value="vision">Vision</option>
-                                <option value="router">Router</option>
-                                <option value="custom">Custom GGUF Model...</option>
-                            </select>
-                        </div>
 
-                        <!-- Custom Model Selection Card (Visible only when 'custom' selected) -->
-                        <div id="customModelCard" class="custom-model-card hidden">
+                        <!-- Custom Model Selection Card -->
+                        <div id="customModelCard" class="custom-model-card">
                             <!-- Model (GGUF) Selector -->
                             <div class="field-group" style="margin-bottom: 12px;">
                                 <div
@@ -1003,6 +1015,43 @@
                                         </select>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Live Hardware Memory Budget Estimator Card -->
+                        <div class="memory-estimator-card" id="memoryEstimatorCard">
+                            <div class="memory-card-header">
+                                <div class="memory-card-title">
+                                    <i class="fa-solid fa-gauge-high"></i>
+                                    <span>Hardware Memory Budget</span>
+                                </div>
+                                <span class="memory-safety-pill status-safe" id="memorySafetyPill">Optimal</span>
+                            </div>
+                            <div class="memory-gauges-grid">
+                                <div class="memory-metric-block">
+                                    <div class="memory-metric-labels">
+                                        <span class="metric-name" id="vramMetricName"><i class="fa-solid fa-microchip" style="color: var(--accent-purple, #a78bfa);"></i> <span id="vramMetricLabel">GPU Memory</span></span>
+                                        <span class="metric-values"><strong id="estVramVal">0.0 GB</strong> <span style="color: var(--text-muted);">/</span> <span id="totalVramVal">0.0 GB</span></span>
+                                    </div>
+                                    <div class="memory-bar-track">
+                                        <div class="memory-bar-fill fill-safe" id="vramBarFill" style="width: 0%;"></div>
+                                    </div>
+                                    <div class="memory-sub-breakdown" id="vramBreakdownText">Calculating...</div>
+                                </div>
+                                <div class="memory-metric-block">
+                                    <div class="memory-metric-labels">
+                                        <span class="metric-name"><i class="fa-solid fa-memory" style="color: #60a5fa;"></i> System RAM</span>
+                                        <span class="metric-values"><strong id="estRamVal">0.0 GB</strong> <span style="color: var(--text-muted);">/</span> <span id="totalRamVal">0.0 GB</span></span>
+                                    </div>
+                                    <div class="memory-bar-track">
+                                        <div class="memory-bar-fill fill-safe" id="ramBarFill" style="width: 0%;"></div>
+                                    </div>
+                                    <div class="memory-sub-breakdown" id="ramBreakdownText">Calculating...</div>
+                                </div>
+                            </div>
+                            <div class="memory-advice-text" id="memoryAdviceText">
+                                <i class="fa-solid fa-circle-check" style="color: #10b981;"></i>
+                                <span>Estimating hardware footprint...</span>
                             </div>
                         </div>
 
@@ -1282,54 +1331,6 @@
                     </div>
                 </div>
 
-                <div class="divider" id="downloadDivider"></div>
-
-                <!-- Download Model Section -->
-                <div class="settings-section" id="downloadModelSection">
-                    <div class="section-title">
-                        <span>Download Model</span>
-                    </div>
-                    <div class="field-group">
-                        <label style="font-size: 0.8rem;">Model Download URL</label>
-                        <div class="custom-input-with-btn">
-                            <input type="text" id="modelDownloadUrlInput"
-                                placeholder="https://huggingface.co/.../model.gguf">
-                            <button id="startDownloadBtn" class="btn-primary" type="button"
-                                style="white-space: nowrap;">
-                                <i class="fa-solid fa-cloud-arrow-down"></i> Download
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Live Download Progress Card -->
-                    <div id="downloadProgressCard" class="download-progress-card hidden">
-                        <div class="download-card-header">
-                            <div class="download-card-info">
-                                <div class="download-card-title" id="downloadCardFilename">Downloading...</div>
-                                <div class="download-card-meta">
-                                    <span id="downloadCardSize">0 MB / 0 MB</span>
-                                    <span class="meta-sep">&bull;</span>
-                                    <span id="downloadCardSpeed">0 MB/s</span>
-                                    <span class="meta-sep">&bull;</span>
-                                    <span id="downloadCardEta">ETA: --</span>
-                                </div>
-                            </div>
-                            <button id="cancelDownloadBtn" class="download-cancel-btn" type="button"
-                                title="Cancel Download">
-                                <i class="fa-solid fa-xmark"></i>
-                            </button>
-                        </div>
-                        <div class="download-progress-track">
-                            <div id="downloadProgressBar" class="download-progress-bar" style="width: 0%;"></div>
-                        </div>
-                        <div
-                            style="display: flex; justify-content: flex-end; font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">
-                            <span id="downloadEngineLabel" class="hidden"></span>
-                            <span id="downloadPercentLabel">0%</span>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- API Server Mode Panel -->
                 <div id="apiModePanel" class="hidden">
                     <div class="settings-section">
@@ -1464,237 +1465,295 @@
                         </div>
                     </div>
                 </div>
+            </div>
+            <!-- End Tab 1: Inference -->
 
-                <div class="divider"></div>
+                <!-- Tab 2: Image Studio -->
+                <div class="settings-tab-pane hidden" id="imageStudioTab">
+                    <!-- Image Studio Configuration (Qwen-Rapid Engine) -->
+                    <div class="settings-section" id="imageStudioSection" style="margin-top: 0;">
+                        <div class="section-title"
+                            style="display: flex; align-items: center; justify-content: space-between;">
+                            <span><i class="fa-solid fa-paintbrush"
+                                    style="color: var(--accent-purple); margin-right: 6px;"></i>Image Studio
+                                (Qwen-Rapid)</span>
+                            <span id="imageStudioMasterBadge" class="role-card-badge"
+                                style="background: rgba(139,92,246,0.15); color: var(--accent-purple); border: 1px solid rgba(139,92,246,0.3);">Checking...</span>
+                        </div>
 
-                <!-- Image Studio Configuration (Qwen-Rapid Engine) -->
-                <div class="settings-section" id="imageStudioSection">
-                    <div class="section-title"
-                        style="display: flex; align-items: center; justify-content: space-between;">
-                        <span><i class="fa-solid fa-paintbrush"
-                                style="color: var(--accent-purple); margin-right: 6px;"></i>Image Studio
-                            (Qwen-Rapid)</span>
-                        <span id="imageStudioMasterBadge" class="role-card-badge"
-                            style="background: rgba(139,92,246,0.15); color: var(--accent-purple); border: 1px solid rgba(139,92,246,0.3);">Checking...</span>
-                    </div>
-
-                    <!-- ComfyUI Backend Detection Card -->
-                    <div class="role-config-card" style="margin-bottom: 12px; background: rgba(0,0,0,0.25);">
-                        <div style="padding: 12px;">
-                            <div
-                                style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-                                <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);"><i
-                                        class="fa-solid fa-server"
-                                        style="color: #38bdf8; margin-right: 6px;"></i>ComfyUI Backend Engine</span>
-                                <span id="comfyStatusBadge" class="role-card-badge">—</span>
-                            </div>
-                            <div id="comfyPathDisplay"
-                                style="font-size: 0.75rem; color: var(--text-tertiary); word-break: break-all; margin-bottom: 8px;">
-                                Path: Detecting...
-                            </div>
-
-                            <!-- Custom Path or Install Helper -->
-                            <div id="comfyActionControls"
-                                style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
-                                <div style="display: flex; gap: 6px;">
-                                    <input type="text" id="customComfyPathInput" placeholder="/path/to/ComfyUI"
-                                        style="flex: 1; font-size: 0.78rem; padding: 6px 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 6px; color: var(--text-primary);">
-                                    <button type="button" id="setComfyPathBtn" class="btn-secondary"
-                                        style="padding: 4px 10px; font-size: 0.75rem; white-space: nowrap;">Set
-                                        Path</button>
+                        <!-- ComfyUI Backend Detection Card -->
+                        <div class="role-config-card" style="margin-bottom: 12px; background: rgba(0,0,0,0.25);">
+                            <div style="padding: 12px;">
+                                <div
+                                    style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                                    <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);"><i
+                                            class="fa-solid fa-server"
+                                            style="color: #38bdf8; margin-right: 6px;"></i>ComfyUI Backend Engine</span>
+                                    <span id="comfyStatusBadge" class="role-card-badge">—</span>
                                 </div>
-                                <button type="button" id="autoSetupComfyBtn" class="btn-secondary"
-                                    style="width: 100%; justify-content: center; gap: 6px; display: flex; align-items: center; font-size: 0.78rem; padding: 6px;">
-                                    <i class="fa-solid fa-cloud-arrow-down"></i> Auto-Install ComfyUI to nivm/engine/
+                                <div id="comfyPathDisplay"
+                                    style="font-size: 0.75rem; color: var(--text-tertiary); word-break: break-all; margin-bottom: 8px;">
+                                    Path: Detecting...
+                                </div>
+
+                                <!-- Custom Path or Install Helper -->
+                                <div id="comfyActionControls"
+                                    style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+                                    <div style="display: flex; gap: 6px;">
+                                        <input type="text" id="customComfyPathInput" placeholder="/path/to/ComfyUI"
+                                            style="flex: 1; font-size: 0.78rem; padding: 6px 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 6px; color: var(--text-primary);">
+                                        <button type="button" id="setComfyPathBtn" class="btn-secondary"
+                                            style="padding: 4px 10px; font-size: 0.75rem; white-space: nowrap;">Set
+                                            Path</button>
+                                    </div>
+                                    <button type="button" id="autoSetupComfyBtn" class="btn-secondary"
+                                        style="width: 100%; justify-content: center; gap: 6px; display: flex; align-items: center; font-size: 0.78rem; padding: 6px;">
+                                        <i class="fa-solid fa-cloud-arrow-down"></i> Auto-Install ComfyUI to nivm/engine/
+                                    </button>
+                                    <div id="comfySetupProgressBox"
+                                        style="display: none; background: rgba(0,0,0,0.4); border: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.3); border-radius: 6px; padding: 10px; font-size: 0.72rem;">
+                                        <div
+                                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                            <div id="comfySetupStepText"
+                                                style="color: var(--accent-purple); font-weight: 600;">[Step 1/3] Cloning
+                                                ComfyUI...</div>
+                                            <span id="comfySetupPct"
+                                                style="color: var(--text-muted); font-size: 0.7rem;">0%</span>
+                                        </div>
+                                        <div id="comfySetupTargetDir"
+                                            style="color: #94a3b8; font-size: 0.68rem; margin-bottom: 6px; word-break: break-all; font-family: monospace;">
+                                            Target: nivm/engine/ComfyUI
+                                        </div>
+                                        <div
+                                            style="background: rgba(255,255,255,0.08); height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 8px;">
+                                            <div id="comfySetupProgressBar"
+                                                style="width: 0%; height: 100%; background: var(--accent-purple); transition: width 0.3s ease;">
+                                            </div>
+                                        </div>
+                                        <div id="comfySetupLogText"
+                                            style="font-family: monospace; color: #cbd5e1; font-size: 0.68rem; max-height: 90px; overflow-y: auto; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: 4px; padding: 6px; white-space: pre-wrap; line-height: 1.35;">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Image Models Card -->
+                        <div class="role-config-card" style="background: rgba(0,0,0,0.25);">
+                            <div style="padding: 12px;">
+                                <div
+                                    style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                                    <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);"><i
+                                            class="fa-solid fa-cubes"
+                                            style="color: var(--accent-purple); margin-right: 6px;"></i>Qwen-Rapid Diffusion
+                                        Models</span>
+                                    <span id="imageModelsBadge" class="role-card-badge">—</span>
+                                </div>
+                                <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 10px;">
+                                    Verified models: Qwen-Rapid UNet (13.3 GB), Qwen2.5-VL CLIP (4.7 GB), VAE (253 MB)
+                                </div>
+
+                                <!-- Model Checklist -->
+                                <div
+                                    style="display: flex; flex-direction: column; gap: 4px; font-size: 0.73rem; margin-bottom: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px;">
+                                    <div style="display: flex; justify-content: space-between;"><span id="unetModelCheck">○
+                                            UNet (Qwen-Rapid-NSFW-v23_Q4_K.gguf)</span><span
+                                            style="color: var(--text-muted);">13.3 GB</span></div>
+                                    <div style="display: flex; justify-content: space-between;"><span id="clipModelCheck">○
+                                            Text Encoder (Qwen2.5-VL-7B-Instruct-abliterated.Q4_K_M.gguf)</span><span
+                                            style="color: var(--text-muted);">4.7 GB</span></div>
+                                    <div style="display: flex; justify-content: space-between;"><span id="vaeModelCheck">○
+                                            VAE (qwen_image_vae.safetensors)</span><span
+                                            style="color: var(--text-muted);">253 MB</span></div>
+                                </div>
+
+                                <!-- Verified Banner (Shown when verified, replaces download button) -->
+                                <div id="imageModelsVerifiedBox"
+                                    style="display: none; align-items: center; justify-content: center; gap: 8px; font-size: 0.78rem; color: #34d399; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.25); border-radius: 6px; padding: 8px; font-weight: 500;">
+                                    <i class="fa-solid fa-circle-check"></i>
+                                    <span>All Models Verified & Ready</span>
+                                </div>
+
+                                <!-- Download Button & Progress (Hidden when all verified, skips existing files) -->
+                                <button type="button" id="downloadImageModelsBtn" class="btn-primary"
+                                    style="width: 100%; justify-content: center; gap: 6px; display: none; align-items: center; font-size: 0.78rem; padding: 7px;">
+                                    <i class="fa-solid fa-download"></i> <span id="downloadBtnLabel">Download Image Models
+                                        (aria2)</span>
                                 </button>
-                                <div id="comfySetupProgressBox"
-                                    style="display: none; background: rgba(0,0,0,0.4); border: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.3); border-radius: 6px; padding: 10px; font-size: 0.72rem;">
-                                    <div
-                                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                        <div id="comfySetupStepText"
-                                            style="color: var(--accent-purple); font-weight: 600;">[Step 1/3] Cloning
-                                            ComfyUI...</div>
-                                        <span id="comfySetupPct"
-                                            style="color: var(--text-muted); font-size: 0.7rem;">0%</span>
+
+                                <div id="imageDownloadProgressBox"
+                                    style="display: none; margin-top: 8px; background: rgba(0,0,0,0.4); border: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.3); border-radius: 6px; padding: 10px; font-size: 0.72rem;">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                        <span id="imageDownloadModelName"
+                                            style="color: var(--accent-purple); font-weight: 600;">Downloading
+                                            UNet...</span>
+                                        <span id="imageDownloadPct" style="color: var(--text-muted);">0%</span>
                                     </div>
-                                    <div id="comfySetupTargetDir"
+                                    <div id="imageDownloadTargetPath"
                                         style="color: #94a3b8; font-size: 0.68rem; margin-bottom: 6px; word-break: break-all; font-family: monospace;">
-                                        Target: nivm/engine/ComfyUI
+                                        Saving to: nivm/models/image/
                                     </div>
                                     <div
-                                        style="background: rgba(255,255,255,0.08); height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 8px;">
-                                        <div id="comfySetupProgressBar"
+                                        style="background: rgba(255,255,255,0.08); height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
+                                        <div id="imageDownloadProgressBar"
                                             style="width: 0%; height: 100%; background: var(--accent-purple); transition: width 0.3s ease;">
                                         </div>
                                     </div>
-                                    <div id="comfySetupLogText"
-                                        style="font-family: monospace; color: #cbd5e1; font-size: 0.68rem; max-height: 90px; overflow-y: auto; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: 4px; padding: 6px; white-space: pre-wrap; line-height: 1.35;">
+                                    <div
+                                        style="display: flex; justify-content: space-between; color: #94a3b8; font-size: 0.68rem; font-family: monospace;">
+                                        <span id="imageDownloadBytes">0 MB / 0 MB</span>
+                                        <span id="imageDownloadSpeed">0 MB/s</span>
+                                        <span id="imageDownloadEta">ETA: --</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Image Models Card -->
-                    <div class="role-config-card" style="background: rgba(0,0,0,0.25);">
-                        <div style="padding: 12px;">
-                            <div
-                                style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-                                <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);"><i
-                                        class="fa-solid fa-cubes"
-                                        style="color: var(--accent-purple); margin-right: 6px;"></i>Qwen-Rapid Diffusion
-                                    Models</span>
-                                <span id="imageModelsBadge" class="role-card-badge">—</span>
-                            </div>
-                            <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 10px;">
-                                Verified models: Qwen-Rapid UNet (13.3 GB), Qwen2.5-VL CLIP (4.7 GB), VAE (253 MB)
-                            </div>
-
-                            <!-- Model Checklist -->
-                            <div
-                                style="display: flex; flex-direction: column; gap: 4px; font-size: 0.73rem; margin-bottom: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px;">
-                                <div style="display: flex; justify-content: space-between;"><span id="unetModelCheck">○
-                                        UNet (Qwen-Rapid-NSFW-v23_Q4_K.gguf)</span><span
-                                        style="color: var(--text-muted);">13.3 GB</span></div>
-                                <div style="display: flex; justify-content: space-between;"><span id="clipModelCheck">○
-                                        Text Encoder (Qwen2.5-VL-7B-Instruct-abliterated.Q4_K_M.gguf)</span><span
-                                        style="color: var(--text-muted);">4.7 GB</span></div>
-                                <div style="display: flex; justify-content: space-between;"><span id="vaeModelCheck">○
-                                        VAE (qwen_image_vae.safetensors)</span><span
-                                        style="color: var(--text-muted);">253 MB</span></div>
-                            </div>
-
-                            <!-- Verified Banner (Shown when verified, replaces download button) -->
-                            <div id="imageModelsVerifiedBox"
-                                style="display: none; align-items: center; justify-content: center; gap: 8px; font-size: 0.78rem; color: #34d399; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.25); border-radius: 6px; padding: 8px; font-weight: 500;">
-                                <i class="fa-solid fa-circle-check"></i>
-                                <span>All Models Verified & Ready</span>
-                            </div>
-
-                            <!-- Download Button & Progress (Hidden when all verified, skips existing files) -->
-                            <button type="button" id="downloadImageModelsBtn" class="btn-primary"
-                                style="width: 100%; justify-content: center; gap: 6px; display: none; align-items: center; font-size: 0.78rem; padding: 7px;">
-                                <i class="fa-solid fa-download"></i> <span id="downloadBtnLabel">Download Image Models
-                                    (aria2)</span>
-                            </button>
-
-                            <div id="imageDownloadProgressBox"
-                                style="display: none; margin-top: 8px; background: rgba(0,0,0,0.4); border: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.3); border-radius: 6px; padding: 10px; font-size: 0.72rem;">
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <span id="imageDownloadModelName"
-                                        style="color: var(--accent-purple); font-weight: 600;">Downloading
-                                        UNet...</span>
-                                    <span id="imageDownloadPct" style="color: var(--text-muted);">0%</span>
-                                </div>
-                                <div id="imageDownloadTargetPath"
-                                    style="color: #94a3b8; font-size: 0.68rem; margin-bottom: 6px; word-break: break-all; font-family: monospace;">
-                                    Saving to: nivm/models/image/
-                                </div>
+                        <!-- Anime Engine Card (Illustrious SDXL — Optional) -->
+                        <div class="role-config-card" style="background: rgba(0,0,0,0.25); margin-top: 10px;">
+                            <div style="padding: 12px;">
                                 <div
-                                    style="background: rgba(255,255,255,0.08); height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
-                                    <div id="imageDownloadProgressBar"
-                                        style="width: 0%; height: 100%; background: var(--accent-purple); transition: width 0.3s ease;">
+                                    style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                                    <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);"><i
+                                            class="fa-solid fa-wand-magic-sparkles"
+                                            style="color: var(--accent-purple); margin-right: 6px;"></i>Anime Engine (Illustrious SDXL)</span>
+                                    <span id="animeModelsBadge" class="role-card-badge">—</span>
+                                </div>
+                                <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 10px;">
+                                    Dedicated anime pipeline: Illustrious SDXL Checkpoint (6.5 GB), Fast Turbo LCM (376 MB)
+                                </div>
+
+                                <!-- Anime Model Checklist -->
+                                <div
+                                    style="display: flex; flex-direction: column; gap: 4px; font-size: 0.73rem; margin-bottom: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px;">
+                                    <div style="display: flex; justify-content: space-between;"><span id="animeCkptCheck">○
+                                            Checkpoint (<span id="animeCkptNameLabel">waiIllustriousSDXL_v150.safetensors</span>)</span><span
+                                            id="animeCkptSizeLabel" style="color: var(--text-muted);">6.5 GB</span></div>
+                                    <div style="display: flex; justify-content: space-between;"><span id="animeLcmCheck">○
+                                            Fast Turbo LCM (turbo_lcm_sdxl.safetensors)</span><span
+                                            id="animeLcmSizeLabel" style="color: var(--text-muted);">376 MB</span></div>
+                                </div>
+
+                                <!-- Verified Banner (Shown when checkpoint verified) -->
+                                <div id="animeModelsVerifiedBox"
+                                    style="display: none; align-items: center; justify-content: center; gap: 8px; font-size: 0.78rem; color: #34d399; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.25); border-radius: 6px; padding: 8px; font-weight: 500;">
+                                    <i class="fa-solid fa-circle-check"></i>
+                                    <span id="animeVerifiedLabel">Anime Engine Verified & Ready</span>
+                                </div>
+
+                                <!-- Open Image Studio Button (moved to Anime Engine card) -->
+                                <button type="button" id="openImageStudioFromSettingsBtn" class="btn-secondary"
+                                    style="width: 100%; justify-content: center; gap: 6px; display: flex; align-items: center; font-size: 0.78rem; padding: 7px; margin-top: 8px;">
+                                    <i class="fa-solid fa-paintbrush" style="color: var(--accent-purple);"></i> Open Image Studio
+                                </button>
+
+                                <!-- Download Button -->
+                                <button type="button" id="downloadAnimeModelsBtn" class="btn-primary"
+                                    style="width: 100%; justify-content: center; gap: 6px; display: none; align-items: center; font-size: 0.78rem; padding: 7px;">
+                                    <i class="fa-solid fa-download"></i> <span id="downloadAnimeBtnLabel">Download Anime Models (aria2)</span>
+                                </button>
+
+                                <!-- Download Progress Box for Anime -->
+                                <div id="animeDownloadProgressBox"
+                                    style="display: none; margin-top: 8px; background: rgba(0,0,0,0.4); border: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.3); border-radius: 6px; padding: 10px; font-size: 0.72rem;">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                        <span id="animeDownloadModelName"
+                                            style="color: var(--accent-purple); font-weight: 600;">Downloading Anime Model...</span>
+                                        <span id="animeDownloadPct" style="color: var(--text-muted);">0%</span>
                                     </div>
-                                </div>
-                                <div
-                                    style="display: flex; justify-content: space-between; color: #94a3b8; font-size: 0.68rem; font-family: monospace;">
-                                    <span id="imageDownloadBytes">0 MB / 0 MB</span>
-                                    <span id="imageDownloadSpeed">0 MB/s</span>
-                                    <span id="imageDownloadEta">ETA: --</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Anime Engine Card (Illustrious SDXL — Optional) -->
-                    <div class="role-config-card" style="background: rgba(0,0,0,0.25); margin-top: 10px;">
-                        <div style="padding: 12px;">
-                            <div
-                                style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-                                <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);"><i
-                                        class="fa-solid fa-wand-magic-sparkles"
-                                        style="color: var(--accent-purple); margin-right: 6px;"></i>Anime Engine (Illustrious SDXL)</span>
-                                <span id="animeModelsBadge" class="role-card-badge">—</span>
-                            </div>
-                            <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 10px;">
-                                Dedicated anime pipeline: Illustrious SDXL Checkpoint (6.5 GB), Fast Turbo LCM (376 MB)
-                            </div>
-
-                            <!-- Anime Model Checklist -->
-                            <div
-                                style="display: flex; flex-direction: column; gap: 4px; font-size: 0.73rem; margin-bottom: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px;">
-                                <div style="display: flex; justify-content: space-between;"><span id="animeCkptCheck">○
-                                        Checkpoint (<span id="animeCkptNameLabel">waiIllustriousSDXL_v170.safetensors</span>)</span><span
-                                        id="animeCkptSizeLabel" style="color: var(--text-muted);">6.5 GB</span></div>
-                                <div style="display: flex; justify-content: space-between;"><span id="animeLcmCheck">○
-                                        Fast Turbo LCM (turbo_lcm_sdxl.safetensors)</span><span
-                                        id="animeLcmSizeLabel" style="color: var(--text-muted);">376 MB</span></div>
-                            </div>
-
-                            <!-- Verified Banner (Shown when checkpoint verified) -->
-                            <div id="animeModelsVerifiedBox"
-                                style="display: none; align-items: center; justify-content: center; gap: 8px; font-size: 0.78rem; color: #34d399; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.25); border-radius: 6px; padding: 8px; font-weight: 500;">
-                                <i class="fa-solid fa-circle-check"></i>
-                                <span id="animeVerifiedLabel">Anime Engine Verified & Ready</span>
-                            </div>
-
-                            <!-- Open Image Studio Button (moved to Anime Engine card) -->
-                            <button type="button" id="openImageStudioFromSettingsBtn" class="btn-secondary"
-                                style="width: 100%; justify-content: center; gap: 6px; display: flex; align-items: center; font-size: 0.78rem; padding: 7px; margin-top: 8px;">
-                                <i class="fa-solid fa-paintbrush" style="color: var(--accent-purple);"></i> Open Image Studio
-                            </button>
-
-                            <!-- Download Button -->
-                            <button type="button" id="downloadAnimeModelsBtn" class="btn-primary"
-                                style="width: 100%; justify-content: center; gap: 6px; display: none; align-items: center; font-size: 0.78rem; padding: 7px;">
-                                <i class="fa-solid fa-download"></i> <span id="downloadAnimeBtnLabel">Download Anime Models (aria2)</span>
-                            </button>
-
-                            <!-- Download Progress Box for Anime -->
-                            <div id="animeDownloadProgressBox"
-                                style="display: none; margin-top: 8px; background: rgba(0,0,0,0.4); border: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.3); border-radius: 6px; padding: 10px; font-size: 0.72rem;">
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <span id="animeDownloadModelName"
-                                        style="color: var(--accent-purple); font-weight: 600;">Downloading Anime Model...</span>
-                                    <span id="animeDownloadPct" style="color: var(--text-muted);">0%</span>
-                                </div>
-                                <div id="animeDownloadTargetPath"
-                                    style="color: #94a3b8; font-size: 0.68rem; margin-bottom: 6px; word-break: break-all; font-family: monospace;">
-                                    Saving to: nivm/models/image/
-                                </div>
-                                <div
-                                    style="background: rgba(255,255,255,0.08); height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
-                                    <div id="animeDownloadProgressBar"
-                                        style="width: 0%; height: 100%; background: var(--accent-purple); transition: width 0.3s ease;">
+                                    <div id="animeDownloadTargetPath"
+                                        style="color: #94a3b8; font-size: 0.68rem; margin-bottom: 6px; word-break: break-all; font-family: monospace;">
+                                        Saving to: nivm/models/image/
                                     </div>
-                                </div>
-                                <div
-                                    style="display: flex; justify-content: space-between; color: #94a3b8; font-size: 0.68rem; font-family: monospace;">
-                                    <span id="animeDownloadBytes">0 MB / 0 MB</span>
-                                    <span id="animeDownloadSpeed">0 MB/s</span>
-                                    <span id="animeDownloadEta">ETA: --</span>
+                                    <div
+                                        style="background: rgba(255,255,255,0.08); height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
+                                        <div id="animeDownloadProgressBar"
+                                            style="width: 0%; height: 100%; background: var(--accent-purple); transition: width 0.3s ease;">
+                                        </div>
+                                    </div>
+                                    <div
+                                        style="display: flex; justify-content: space-between; color: #94a3b8; font-size: 0.68rem; font-family: monospace;">
+                                        <span id="animeDownloadBytes">0 MB / 0 MB</span>
+                                        <span id="animeDownloadSpeed">0 MB/s</span>
+                                        <span id="animeDownloadEta">ETA: --</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Smart Engine Toggle & Unload All -->
-                <div class="settings-section" id="smartEngineSection"
-                    style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
-                    <button class="smart-toggle-btn" id="smartToggleBtn">
-                        <i class="fa-solid fa-bolt"></i>
-                        <span id="smartToggleLabel">Load Engine</span>
-                    </button>
-                    <div id="engineStatusText" style="font-size: 0.8rem; text-align: center; color: var(--text-muted);">
-                        Status: Not Loaded
+                <!-- Tab 3: Model Downloader -->
+                <div class="settings-tab-pane hidden" id="downloaderTab">
+                    <!-- Download Model Section -->
+                    <div class="settings-section" id="downloadModelSection" style="margin-top: 0;">
+                        <div class="section-title">
+                            <span>Download GGUF Model</span>
+                        </div>
+                        <div class="field-group">
+                            <label style="font-size: 0.8rem;">Model Download URL</label>
+                            <div class="custom-input-with-btn">
+                                <input type="text" id="modelDownloadUrlInput"
+                                    placeholder="https://huggingface.co/.../model.gguf">
+                                <button id="startDownloadBtn" class="btn-primary" type="button"
+                                    style="white-space: nowrap;">
+                                    <i class="fa-solid fa-cloud-arrow-down"></i> Download
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Live Download Progress Card -->
+                        <div id="downloadProgressCard" class="download-progress-card hidden">
+                            <div class="download-card-header">
+                                <div class="download-card-info">
+                                    <div class="download-card-title" id="downloadCardFilename">Downloading...</div>
+                                    <div class="download-card-meta">
+                                        <span id="downloadCardSize">0 MB / 0 MB</span>
+                                        <span class="meta-sep">&bull;</span>
+                                        <span id="downloadCardSpeed">0 MB/s</span>
+                                        <span class="meta-sep">&bull;</span>
+                                        <span id="downloadCardEta">ETA: --</span>
+                                    </div>
+                                </div>
+                                <button id="cancelDownloadBtn" class="download-cancel-btn" type="button"
+                                    title="Cancel Download">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                            <div class="download-progress-track">
+                                <div id="downloadProgressBar" class="download-progress-bar" style="width: 0%;"></div>
+                            </div>
+                            <div
+                                style="display: flex; justify-content: flex-end; font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">
+                                <span id="downloadEngineLabel" class="hidden"></span>
+                                <span id="downloadPercentLabel">0%</span>
+                            </div>
+                        </div>
                     </div>
-                    <button type="button" class="btn-secondary" id="unloadAllModelsBtn"
-                        title="Unload all models (LLM, Voice TTS, STT, Diffusion) and completely free GPU VRAM"
-                        style="width: 100%; border-color: rgba(239, 68, 68, 0.25); color: #f87171; justify-content: center; gap: 8px; display: flex; align-items: center; font-size: 0.82rem; padding: 9px 14px; margin-top: 2px;">
-                        <i class="fa-solid fa-broom"></i>
-                        <span>Unload All Models (Free VRAM)</span>
-                    </button>
+                </div>
+
+                <!-- Tab 4: Preferences -->
+                <div class="settings-tab-pane hidden" id="preferencesTab">
+                    <!-- User Preferences Section -->
+                    <div class="settings-section" style="margin-top: 0;">
+                        <div class="section-title">User Preferences</div>
+                        <div class="field-group">
+                            <label for="userNameInput">What should nivm call you?</label>
+                            <input type="text" id="userNameInput" placeholder="Enter your name (optional)">
+                            <div class="pref-quick-grid">
+                                <button type="button" class="pref-quick-btn" id="openPersonalityFromSettingsBtn"
+                                    title="Customize Personality & Instructions">
+                                    <i class="fa-solid fa-user-pen"></i>
+                                    <span>Personality</span>
+                                </button>
+                                <button type="button" class="pref-quick-btn" id="openVoiceFromSettingsBtn"
+                                    title="Customize Voice & Speech Profile">
+                                    <i class="fa-solid fa-microphone-lines"></i>
+                                    <span>Voice Profile</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="window-footer">
@@ -2723,7 +2782,7 @@
             <div class="stats-actions-group">
                 <button class="stats-action-btn unload-btn" id="statsUnloadAllBtn">
                     <i class="fa-solid fa-broom"></i>
-                    <span>Unload All Models (Free VRAM)</span>
+                    <span>Unload All Models</span>
                 </button>
                 <button class="stats-action-btn reset-btn" id="resetStatsBtn">
                     <i class="fa-solid fa-trash-can"></i>

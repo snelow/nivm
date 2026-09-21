@@ -967,7 +967,7 @@ export function sealUnclosedThoughts(text) {
     }
 
     // 3. Explicit transition markers: "Response:", "Final Answer:", "Answer:"
-    const markerMatch = body.match(/^(.*?)\n+(?:Final Answer|Response|Answer|Direct response):\s*(.*)$/is);
+    const markerMatch = body.match(/^(.*?)\n+(?:Final Answer|Response|Answer|Direct response|Possible response|Actual response|Output):\s*(.*)$/is);
     if (markerMatch) {
         return `${before}<think>${markerMatch[1].trim()}</think>\n\n${markerMatch[2].trim()}`;
     }
@@ -992,7 +992,8 @@ export function sealUnclosedThoughts(text) {
         }
     }
 
-    return text;
+    // 5. Fallback: If unclosed think tag reached end of text, close it cleanly
+    return `${before}<think>${body.trim()}</think>`;
 }
 
 export function updateAssistantBubble(bubbleElement, rawText, isGenerating = false, thinkStartTimeOrDuration = null) {
@@ -1019,9 +1020,19 @@ export function updateAssistantBubble(bubbleElement, rawText, isGenerating = fal
     // Strip empty thought tags so they never create ghost thinking elements or break answer splitting
     processedText = processedText.replace(/<think>\s*<\/think>/gi, '');
 
-    // If model closed </think> without an explicit opening <think> tag (common with prefilled prompt templates like Qwen), prepend <think>
-    if (processedText.includes('</think>') && !processedText.includes('<think>')) {
+    // For models where <think> is prefilled by the prompt template (e.g. Spark, DeepSeek, Qwen),
+    // the generation starts directly with thought text and later emits </think>.
+    // Ensure <think> is added at the very beginning if </think> occurs before any <think>.
+    const firstOpenIdx = processedText.indexOf('<think>');
+    const firstCloseIdx = processedText.indexOf('</think>');
+    if (firstCloseIdx !== -1 && (firstOpenIdx === -1 || firstCloseIdx < firstOpenIdx)) {
         processedText = '<think>' + processedText;
+    } else if (firstOpenIdx === -1 && firstCloseIdx === -1 && processedText.trim()) {
+        // Detect raw internal reasoning that started without tags
+        const isRawReasoning = /^\s*(?:(?:The\s+user|We\s+need\s+to|I\s+need\s+to|I\s+should|Let\s+me\s+think|Thinking\s+Process|User\s+input|User\s+says)\b|Plan:|Step\s+1:)/i.test(processedText);
+        if (isRawReasoning) {
+            processedText = '<think>' + processedText;
+        }
     }
 
     // If generation is complete and model forgot to output </think>, recover thoughts and separate the spoken dialogue
@@ -1073,12 +1084,29 @@ function deduplicateConsecutiveParagraphs(text) {
         if (tMatch[1].trim()) thinkMatches.push(tMatch[1].trim());
     }
 
-    if (thinkMatches.length > 0) {
+    if (thinkMatches.length > 0 || processedText.includes('</think>')) {
         stopThinkingPhraseRotation();
-        const thinkContent = thinkMatches.join('\n\n');
-        answerText = processedText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-        answerText = answerText.replace(/<think>[\s\S]*$/gi, '').replace(/<\/think>/gi, '').trim();
-        answerText = deduplicateConsecutiveParagraphs(answerText);
+        
+        // If multiple think blocks or nested tags exist, the spoken answer begins strictly after the LAST </think> tag
+        const lastCloseIdx = processedText.lastIndexOf('</think>');
+        let thinkContent = '';
+        if (lastCloseIdx !== -1) {
+            const rawThoughts = processedText.substring(0, lastCloseIdx);
+            // Clean out tag wrappers from thoughts
+            thinkContent = rawThoughts.replace(/<\/?think>/gi, '').trim();
+            answerText = processedText.substring(lastCloseIdx + 8).replace(/<\/?think>/gi, '').trim();
+        } else {
+            thinkContent = thinkMatches.join('\n\n');
+            answerText = processedText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+            answerText = answerText.replace(/<think>[\s\S]*$/gi, '').replace(/<\/think>/gi, '').trim();
+        }
+        if (!answerText.trim() && thinkContent) {
+            // Edge case: Model concluded generation immediately after </think> without speaking any dialogue.
+            // Keep the thinking block open and clearly indicate the model only output reasoning.
+            if (!isGenerating) {
+                answerText = '<em style="opacity: 0.7; font-size: 0.9em;">(Completed thinking without spoken output)</em>';
+            }
+        }
         
         if (thinkContent) {
             const thinkDuration = resolveThinkDuration(thinkStartTimeOrDuration, isGenerating);

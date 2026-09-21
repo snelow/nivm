@@ -275,6 +275,16 @@ class ModelManager:
         mmproj = active_cfg.get("mmproj_path", "")
         mmproj_valid = bool(mmproj and mmproj.strip().lower() != "none" and os.path.isfile(mmproj.strip()))
         has_vision = bool(mmproj_valid or active_cfg.get("chat_handler_type") is not None or self.active_role == "vision")
+        has_prefill_think = False
+        if self.active_role and self.active_role in self.loaded_models:
+            try:
+                m = self.loaded_models[self.active_role]
+                tmpl = str(m.metadata.get("tokenizer.chat_template", ""))
+                if "<think>" in tmpl.split("add_generation_prompt")[-1]:
+                    has_prefill_think = True
+            except Exception:
+                pass
+
         return {
             "role": self.active_role,
             "name": self.active_name,
@@ -283,6 +293,7 @@ class ModelManager:
             "warning": self.last_load_warning,
             "has_vision": has_vision,
             "mmproj_path": mmproj if mmproj_valid else None,
+            "prefill_think": has_prefill_think,
         }
 
     def get_model_path(self, role: str, custom_path: Optional[str] = None) -> Optional[str]:
@@ -562,6 +573,23 @@ class ModelManager:
             logger.warning(f"Model loaded: {self.active_name} in {elapsed:.1f}s")
             return elapsed
         except Exception as e:
+            gc.collect()
+            err_msg = str(e).lower()
+            if "failed to create llama_context" in err_msg or "out of memory" in err_msg:
+                ctx_val = config.get("n_ctx", 8192)
+                kv_val = config.get("kv_type", "q4_0")
+                friendly_msg = (
+                    f"GPU VRAM limit exceeded: Could not allocate {ctx_val} context tokens with {kv_val.upper()} KV cache. "
+                    f"Please lower the Context slider (e.g. to 8k or 16k), select Q4_0 KV cache, or uncheck 'KV → GPU' to run the context in system RAM."
+                )
+                logger.error(f"Failed to load model from {model_path}: {friendly_msg}")
+                self.active_role = None
+                self.active_name = None
+                self.loaded_models.clear()
+                self.loaded_paths.clear()
+                self.last_load_warning = friendly_msg
+                raise RuntimeError(friendly_msg)
+
             logger.error(f"Failed to load model from {model_path}: {e}")
             self.active_role = None
             self.active_name = None
@@ -572,13 +600,28 @@ class ModelManager:
         finally:
             self._loading = False
     
-    def generate(self, messages, max_tokens=2048, temperature=0.6, top_p=0.9, stream=True, repeat_penalty=1.1):
+    def generate(self, messages, max_tokens=2048, temperature=0.6, top_p=0.9, stream=True, repeat_penalty=1.1, enable_thinking=None):
         """Generate a chat completion using the currently active model."""
         if not self.active_role or self.active_role not in self.loaded_models:
             raise RuntimeError("No model is loaded. Call activate() first.")
         
         model = self.loaded_models[self.active_role]
         with suppress_c():
+            handler = model.chat_handler or model._chat_handlers.get(model.chat_format)
+            if handler and enable_thinking is not None:
+                try:
+                    return handler(
+                        llama=model,
+                        messages=messages,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        top_p=top_p,
+                        repeat_penalty=repeat_penalty,
+                        stream=stream,
+                        enable_thinking=enable_thinking,
+                    )
+                except Exception as e:
+                    logger.warning(f"Direct chat_handler invocation failed: {e}")
             return model.create_chat_completion(
                 messages=messages,
                 max_tokens=max_tokens,

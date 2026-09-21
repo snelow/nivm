@@ -747,8 +747,8 @@ async def generate_anime_endpoint(req: AnimeGenerateRequest):
     ckpt_name, ckpt_path = find_illustrious_checkpoint()
     if not ckpt_path or not os.path.isfile(ckpt_path):
         raise HTTPException(
-            status_code=503,
-            detail="Illustrious SDXL checkpoint not found. Please install waiIllustriousSDXL_v170.safetensors or download it via Settings."
+            status_code=400,
+            detail="Illustrious SDXL checkpoint not found. Please install waiIllustriousSDXL_v150.safetensors or download it via Settings."
         )
 
     task_id = str(uuid.uuid4())

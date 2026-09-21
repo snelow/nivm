@@ -318,8 +318,26 @@ const rawDom = {
     smartToggleBtn: document.getElementById('smartToggleBtn'),
     smartToggleLabel: document.getElementById('smartToggleLabel'),
     engineStatusText: document.getElementById('engineStatusText'),
+    engineStatusDot: document.getElementById('engineStatusDot'),
+    engineHardwareSub: document.getElementById('engineHardwareSub'),
     unloadAllModelsBtn: document.getElementById('unloadAllModelsBtn'),
     statsUnloadAllBtn: document.getElementById('statsUnloadAllBtn'),
+
+    // ── Settings Tabs & Memory Budget ──
+    settingsNavTabs: document.getElementById('settingsNavTabs'),
+    settingsTabBtns: document.querySelectorAll('.settings-tab-btn'),
+    settingsTabPanes: document.querySelectorAll('.settings-tab-pane'),
+    memoryEstimatorCard: document.getElementById('memoryEstimatorCard'),
+    memorySafetyPill: document.getElementById('memorySafetyPill'),
+    estVramVal: document.getElementById('estVramVal'),
+    totalVramVal: document.getElementById('totalVramVal'),
+    vramBarFill: document.getElementById('vramBarFill'),
+    vramBreakdownText: document.getElementById('vramBreakdownText'),
+    estRamVal: document.getElementById('estRamVal'),
+    totalRamVal: document.getElementById('totalRamVal'),
+    ramBarFill: document.getElementById('ramBarFill'),
+    ramBreakdownText: document.getElementById('ramBreakdownText'),
+    memoryAdviceText: document.getElementById('memoryAdviceText'),
 
     // Background System
     bgElements: document.querySelectorAll('.bg-element'),

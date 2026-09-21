@@ -101,15 +101,56 @@ async def fetch_remote_models(req: FetchRemoteModelsRequest):
         return {"success": False, "error": str(e), "models": []}
 
 
+def get_system_memory_info() -> dict:
+    info = {
+        "gpu_available": False,
+        "gpu_name": "",
+        "vram_total_gb": 0.0,
+        "vram_free_gb": 0.0,
+        "vram_used_gb": 0.0,
+        "ram_total_gb": 0.0,
+        "ram_available_gb": 0.0,
+    }
+    try:
+        import psutil
+        vmem = psutil.virtual_memory()
+        info["ram_total_gb"] = round(vmem.total / (1024 ** 3), 2)
+        info["ram_available_gb"] = round(vmem.available / (1024 ** 3), 2)
+    except Exception:
+        pass
+
+    try:
+        import torch
+        if torch.cuda.is_available():
+            info["gpu_available"] = True
+            info["gpu_name"] = torch.cuda.get_device_name(0)
+            total = torch.cuda.get_device_properties(0).total_memory
+            free, total_mem = torch.cuda.mem_get_info()
+            used = total_mem - free
+            info["vram_total_gb"] = round(total / (1024 ** 3), 2)
+            info["vram_free_gb"] = round(free / (1024 ** 3), 2)
+            info["vram_used_gb"] = round(used / (1024 ** 3), 2)
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            info["gpu_available"] = True
+            info["gpu_name"] = "Apple Silicon (Metal)"
+            info["vram_total_gb"] = info["ram_total_gb"]
+            info["vram_free_gb"] = info["ram_available_gb"]
+            info["vram_used_gb"] = round(max(0.0, info["ram_total_gb"] - info["ram_available_gb"]), 2)
+    except Exception:
+        pass
+    return info
+
+
 # ── Engine Management Endpoints ───────────────────────────────────
 
 @router.get("/api/engine/status")
 async def engine_status():
-    """Get current engine and model status."""
+    """Get current engine, model, and hardware VRAM/RAM status."""
     return {
         "has_llama_cpp": HAS_LLAMA_CPP,
         "active": model_manager.get_active_info(),
         "available": model_manager.list_available(),
+        "hardware": get_system_memory_info(),
     }
 
 

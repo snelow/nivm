@@ -362,7 +362,8 @@ class ChatGenerationManager:
         temperature: float,
         top_p: float,
         repeat_penalty: float,
-        inference_mode: str
+        inference_mode: str,
+        enable_thinking: Optional[bool] = None
     ) -> GenerationJob:
         """Start a local engine generation task in the background."""
         self._cleanup_old_jobs()
@@ -371,17 +372,24 @@ class ChatGenerationManager:
             existing.request_stop()
 
         job = GenerationJob(chat_id)
+        active_info = model_manager.get_active_info()
+        prefill_val = bool(active_info.get("prefill_think", False))
+        if enable_thinking is False:
+            prefill_val = False
+
         job.model_info = {
             "role": routed_to,
             "name": model_info["name"],
-            "swap_time_s": round(swap_time, 1)
+            "swap_time_s": round(swap_time, 1),
+            "prefill_think": prefill_val,
         }
         self.jobs[chat_id] = job
 
         job.task = asyncio.create_task(
             self._run_local_worker(
                 job, routed_to, model_info, swap_time, messages,
-                max_tokens, temperature, top_p, repeat_penalty, inference_mode
+                max_tokens, temperature, top_p, repeat_penalty, inference_mode,
+                enable_thinking
             )
         )
         return job
@@ -397,7 +405,8 @@ class ChatGenerationManager:
         temperature: float,
         top_p: float,
         repeat_penalty: float,
-        inference_mode: str
+        inference_mode: str,
+        enable_thinking: Optional[bool] = None
     ):
         start_time = time.time()
         try:
@@ -414,7 +423,8 @@ class ChatGenerationManager:
             def sync_generate():
                 for chunk in model_manager.generate(
                     messages, max_tokens, temperature, top_p,
-                    stream=True, repeat_penalty=repeat_penalty
+                    stream=True, repeat_penalty=repeat_penalty,
+                    enable_thinking=enable_thinking
                 ):
                     if job.stop_requested:
                         break
@@ -474,6 +484,11 @@ class ChatGenerationManager:
             final_content = job.full_text
             if job.reasoning_text and not final_content.startswith("<think>"):
                 final_content = f"<think>{job.reasoning_text}</think>\n\n{final_content}"
+            else:
+                first_open = final_content.find("<think>")
+                first_close = final_content.find("</think>")
+                if first_close != -1 and (first_open == -1 or first_close < first_open):
+                    final_content = f"<think>{final_content}"
 
             think_time = None
             if "<think>" in final_content and "</think>" in final_content:

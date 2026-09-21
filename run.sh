@@ -126,10 +126,13 @@ fi
 mkdir -p "models"
 
 # Auto-discover CUDA & cuDNN paths for GPU acceleration
-for CUDNN_DIR in "/home/blubvlub/.local/lib/python3.14/site-packages/nvidia/cudnn/lib" "$HOME/.local/lib/python3.14/site-packages/nvidia/cudnn/lib" "/usr/local/cuda/lib64"; do
-    if [ -d "$CUDNN_DIR" ]; then
-        export LD_LIBRARY_PATH="$CUDNN_DIR:${LD_LIBRARY_PATH:-}"
-        break
+if [ -d "/usr/local/cuda/bin" ] && [[ ":$PATH:" != *":/usr/local/cuda/bin:"* ]]; then
+    export PATH="/usr/local/cuda/bin:$PATH"
+fi
+
+for CUDA_LIB in "/usr/local/cuda/lib64" "/usr/local/cuda-13.2/lib64" "$HOME/.local/lib/python3.14/site-packages/nvidia/cudnn/lib" "/home/blubvlub/.local/lib/python3.14/site-packages/nvidia/cudnn/lib"; do
+    if [ -d "$CUDA_LIB" ]; then
+        export LD_LIBRARY_PATH="$CUDA_LIB:${LD_LIBRARY_PATH:-}"
     fi
 done
 

@@ -145,11 +145,15 @@ def check_anime_models_status() -> Dict[str, Any]:
             LCM_LORA_FILE,
             LORAS_DIR,
             CHECKPOINTS_DIR,
+            ILLUSTRIOUS_V150_FILENAME,
             ILLUSTRIOUS_V170_FILENAME,
         )
         ckpt_name, ckpt_path = find_illustrious_checkpoint()
         ckpt_exists = bool(ckpt_path and os.path.isfile(ckpt_path))
         ckpt_size = os.path.getsize(ckpt_path) if ckpt_exists else 0
+
+        v150_path = os.path.join(CHECKPOINTS_DIR, ILLUSTRIOUS_V150_FILENAME)
+        v150_installed = os.path.isfile(v150_path) and os.path.getsize(v150_path) > 100 * 1024 * 1024
 
         v170_path = os.path.join(CHECKPOINTS_DIR, ILLUSTRIOUS_V170_FILENAME)
         v170_installed = os.path.isfile(v170_path) and os.path.getsize(v170_path) > 100 * 1024 * 1024
@@ -161,10 +165,12 @@ def check_anime_models_status() -> Dict[str, Any]:
         return {
             "installed": ckpt_exists,
             "all_installed": ckpt_exists and lcm_exists,
+            "v150_installed": v150_installed,
             "v170_installed": v170_installed,
             "checkpoint": {
-                "name": ckpt_name or ILLUSTRIOUS_V170_FILENAME,
+                "name": ckpt_name or ILLUSTRIOUS_V150_FILENAME,
                 "installed": ckpt_exists,
+                "is_v150": v150_installed,
                 "is_v170": v170_installed,
                 "size_bytes": ckpt_size,
                 "size_str": f"{round(ckpt_size / (1024 * 1024 * 1024), 2)} GB" if ckpt_exists else "6.5 GB",
@@ -183,6 +189,6 @@ def check_anime_models_status() -> Dict[str, Any]:
         return {
             "installed": False,
             "all_installed": False,
-            "checkpoint": {"name": "waiIllustriousSDXL_v170.safetensors", "installed": False, "size_bytes": 0, "size_str": "6.5 GB", "path": None},
+            "checkpoint": {"name": "waiIllustriousSDXL_v150.safetensors", "installed": False, "size_bytes": 0, "size_str": "6.5 GB", "path": None},
             "lcm_lora": {"name": "turbo_lcm_sdxl.safetensors", "installed": False, "size_bytes": 0, "size_str": "376 MB", "path": None}
         }

@@ -83,7 +83,7 @@ def _run_downloads(category: str = "standard"):
     if category in ("anime", "all"):
         from .config import ANIME_DOWNLOAD_URLS
         anime_info = model_status.get("anime", {})
-        if not anime_info.get("v170_installed"):
+        if not anime_info.get("installed") and not anime_info.get("checkpoint", {}).get("installed"):
             queue.append(ANIME_DOWNLOAD_URLS["checkpoint"])
         if not anime_info.get("lcm_lora", {}).get("installed"):
             queue.append(ANIME_DOWNLOAD_URLS["lcm_lora"])

@@ -293,6 +293,7 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
     repeat_penalty = body.get("repeat_penalty", 1.1)
     max_tokens = body.get("max_tokens", config.DEFAULT_MAX_TOKENS)
     stream = body.get("stream", True)
+    enable_thinking = body.get("enable_thinking")
 
     # Step 1: Process media (convert uploads to base64)
     has_images = await asyncio.to_thread(process_media_in_messages, messages)
@@ -485,13 +486,14 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
             temperature=temperature,
             top_p=top_p,
             repeat_penalty=repeat_penalty,
-            inference_mode=inference_mode
+            inference_mode=inference_mode,
+            enable_thinking=enable_thinking
         )
         return StreamingResponse(chat_manager.stream_job(job), media_type="text/event-stream")
     else:
         try:
             response = await asyncio.to_thread(
-                model_manager.generate, messages, max_tokens, temperature, top_p, False, repeat_penalty
+                model_manager.generate, messages, max_tokens, temperature, top_p, False, repeat_penalty, enable_thinking
             )
             if isinstance(response, dict):
                 response["model_info"] = {

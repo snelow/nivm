@@ -71,12 +71,13 @@ export async function fetchApiSettings() {
                 const isApi = inferenceMode === 'api';
                 if (dom.downloadModelSection) dom.downloadModelSection.classList.toggle('hidden', isApi);
                 if (dom.downloadDivider) dom.downloadDivider.classList.toggle('hidden', isApi);
+                if (dom.memoryEstimatorCard) dom.memoryEstimatorCard.classList.toggle('hidden', isApi);
                 if (dom.smartEngineSection) dom.smartEngineSection.classList.toggle('hidden', isApi);
             }
             if (window.updateVisionAvailabilityUI) window.updateVisionAvailabilityUI();
             
             // Single model role
-            if (dom.singleModelRoleSelect) dom.singleModelRoleSelect.value = data.single_model_role || 'coder';
+            if (dom.singleModelRoleSelect) dom.singleModelRoleSelect.value = data.single_model_role || 'custom';
             
             // Custom model path & history
             state.customModelPath = data.custom_model_path || '';
@@ -109,11 +110,7 @@ export async function fetchApiSettings() {
             }
 
             if (dom.customModelCard) {
-                if (data.single_model_role === 'custom') {
-                    dom.customModelCard.classList.remove('hidden');
-                } else {
-                    dom.customModelCard.classList.add('hidden');
-                }
+                dom.customModelCard.classList.remove('hidden');
             }
 
             // Per-role configs
@@ -133,7 +130,7 @@ export async function fetchApiSettings() {
 export async function saveApiSettings() {
     // Base payload
     const inferenceMode = state.inferenceMode || 'single';
-    const singleRole = dom.singleModelRoleSelect ? dom.singleModelRoleSelect.value : 'coder';
+    const singleRole = dom.singleModelRoleSelect ? dom.singleModelRoleSelect.value : 'custom';
     
     const payload = { 
         engine_mode: 'native',

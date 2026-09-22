@@ -37,6 +37,21 @@
     border-color: var(--text-primary);
 }
 
+.font-family-btn {
+    font-size: 0.9rem;
+    padding: 11px 12px;
+}
+
+.font-family-btn[data-font="monocraft"] {
+    font-family: 'Monocraft', monospace !important;
+    letter-spacing: 0.02em;
+}
+
+.font-family-btn[data-font="opensans"] {
+    font-family: 'Open Sans', sans-serif !important;
+    font-weight: 600;
+}
+
 /* Custom Toggle Checkbox */
 .custom-toggle {
     appearance: none;

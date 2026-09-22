@@ -5,14 +5,14 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>nivm</title>
+    <title>Project NIVM</title>
 
     <!-- PWA & Mobile Web App Meta -->
     <meta name="theme-color" content="#050508">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="nivm">
+    <meta name="apple-mobile-web-app-title" content="Project NIVM">
     <link rel="manifest" href="/manifest.json">
 
     <!-- Favicon & Touch Icons -->
@@ -22,6 +22,9 @@
     <link rel="shortcut icon" href="/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
     <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/vendor/fira-code.css">
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="/static/vendor/fontawesome.min.css">
@@ -155,6 +158,15 @@
 
     <!-- Perlin Noise Flow Field Canvas Layer -->
     <canvas class="bg-layer flowfield-layer" id="flowFieldBgCanvas"></canvas>
+
+    <!-- Circuit Traces Canvas Layer -->
+    <canvas class="bg-layer circuits-layer" id="circuitsBgCanvas"></canvas>
+
+    <!-- Cyber Hex Canvas Layer -->
+    <canvas class="bg-layer hex-layer" id="hexBgCanvas"></canvas>
+
+    <!-- Aurora Waves Canvas Layer -->
+    <canvas class="bg-layer aurora-layer" id="auroraBgCanvas"></canvas>
 
     <div class="app-container">
         <!-- Mobile Drawer Backdrop Scrim -->
@@ -516,8 +528,8 @@
                     </div>
                 </div>
                 <div class="footer-caption">
-                    <span class="footer-desktop-only">nivm may make mistakes. &bull; </span><span
-                        class="footer-mobile-only">nivm might make mistakes &bull; </span><a href="#"
+                    <span class="footer-desktop-only">AI may make mistakes. &bull; </span><span
+                        class="footer-mobile-only">AI may make mistakes &bull; </span><a href="#"
                         id="openCreatorBtn" class="credits-link" title="Meet the creator"><span
                             class="footer-desktop-only">crafted with <i class="fa-solid fa-heart dynamic-footer-heart"
                                 id="footerHeartIcon"></i> </span>by snelow</a><span class="footer-desktop-only"> &bull;
@@ -557,13 +569,13 @@
                             <span class="creator-name">snelow</span>
                             <span class="creator-tag">Author &amp; Maintainer</span>
                         </div>
-                        <span class="creator-project">nivm &bull; Native Inference Virtual Machine</span>
+                        <span class="creator-project">Project NIVM &bull; Native Inference Virtual Machine</span>
                     </div>
                 </div>
 
                 <div class="creator-message-card">
                     <p class="creator-message-text">
-                        Heya! a huge thanks for testing out nivm!<br>
+                        Heya! a huge thanks for testing out Project NIVM!<br>
                         Whether you're here for chatting, using tools, or just to have fun, you're awesome &lt;3
                     </p>
                 </div>
@@ -573,7 +585,7 @@
                         class="creator-link-card repo-link">
                         <div class="link-icon"><i class="fa-solid fa-star"></i></div>
                         <div class="link-info">
-                            <span class="link-title">Star nivm on GitHub</span>
+                            <span class="link-title">Star Project NIVM on GitHub</span>
                             <span class="link-sub">github.com/snelow/nivm</span>
                         </div>
                         <i class="fa-solid fa-arrow-up-right-from-square link-arrow"></i>
@@ -838,7 +850,7 @@
                 <div class="engine-bar-status">
                     <span class="engine-status-dot" id="engineStatusDot"></span>
                     <div class="engine-status-info">
-                        <span class="engine-status-label" id="engineStatusText">Not Loaded</span>
+                        <span class="engine-status-label" id="engineStatusText">Ready</span>
                         <span class="engine-hardware-sub" id="engineHardwareSub">GPU: Detecting...</span>
                     </div>
                 </div>
@@ -867,7 +879,7 @@
                 </button>
                 <button type="button" class="settings-tab-btn" data-tab="downloader">
                     <i class="fa-solid fa-cloud-arrow-down"></i>
-                    <span>Downloader</span>
+                    <span>Download</span>
                 </button>
                 <button type="button" class="settings-tab-btn" data-tab="preferences">
                     <i class="fa-solid fa-user-gear"></i>
@@ -944,7 +956,14 @@
                                         style="flex: 1 1 0; min-width: 0; font-size: 0.75rem; padding: 4px 8px; font-family: var(--font-code); background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; color: var(--text-secondary);"
                                         title="Active model path (in sync with dropdown)">
                                 </div>
+                                <div id="modelSpecsBar" class="model-specs-bar hidden">
+                                    <span class="model-spec-pill pill-layers" id="specPillLayers"><i class="fa-solid fa-layer-group"></i> <span>-- Layers</span></span>
+                                    <span class="model-spec-pill pill-arch" id="specPillArch"><i class="fa-solid fa-microchip"></i> <span>--</span></span>
+                                    <span class="model-spec-pill pill-ctx" id="specPillCtx"><i class="fa-solid fa-expand"></i> <span>-- Ctx</span></span>
+                                    <span class="model-spec-pill pill-moe hidden" id="specPillMoE"><i class="fa-solid fa-network-wired"></i> <span>MoE</span></span>
+                                </div>
                             </div>
+
 
                             <!-- Remembered Paths Chips -->
                             <div id="rememberedPathsContainer" class="remembered-paths-container hidden">
@@ -1066,7 +1085,12 @@
                                 </div>
                                 <input type="range" id="singleGpuSlider" class="custom-slider" min="-1" max="128"
                                     value="-1">
+                                <div id="singleGpuMoEAlert" class="moe-info-banner hidden">
+                                    <i class="fa-solid fa-network-wired"></i>
+                                    <span id="singleGpuMoEText">MoE Architecture: In llama.cpp, offloading layers loads all experts per block into GPU VRAM.</span>
+                                </div>
                             </div>
+
                             <div class="color-picker-item"
                                 style="flex-direction: column; align-items: stretch; gap: 8px;">
                                 <div style="display: flex; justify-content: space-between;">
@@ -1475,8 +1499,7 @@
                         <div class="section-title"
                             style="display: flex; align-items: center; justify-content: space-between;">
                             <span><i class="fa-solid fa-paintbrush"
-                                    style="color: var(--accent-purple); margin-right: 6px;"></i>Image Studio
-                                (Qwen-Rapid)</span>
+                                    style="color: var(--accent-purple); margin-right: 6px;"></i>Image Studio</span>
                             <span id="imageStudioMasterBadge" class="role-card-badge"
                                 style="background: rgba(139,92,246,0.15); color: var(--accent-purple); border: 1px solid rgba(139,92,246,0.3);">Checking...</span>
                         </div>
@@ -1498,16 +1521,15 @@
 
                                 <!-- Custom Path or Install Helper -->
                                 <div id="comfyActionControls"
-                                    style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
-                                    <div style="display: flex; gap: 6px;">
+                                    style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px; width: 100%; max-width: 100%; box-sizing: border-box;">
+                                    <div style="display: flex; gap: 6px; width: 100%; max-width: 100%; box-sizing: border-box; align-items: center;">
                                         <input type="text" id="customComfyPathInput" placeholder="/path/to/ComfyUI"
-                                            style="flex: 1; font-size: 0.78rem; padding: 6px 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 6px; color: var(--text-primary);">
+                                            style="flex: 1 1 0; min-width: 0; width: 100%; font-size: 0.78rem; padding: 6px 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 6px; color: var(--text-primary); box-sizing: border-box;">
                                         <button type="button" id="setComfyPathBtn" class="btn-secondary"
-                                            style="padding: 4px 10px; font-size: 0.75rem; white-space: nowrap;">Set
-                                            Path</button>
+                                            style="flex-shrink: 0; padding: 6px 12px; font-size: 0.75rem; white-space: nowrap;">Set Path</button>
                                     </div>
                                     <button type="button" id="autoSetupComfyBtn" class="btn-secondary"
-                                        style="width: 100%; justify-content: center; gap: 6px; display: flex; align-items: center; font-size: 0.78rem; padding: 6px;">
+                                        style="width: 100%; max-width: 100%; justify-content: center; gap: 6px; display: flex; align-items: center; font-size: 0.78rem; padding: 6px; box-sizing: border-box;">
                                         <i class="fa-solid fa-cloud-arrow-down"></i> Auto-Install ComfyUI to nivm/engine/
                                     </button>
                                     <div id="comfySetupProgressBox"
@@ -1555,16 +1577,16 @@
 
                                 <!-- Model Checklist -->
                                 <div
-                                    style="display: flex; flex-direction: column; gap: 4px; font-size: 0.73rem; margin-bottom: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px;">
-                                    <div style="display: flex; justify-content: space-between;"><span id="unetModelCheck">○
+                                    style="display: flex; flex-direction: column; gap: 6px; font-size: 0.73rem; margin-bottom: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%;"><span id="unetModelCheck" style="min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">○
                                             UNet (Qwen-Rapid-NSFW-v23_Q4_K.gguf)</span><span
-                                            style="color: var(--text-muted);">13.3 GB</span></div>
-                                    <div style="display: flex; justify-content: space-between;"><span id="clipModelCheck">○
-                                            Text Encoder (Qwen2.5-VL-7B-Instruct-abliterated.Q4_K_M.gguf)</span><span
-                                            style="color: var(--text-muted);">4.7 GB</span></div>
-                                    <div style="display: flex; justify-content: space-between;"><span id="vaeModelCheck">○
+                                            style="color: var(--text-muted); white-space: nowrap; flex-shrink: 0; font-family: monospace; font-size: 0.72rem; text-align: right;">13.3 GB</span></div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%;"><span id="clipModelCheck" style="min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">○
+                                            Text Encoder (Qwen2.5-VL CLIP)</span><span
+                                            style="color: var(--text-muted); white-space: nowrap; flex-shrink: 0; font-family: monospace; font-size: 0.72rem; text-align: right;">4.7 GB</span></div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%;"><span id="vaeModelCheck" style="min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">○
                                             VAE (qwen_image_vae.safetensors)</span><span
-                                            style="color: var(--text-muted);">253 MB</span></div>
+                                            style="color: var(--text-muted); white-space: nowrap; flex-shrink: 0; font-family: monospace; font-size: 0.72rem; text-align: right;">253 MB</span></div>
                                 </div>
 
                                 <!-- Verified Banner (Shown when verified, replaces download button) -->
@@ -1613,11 +1635,11 @@
                         <div class="role-config-card" style="background: rgba(0,0,0,0.25); margin-top: 10px;">
                             <div style="padding: 12px;">
                                 <div
-                                    style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-                                    <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);"><i
+                                    style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; gap: 8px;">
+                                    <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary); white-space: nowrap;"><i
                                             class="fa-solid fa-wand-magic-sparkles"
-                                            style="color: var(--accent-purple); margin-right: 6px;"></i>Anime Engine (Illustrious SDXL)</span>
-                                    <span id="animeModelsBadge" class="role-card-badge">—</span>
+                                            style="color: var(--accent-purple); margin-right: 6px;"></i>Anime Engine (Illustrious)</span>
+                                    <span id="animeModelsBadge" class="role-card-badge" style="flex-shrink: 0; white-space: nowrap;">—</span>
                                 </div>
                                 <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 10px;">
                                     Dedicated anime pipeline: Illustrious SDXL Checkpoint (6.5 GB), Fast Turbo LCM (376 MB)
@@ -1625,13 +1647,13 @@
 
                                 <!-- Anime Model Checklist -->
                                 <div
-                                    style="display: flex; flex-direction: column; gap: 4px; font-size: 0.73rem; margin-bottom: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px;">
-                                    <div style="display: flex; justify-content: space-between;"><span id="animeCkptCheck">○
+                                    style="display: flex; flex-direction: column; gap: 6px; font-size: 0.73rem; margin-bottom: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%;"><span id="animeCkptCheck" style="min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">○
                                             Checkpoint (<span id="animeCkptNameLabel">waiIllustriousSDXL_v150.safetensors</span>)</span><span
-                                            id="animeCkptSizeLabel" style="color: var(--text-muted);">6.5 GB</span></div>
-                                    <div style="display: flex; justify-content: space-between;"><span id="animeLcmCheck">○
+                                            id="animeCkptSizeLabel" style="color: var(--text-muted); white-space: nowrap; flex-shrink: 0; font-family: monospace; font-size: 0.72rem; text-align: right;">6.5 GB</span></div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%;"><span id="animeLcmCheck" style="min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">○
                                             Fast Turbo LCM (turbo_lcm_sdxl.safetensors)</span><span
-                                            id="animeLcmSizeLabel" style="color: var(--text-muted);">376 MB</span></div>
+                                            id="animeLcmSizeLabel" style="color: var(--text-muted); white-space: nowrap; flex-shrink: 0; font-family: monospace; font-size: 0.72rem; text-align: right;">376 MB</span></div>
                                 </div>
 
                                 <!-- Verified Banner (Shown when checkpoint verified) -->
@@ -1736,9 +1758,14 @@
                 <div class="settings-tab-pane hidden" id="preferencesTab">
                     <!-- User Preferences Section -->
                     <div class="settings-section" style="margin-top: 0;">
-                        <div class="section-title">User Preferences</div>
+                        <div class="section-title">Identity & Preferences</div>
+                        <div class="field-group" style="margin-bottom: 14px;">
+                            <label for="aiNameInput" id="aiNameInputLabel">What do you want to call the AI?</label>
+                            <input type="text" id="aiNameInput" placeholder="e.g. nivm, noa, or model name (default: nivm)">
+                            <span class="field-helper" style="display: block; font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">Sets the assistant's name across prompts, chat placeholders, greetings, and system instructions.</span>
+                        </div>
                         <div class="field-group">
-                            <label for="userNameInput">What should nivm call you?</label>
+                            <label for="userNameInput" id="userNameInputLabel">What should the AI call you?</label>
                             <input type="text" id="userNameInput" placeholder="Enter your name (optional)">
                             <div class="pref-quick-grid">
                                 <button type="button" class="pref-quick-btn" id="openPersonalityFromSettingsBtn"
@@ -2277,22 +2304,25 @@
                 <button class="icon-btn-sm" id="closeThemeBtn"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="window-body">
-                <!-- Typography & Layout -->
+                <!-- 1. Typography -->
                 <div class="settings-section">
-                    <div class="section-title">Typography & Layout</div>
-                    <div class="button-group-row">
-                        <button class="toggle-btn" data-width="default">Default</button>
-                        <button class="toggle-btn" data-width="full">Full Width</button>
+                    <div class="section-title"><i class="fa-solid fa-font"></i> Typography</div>
+                    <div class="typography-font-selector">
+                        <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 8px; display: block;">Font Family</label>
+                        <div class="button-group-row">
+                            <button class="toggle-btn font-family-btn active" data-font="monocraft">Monocraft</button>
+                            <button class="toggle-btn font-family-btn" data-font="opensans">Open Sans</button>
+                        </div>
                     </div>
                     <div class="color-picker-item"
-                        style="flex-direction: column; align-items: stretch; gap: 12px; margin-top: 20px;">
+                        style="flex-direction: column; align-items: stretch; gap: 10px; margin-top: 14px;">
                         <div style="display: flex; justify-content: space-between;">
                             <label for="fontSizeSlider">Font Size</label>
                             <span id="fontSizeVal" style="font-size: 0.8rem; color: var(--text-muted);">15px</span>
                         </div>
                         <input type="range" id="fontSizeSlider" class="custom-slider" min="12" max="24" value="15">
                     </div>
-                    <div class="color-picker-item" style="margin-top: 12px;">
+                    <div class="color-picker-item" style="margin-top: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                             <label for="clearTextToggle">Clear Text Highlight</label>
                             <input type="checkbox" id="clearTextToggle" class="custom-toggle">
@@ -2300,9 +2330,79 @@
                     </div>
                 </div>
 
-                <!-- Background Motion Cards (Icon + Text Below) -->
+                <div class="divider"></div>
+
+                <!-- 2. Chat Layout Width -->
                 <div class="settings-section">
-                    <div class="section-title">Animated Background</div>
+                    <div class="section-title"><i class="fa-solid fa-arrows-left-right-to-line"></i> Chat Layout</div>
+                    <div class="button-group-row">
+                        <button class="toggle-btn" data-width="default">Default Width (800px)</button>
+                        <button class="toggle-btn" data-width="full">Full Width</button>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- 3. Site Palette -->
+                <div class="settings-section">
+                    <div class="section-title"><i class="fa-solid fa-palette"></i> Site Palette</div>
+                    <div class="color-picker-item site-palette-container">
+                        <div class="site-palette-row row-2">
+                            <div class="palette-picker-col">
+                                <input type="color" id="bgTonePicker">
+                                <label>Main Background</label>
+                            </div>
+                            <div class="palette-picker-col">
+                                <input type="color" id="sidebarTonePicker">
+                                <label>Sidebar & Prompt</label>
+                            </div>
+                        </div>
+                        <div class="site-palette-row row-3">
+                            <div class="palette-picker-col">
+                                <input type="color" id="accentColorPicker" title="Primary text and highlights">
+                                <label>Main Text</label>
+                            </div>
+                            <div class="palette-picker-col">
+                                <input type="color" id="mutedColorPicker"
+                                    title="Muted text, hints, placeholders, and inactive icons">
+                                <label>Muted Text</label>
+                            </div>
+                            <div class="palette-picker-col">
+                                <input type="color" id="brandColorPicker" value="#a855f7"
+                                    title="Custom accent color (replaces default purple)">
+                                <label>Accent</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dynamic Color Cycling -->
+                <div class="settings-section" style="margin-top: -6px;">
+                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <label for="cycleAccentToggle">Cycle Accent Color</label>
+                            <input type="checkbox" id="cycleAccentToggle" class="custom-toggle">
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <label for="cycleBgToggle">Cycle Background Color</label>
+                            <input type="checkbox" id="cycleBgToggle" class="custom-toggle">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <label for="cycleSpeedSlider" style="font-size: 0.85rem;">Cycle Speed</label>
+                                <span id="cycleSpeedVal" style="font-size: 0.8rem; color: var(--text-muted);">50%</span>
+                            </div>
+                            <input type="range" id="cycleSpeedSlider" class="custom-slider" min="1" max="100"
+                                value="50">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- 4. Animated Background (12 Motion Cards in 4x3 Grid) -->
+                <div class="settings-section">
+                    <div class="section-title"><i class="fa-solid fa-wand-magic-sparkles"></i> Animated Background</div>
                     <div class="bg-motion-grid">
                         <button class="bg-motion-card active" data-motion="none"><span
                                 class="motion-label">Off</span></button>
@@ -2315,22 +2415,27 @@
 
                         <button class="bg-motion-card" data-motion="rain"><span class="motion-label">Gentle
                                 Rain</span></button>
-
                         <button class="bg-motion-card" data-motion="matrix"><span class="motion-label">Matrix
                                 Rain</span></button>
                         <button class="bg-motion-card" data-motion="jellyfish"><span
                                 class="motion-label">Jellyfish</span></button>
-
                         <button class="bg-motion-card" data-motion="fluid"><span class="motion-label">Fluid
                                 Sim</span></button>
+
                         <button class="bg-motion-card" data-motion="flowfield"><span class="motion-label">Flow
                                 Field</span></button>
+                        <button class="bg-motion-card" data-motion="circuits"><span class="motion-label">Circuit
+                                Traces</span></button>
+                        <button class="bg-motion-card" data-motion="hexgrid"><span class="motion-label">Cyber
+                                Hex</span></button>
+                        <button class="bg-motion-card" data-motion="aurora"><span class="motion-label">Aurora
+                                Waves</span></button>
                     </div>
                 </div>
 
-                <!-- Animation Settings Panel (Dynamic based on selected animation) -->
+                <!-- 5. Animation Settings Panel (Dynamic based on selected animation) -->
                 <div class="settings-section" id="animationSettingsPanel" style="display: none;">
-                    <div class="section-title">Animation Settings</div>
+                    <div class="section-title"><i class="fa-solid fa-sliders"></i> Animation Settings</div>
 
                     <!-- Flow Field Settings -->
                     <div id="flowFieldSettings" style="display: none;">
@@ -2442,63 +2547,43 @@
                                 class="custom-slider">
                         </div>
                     </div>
-                </div>
-                <div class="divider"></div>
 
-                <!-- Complete Custom Color Freedom Pickers -->
-                <div class="settings-section">
-                    <div class="section-title">Site Palette</div>
-                    <div class="color-picker-item site-palette-container">
-                        <div class="site-palette-row row-2">
-                            <div class="palette-picker-col">
-                                <input type="color" id="bgTonePicker">
-                                <label>Main Background</label>
+                    <!-- Circuit Traces Settings -->
+                    <div id="circuitsSettings" style="display: none;">
+                        <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <label style="font-size: 0.8rem;">Pulse Speed</label>
+                                <span id="circuitSpeedVal"
+                                    style="font-family: var(--font-code); font-size: 0.8rem; color: var(--text-secondary);">1.2x</span>
                             </div>
-                            <div class="palette-picker-col">
-                                <input type="color" id="sidebarTonePicker">
-                                <label>Sidebar & Prompt</label>
-                            </div>
-                        </div>
-                        <div class="site-palette-row row-3">
-                            <div class="palette-picker-col">
-                                <input type="color" id="accentColorPicker" title="Primary text and highlights">
-                                <label>Main Text</label>
-                            </div>
-                            <div class="palette-picker-col">
-                                <input type="color" id="mutedColorPicker"
-                                    title="Muted text, hints, placeholders, and inactive icons">
-                                <label>Muted Text</label>
-                            </div>
-                            <div class="palette-picker-col">
-                                <input type="color" id="brandColorPicker" value="#a855f7"
-                                    title="Custom accent color (replaces default purple)">
-                                <label>Accent</label>
-                            </div>
+                            <input type="range" id="circuitSpeedSlider" min="0.3" max="3.0" step="0.1" value="1.2"
+                                class="custom-slider">
                         </div>
                     </div>
-                </div>
 
-                <div class="divider"></div>
-
-                <!-- Dynamic Color Cycling -->
-                <div class="settings-section">
-                    <div class="section-title">Dynamic Color Cycling</div>
-                    <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 20px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <label for="cycleAccentToggle">Cycle Accent Color</label>
-                            <input type="checkbox" id="cycleAccentToggle" class="custom-toggle">
-                        </div>
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <label for="cycleBgToggle">Cycle Background Color</label>
-                            <input type="checkbox" id="cycleBgToggle" class="custom-toggle">
-                        </div>
-                        <div style="display: flex; flex-direction: column; gap: 12px; padding-top: 4px;">
+                    <!-- Cyber Hex Settings -->
+                    <div id="hexSettings" style="display: none;">
+                        <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
                             <div style="display: flex; justify-content: space-between;">
-                                <label for="cycleSpeedSlider">Cycle Speed</label>
-                                <span id="cycleSpeedVal" style="font-size: 0.8rem; color: var(--text-muted);">50%</span>
+                                <label style="font-size: 0.8rem;">Pulse Speed</label>
+                                <span id="hexSpeedVal"
+                                    style="font-family: var(--font-code); font-size: 0.8rem; color: var(--text-secondary);">1.0x</span>
                             </div>
-                            <input type="range" id="cycleSpeedSlider" class="custom-slider" min="1" max="100"
-                                value="50">
+                            <input type="range" id="hexSpeedSlider" min="0.3" max="3.0" step="0.1" value="1.0"
+                                class="custom-slider">
+                        </div>
+                    </div>
+
+                    <!-- Aurora Waves Settings -->
+                    <div id="auroraSettings" style="display: none;">
+                        <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <label style="font-size: 0.8rem;">Wave Speed</label>
+                                <span id="auroraSpeedVal"
+                                    style="font-family: var(--font-code); font-size: 0.8rem; color: var(--text-secondary);">1.0x</span>
+                            </div>
+                            <input type="range" id="auroraSpeedSlider" min="0.3" max="3.0" step="0.1" value="1.0"
+                                class="custom-slider">
                         </div>
                     </div>
                 </div>

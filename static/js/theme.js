@@ -1,191 +1,28 @@
 import { themeState, saveThemeConfig as baseSaveThemeConfig } from './state.js';
 import { dom } from './dom.js';
-import { setupFlowFieldCanvas } from './flowfield.js';
-export { setupFlowFieldCanvas };
+import {
+    setupNodesCanvas,
+    setupMatrixCanvas,
+    setupFluidCanvas,
+    setupFlowFieldCanvas,
+    setupCircuitsCanvas,
+    setupHexCanvas,
+    setupAuroraCanvas
+} from './backgrounds.js';
 
-let nodesAnimationId = null;
-let nodesArray = [];
-let matrixAnimationId = null;
+export {
+    setupNodesCanvas,
+    setupMatrixCanvas,
+    setupFluidCanvas,
+    setupFlowFieldCanvas,
+    setupCircuitsCanvas,
+    setupHexCanvas,
+    setupAuroraCanvas
+};
 
 let currentAccentHue = 0;
 let currentBgHue = 0;
 let cyclingAnimationFrame = null;
-
-// Connecting Nodes Canvas Animation Loop
-export function setupNodesCanvas() {
-    if (!dom.nodesBgCanvas) return;
-    const ctx = dom.nodesBgCanvas.getContext('2d');
-
-    function resizeCanvas() {
-        dom.nodesBgCanvas.width = window.innerWidth;
-        dom.nodesBgCanvas.height = window.innerHeight;
-        initNodes();
-    }
-
-    window.addEventListener('resize', resizeCanvas);
-    window.resizeNodesCanvas = resizeCanvas;
-    resizeCanvas();
-
-    function initNodes() {
-        nodesArray = [];
-        const count = Math.floor((dom.nodesBgCanvas.width * dom.nodesBgCanvas.height) / (themeState.nodesDensity || 25000));
-        for (let i = 0; i < count; i++) {
-            nodesArray.push({
-                x: Math.random() * dom.nodesBgCanvas.width,
-                y: Math.random() * dom.nodesBgCanvas.height,
-                vx: (Math.random() - 0.5) * 0.8,
-                vy: (Math.random() - 0.5) * 0.8,
-                radius: Math.random() * 2 + 1
-            });
-        }
-    }
-
-    function drawNodes() {
-        if (themeState.bgMotion !== 'nodes') {
-            if (nodesAnimationId) {
-                cancelAnimationFrame(nodesAnimationId);
-                nodesAnimationId = null;
-            }
-            return;
-        }
-
-        ctx.clearRect(0, 0, dom.nodesBgCanvas.width, dom.nodesBgCanvas.height);
-        const accentHex = themeState.accentColor || '#f4f4f5';
-
-        for (let i = 0; i < nodesArray.length; i++) {
-            const node = nodesArray[i];
-            node.x += node.vx;
-            node.y += node.vy;
-
-            if (node.x < 0 || node.x > dom.nodesBgCanvas.width) node.vx *= -1;
-            if (node.y < 0 || node.y > dom.nodesBgCanvas.height) node.vy *= -1;
-
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-            ctx.fillStyle = accentHex;
-            ctx.fill();
-
-            for (let j = i + 1; j < nodesArray.length; j++) {
-                const node2 = nodesArray[j];
-                const dx = node.x - node2.x;
-                const dy = node.y - node2.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                const maxDist = themeState.nodesDistance || 130;
-
-                if (dist < maxDist) {
-                    ctx.beginPath();
-                    ctx.moveTo(node.x, node.y);
-                    ctx.lineTo(node2.x, node2.y);
-                    ctx.strokeStyle = accentHex;
-                    ctx.globalAlpha = (1 - dist / maxDist) * 0.8;
-                    ctx.lineWidth = 1.2;
-                    ctx.stroke();
-                    ctx.globalAlpha = 1.0;
-                }
-            }
-        }
-
-        nodesAnimationId = requestAnimationFrame(drawNodes);
-    }
-
-    window.startNodesAnimation = function() {
-        if (!nodesAnimationId) {
-            drawNodes();
-        }
-    };
-}
-
-// Matrix Digital Rain Canvas Animation Loop
-export function setupMatrixCanvas() {
-    if (!dom.matrixBgCanvas) return;
-    const ctx = dom.matrixBgCanvas.getContext('2d');
-    
-    let width, height;
-    const fontSize = 16;
-    let columns = [];
-    let drops = [];
-    const chars = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレゲゼデベペオォコソトノホモヨョロゴゾドボポヴッン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-
-    function resizeCanvas() {
-        width = dom.matrixBgCanvas.width = window.innerWidth;
-        height = dom.matrixBgCanvas.height = window.innerHeight;
-        columns = Math.floor(width / fontSize) + 1;
-        drops = [];
-        for (let x = 0; x < columns; x++) {
-            drops[x] = 1;
-        }
-        ctx.fillStyle = themeState.bgTone || '#09090b';
-        ctx.fillRect(0, 0, width, height);
-    }
-
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
-
-    let lastDrawTime = 0;
-    const drawMatrixLoop = (timestamp) => {
-        if (themeState.bgMotion !== 'matrix') {
-            if (matrixAnimationId) {
-                cancelAnimationFrame(matrixAnimationId);
-                matrixAnimationId = null;
-            }
-            return;
-        }
-
-        const speed = themeState.matrixSpeed || 45;
-        if (timestamp - lastDrawTime < speed) {
-            matrixAnimationId = requestAnimationFrame(drawMatrixLoop);
-            return;
-        }
-        lastDrawTime = timestamp;
-
-        const accentHex = themeState.accentColor || '#f4f4f5';
-        const bgRgb = hexToRgb(themeState.bgTone || '#09090b');
-
-        const fade = themeState.matrixFade || 0.05;
-        ctx.fillStyle = `rgba(${bgRgb.r}, ${bgRgb.g}, ${bgRgb.b}, ${fade})`;
-        ctx.fillRect(0, 0, width, height);
-
-        ctx.fillStyle = accentHex;
-        ctx.font = fontSize + 'px "Fira Code", monospace';
-
-        for (let i = 0; i < drops.length; i++) {
-            const text = chars.charAt(Math.floor(Math.random() * chars.length));
-            ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-
-            if (drops[i] * fontSize > height && Math.random() > 0.975) {
-                drops[i] = 0;
-            }
-            drops[i]++;
-        }
-
-        matrixAnimationId = requestAnimationFrame(drawMatrixLoop);
-    };
-
-    window.startMatrixAnimation = function() {
-        if (!matrixAnimationId) {
-            ctx.fillStyle = themeState.bgTone || '#09090b';
-            ctx.fillRect(0, 0, width, height);
-            matrixAnimationId = requestAnimationFrame(drawMatrixLoop);
-        }
-    };
-}
-
-// WebGL Fluid Simulation Engine
-export function setupFluidCanvas() {
-    const updateFluidTheme = () => {
-        if (window.fluidConfig) {
-            const bgRgb = hexToRgb(themeState.bgTone || '#09090b');
-            window.fluidConfig.BACK_COLOR = { r: bgRgb.r, g: bgRgb.g, b: bgRgb.b };
-            if (themeState.fluidRadius !== undefined) window.fluidConfig.SPLAT_RADIUS = themeState.fluidRadius;
-            if (themeState.fluidCurl !== undefined) window.fluidConfig.CURL = themeState.fluidCurl;
-            if (themeState.fluidBloom !== undefined) window.fluidConfig.BLOOM_INTENSITY = themeState.fluidBloom;
-        }
-    };
-    updateFluidTheme();
-    window.startFluidAnimation = function() {
-        updateFluidTheme();
-    };
-}
 
 function hexToRgb(hex) {
     let r = 0, g = 0, b = 0;
@@ -416,6 +253,18 @@ export function applyThemeState() {
         dom.flowFieldBgCanvas.classList.toggle('active', themeState.bgMotion === 'flowfield');
         if (themeState.bgMotion === 'flowfield' && window.startFlowFieldAnimation) window.startFlowFieldAnimation();
     }
+    if (dom.circuitsBgCanvas) {
+        dom.circuitsBgCanvas.classList.toggle('active', themeState.bgMotion === 'circuits');
+        if (themeState.bgMotion === 'circuits' && window.startCircuitsAnimation) window.startCircuitsAnimation();
+    }
+    if (dom.hexBgCanvas) {
+        dom.hexBgCanvas.classList.toggle('active', themeState.bgMotion === 'hexgrid');
+        if (themeState.bgMotion === 'hexgrid' && window.startHexAnimation) window.startHexAnimation();
+    }
+    if (dom.auroraBgCanvas) {
+        dom.auroraBgCanvas.classList.toggle('active', themeState.bgMotion === 'aurora');
+        if (themeState.bgMotion === 'aurora' && window.startAuroraAnimation) window.startAuroraAnimation();
+    }
 
     if (window.fluidConfig) {
         const bg = hexToRgb(themeState.bgTone || '#09090b');
@@ -427,13 +276,16 @@ export function applyThemeState() {
 
     if (dom.animationSettingsPanel) {
         const motion = themeState.bgMotion;
-        const hasSettings = ['fluid', 'nodes', 'matrix', 'flowfield'].includes(motion);
+        const hasSettings = ['fluid', 'nodes', 'matrix', 'flowfield', 'circuits', 'hexgrid', 'aurora'].includes(motion);
         dom.animationSettingsPanel.style.display = hasSettings ? 'block' : 'none';
         
         if (dom.flowFieldSettings) dom.flowFieldSettings.style.display = motion === 'flowfield' ? 'block' : 'none';
         if (dom.fluidSettings) dom.fluidSettings.style.display = motion === 'fluid' ? 'block' : 'none';
         if (dom.nodesSettings) dom.nodesSettings.style.display = motion === 'nodes' ? 'block' : 'none';
         if (dom.matrixSettings) dom.matrixSettings.style.display = motion === 'matrix' ? 'block' : 'none';
+        if (dom.circuitsSettings) dom.circuitsSettings.style.display = motion === 'circuits' ? 'block' : 'none';
+        if (dom.hexSettings) dom.hexSettings.style.display = motion === 'hexgrid' ? 'block' : 'none';
+        if (dom.auroraSettings) dom.auroraSettings.style.display = motion === 'aurora' ? 'block' : 'none';
     }
 
     document.querySelectorAll('.bg-motion-card').forEach(card => {
@@ -463,6 +315,17 @@ export function applyThemeState() {
     document.documentElement.style.setProperty('--text-secondary', activeSecondaryColor);
     document.documentElement.style.setProperty('--font-size-base', `${themeState.fontSize}px`);
     
+    // Dynamic Typography Font Family
+    if (!themeState.fontFamily) themeState.fontFamily = 'monocraft';
+    const fontValue = themeState.fontFamily === 'opensans'
+        ? "'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+        : "'Monocraft', monospace";
+    document.documentElement.style.setProperty('--font-main', fontValue);
+    document.documentElement.style.setProperty('--font-chat', fontValue);
+    document.querySelectorAll('button[data-font]').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-font') === themeState.fontFamily);
+    });
+
     // Dynamic Brand Accent (Custom Purple replacement)
     const brandRgb = hexToRgb(themeState.brandColor);
     document.documentElement.style.setProperty('--accent-purple', themeState.brandColor);
@@ -517,6 +380,19 @@ export function applyThemeState() {
     if (dom.flowDensitySlider) {
         dom.flowDensitySlider.value = themeState.flowDensity || 450;
         if (dom.flowDensityVal) dom.flowDensityVal.textContent = themeState.flowDensity || 450;
+    }
+
+    if (dom.circuitSpeedSlider) {
+        dom.circuitSpeedSlider.value = themeState.circuitSpeed || 1.2;
+        if (dom.circuitSpeedVal) dom.circuitSpeedVal.textContent = (themeState.circuitSpeed || 1.2) + 'x';
+    }
+    if (dom.hexSpeedSlider) {
+        dom.hexSpeedSlider.value = themeState.hexSpeed || 1.0;
+        if (dom.hexSpeedVal) dom.hexSpeedVal.textContent = (themeState.hexSpeed || 1.0) + 'x';
+    }
+    if (dom.auroraSpeedSlider) {
+        dom.auroraSpeedSlider.value = themeState.auroraSpeed || 1.0;
+        if (dom.auroraSpeedVal) dom.auroraSpeedVal.textContent = (themeState.auroraSpeed || 1.0) + 'x';
     }
 
     if (themeState.cycleAccent || themeState.cycleBg) {

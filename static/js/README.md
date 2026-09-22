@@ -11,7 +11,8 @@ static/js/
 ├── api.js                   # Backend HTTP API client
 ├── state.js                 # Global application state and localStorage sync
 ├── dom.js                   # Cached DOM element references
-├── theme.js                 # Theme engine, canvas backgrounds, color pickers
+├── theme.js                 # Theme engine, palette calculation, color pickers
+├── backgrounds.js           # Canvas background animations (nodes, matrix, circuits, hex, aurora)
 ├── tools.js                 # Local tool definitions, parsing, and execution
 ├── voice.js                 # Voice mode stage, audio visualizer, TTS/STT
 ├── image_editor.js          # In-chat before/after sliders and image previews

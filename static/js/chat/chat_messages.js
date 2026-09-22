@@ -3,6 +3,7 @@
 import { state, saveConversations } from '../state.js';
 import { dom } from '../dom.js';
 import { tools, parseToolCall, stripToolCallFromText } from '../tools.js';
+import { normalizeThinkTags, cleanReasoningText } from '../think_tags.js';
 import { createSingleImageCard, createBeforeAfterSlider, getImageDuration, saveImageDuration } from '../image_editor.js';
 import { escapeHtml, showNotification } from '../modals/dialogs.js';
 import { openLightbox, openVideoPreview } from '../media/media_manager.js';
@@ -109,7 +110,8 @@ export function updateChatInputState(activeChat) {
         if (dom.userPrompt) {
             dom.userPrompt.disabled = true;
             if (!dom.userPrompt.dataset.originalPlaceholder) {
-                dom.userPrompt.dataset.originalPlaceholder = dom.userPrompt.placeholder || 'Message nivm...';
+                const aiName = (state.aiName || 'nivm').trim();
+                dom.userPrompt.dataset.originalPlaceholder = dom.userPrompt.placeholder || `Message ${aiName}...`;
             }
             dom.userPrompt.placeholder = 'This conversation has ended.';
         }
@@ -126,13 +128,28 @@ export function updateChatInputState(activeChat) {
             if (dom.userPrompt.dataset.originalPlaceholder) {
                 dom.userPrompt.placeholder = dom.userPrompt.dataset.originalPlaceholder;
             } else {
-                dom.userPrompt.placeholder = 'Message nivm...';
+                const aiName = (state.aiName || 'nivm').trim();
+                dom.userPrompt.placeholder = `Message ${aiName}...`;
             }
         }
         if (dom.sendBtn) dom.sendBtn.disabled = false;
         if (dom.micRecordBtn) dom.micRecordBtn.disabled = false;
         if (dom.attachImgBtn) dom.attachImgBtn.disabled = false;
         if (dom.visionToggleBtn) dom.visionToggleBtn.disabled = false;
+    }
+}
+
+export function updateAssistantNameUI() {
+    const aiName = (state.aiName || 'nivm').trim();
+    if (dom.userPrompt) {
+        dom.userPrompt.dataset.originalPlaceholder = `Ask ${aiName} anything...`;
+        if (!dom.userPrompt.disabled) {
+            dom.userPrompt.placeholder = `Ask ${aiName} anything...`;
+        }
+    }
+    const userLabel = document.getElementById('userNameInputLabel');
+    if (userLabel) {
+        userLabel.textContent = `What should ${aiName} call you?`;
     }
 }
 
@@ -933,8 +950,8 @@ function startThinkingPhraseRotation() {
     thinkPhraseIndex = Math.floor(Math.random() * thinkingPhrases.length);
     thinkPhraseInterval = setInterval(() => {
         thinkPhraseIndex = (thinkPhraseIndex + 1) % thinkingPhrases.length;
-        const el = document.querySelector('.thinking-block.is-streaming .think-status');
-        if (el) el.textContent = thinkingPhrases[thinkPhraseIndex];
+        const el = document.querySelector('.reasoning-panel.is-thinking .reasoning-title, .thinking-block.is-streaming .think-status');
+        if (el && !el.textContent.includes('·')) el.textContent = thinkingPhrases[thinkPhraseIndex];
     }, 2800);
 }
 
@@ -996,57 +1013,6 @@ export function sealUnclosedThoughts(text) {
     return `${before}<think>${body.trim()}</think>`;
 }
 
-export function updateAssistantBubble(bubbleElement, rawText, isGenerating = false, thinkStartTimeOrDuration = null) {
-    let processedText = rawText || '';
-
-    if (processedText.trim() !== '' && bubbleElement.dataset.initialStatus) {
-        delete bubbleElement.dataset.initialStatus;
-        delete bubbleElement.dataset.initialIcon;
-    }
-
-    // Strip local model self-identification prefixes (e.g. "nivm:", "nivm.", "**nivm:**", "Assistant:")
-    // Handle at start of text
-    processedText = processedText.replace(/^\*{0,2}nivm\*{0,2}[\s]*[:.!;\-–—]\s*/i, '');
-    processedText = processedText.replace(/^nivm\s*\n/i, '');
-    processedText = processedText.replace(/^\*{0,2}assistant\*{0,2}[\s]*[:.]\s*/i, '');
-    // Handle after </think> tag
-    processedText = processedText.replace(/(<\/think>\s*)\*{0,2}nivm\*{0,2}[\s]*[:.!;\-–—]\s*/i, '$1');
-    processedText = processedText.replace(/(<\/think>\s*)nivm\s*\n/i, '$1');
-    processedText = processedText.replace(/(<\/think>\s*)\*{0,2}assistant\*{0,2}[\s]*[:.]\s*/i, '$1');
-
-    // Normalize alternative thinking tags to <think>
-    processedText = processedText.replace(/<thought>/gi, '<think>').replace(/<\/thought>/gi, '</think>');
-    processedText = processedText.replace(/<reasoning>/gi, '<think>').replace(/<\/reasoning>/gi, '</think>');
-    // Strip empty thought tags so they never create ghost thinking elements or break answer splitting
-    processedText = processedText.replace(/<think>\s*<\/think>/gi, '');
-
-    // For models where <think> is prefilled by the prompt template (e.g. Spark, DeepSeek, Qwen),
-    // the generation starts directly with thought text and later emits </think>.
-    // Ensure <think> is added at the very beginning if </think> occurs before any <think>.
-    const firstOpenIdx = processedText.indexOf('<think>');
-    const firstCloseIdx = processedText.indexOf('</think>');
-    if (firstCloseIdx !== -1 && (firstOpenIdx === -1 || firstCloseIdx < firstOpenIdx)) {
-        processedText = '<think>' + processedText;
-    } else if (firstOpenIdx === -1 && firstCloseIdx === -1 && processedText.trim()) {
-        // Detect raw internal reasoning that started without tags
-        const isRawReasoning = /^\s*(?:(?:The\s+user|We\s+need\s+to|I\s+need\s+to|I\s+should|Let\s+me\s+think|Thinking\s+Process|User\s+input|User\s+says)\b|Plan:|Step\s+1:)/i.test(processedText);
-        if (isRawReasoning) {
-            processedText = '<think>' + processedText;
-        }
-    }
-
-    // If generation is complete and model forgot to output </think>, recover thoughts and separate the spoken dialogue
-    if (!isGenerating && processedText.includes('<think>') && !processedText.includes('</think>')) {
-        processedText = sealUnclosedThoughts(processedText);
-    }
-
-    // Hide and strip tool calls and decision codes from the user UI
-    processedText = stripToolCallFromText(processedText, tools);
-    processedText = processedText.replace(/\[DECISION:\s*(?:ACCEPT_RESUME|REJECT_RESUME)\]/gi, '');
-
-    let thinkingHtml = '';
-    let answerText = processedText;
-
 function deduplicateConsecutiveParagraphs(text) {
     if (!text || typeof text !== 'string') return text;
     const paragraphs = text.split(/\n\s*\n/);
@@ -1073,165 +1039,238 @@ function deduplicateConsecutiveParagraphs(text) {
     return cleanParagraphs.join('\n\n');
 }
 
-    // Keep thoughts collapsed by default unless user has manually opened it during streaming
-    const wasOpen = bubbleElement.querySelector('.thinking-block')?.open || false;
-    const openAttr = wasOpen ? ' open' : '';
+export function updateAssistantBubble(bubbleElement, rawText, isGenerating = false, thinkStartTimeOrDuration = null, liveStreamInfo = null) {
+    let processedText = rawText || '';
 
-    const thinkRegex = /<think>([\s\S]*?)<\/think>/gi;
-    const thinkMatches = [];
-    let tMatch;
-    while ((tMatch = thinkRegex.exec(processedText)) !== null) {
-        if (tMatch[1].trim()) thinkMatches.push(tMatch[1].trim());
+    if (processedText.trim() !== '' && bubbleElement.dataset.initialStatus) {
+        delete bubbleElement.dataset.initialStatus;
+        delete bubbleElement.dataset.initialIcon;
     }
 
-    if (thinkMatches.length > 0 || processedText.includes('</think>')) {
-        stopThinkingPhraseRotation();
-        
-        // If multiple think blocks or nested tags exist, the spoken answer begins strictly after the LAST </think> tag
-        const lastCloseIdx = processedText.lastIndexOf('</think>');
-        let thinkContent = '';
-        if (lastCloseIdx !== -1) {
-            const rawThoughts = processedText.substring(0, lastCloseIdx);
-            // Clean out tag wrappers from thoughts
-            thinkContent = rawThoughts.replace(/<\/?think>/gi, '').trim();
-            answerText = processedText.substring(lastCloseIdx + 8).replace(/<\/?think>/gi, '').trim();
-        } else {
-            thinkContent = thinkMatches.join('\n\n');
-            answerText = processedText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-            answerText = answerText.replace(/<think>[\s\S]*$/gi, '').replace(/<\/think>/gi, '').trim();
+    // Strip local model self-identification prefixes (e.g. "nivm:", "nivm.", "**nivm:**", "Assistant:")
+    const activeAiName = (state.aiName || 'nivm').trim();
+    const escapeRegex = (s) => s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const namePattern = (activeAiName.toLowerCase() !== 'nivm')
+        ? `${escapeRegex(activeAiName)}|nivm`
+        : 'nivm';
+    processedText = processedText.replace(new RegExp(`^\\*{0,2}(?:${namePattern})\\*{0,2}[\\s]*[:.!;\\-–—]\\s*`, 'i'), '');
+    processedText = processedText.replace(new RegExp(`^(?:${namePattern})\\s*\\n`, 'i'), '');
+    processedText = processedText.replace(/^\*{0,2}assistant\*{0,2}[\s]*[:.]\s*/i, '');
+    processedText = processedText.replace(new RegExp(`(<\\/think>\\s*)\\*{0,2}(?:${namePattern})\\*{0,2}[\\s]*[:.!;\\-–—]\\s*`, 'i'), '$1');
+    processedText = processedText.replace(new RegExp(`(<\\/think>\\s*)(?:${namePattern})\\s*\\n`, 'i'), '$1');
+    processedText = processedText.replace(/(<\/think>\s*)\*{0,2}assistant\*{0,2}[\s]*[:.]\s*/i, '$1');
+
+    // Normalize all model-specific thinking tags to <think>...</think>
+    processedText = normalizeThinkTags(processedText);
+    processedText = processedText.replace(/<think>\s*<\/think>/gi, '');
+
+    // Hide and strip tool calls and decision codes from the user UI
+    processedText = stripToolCallFromText(processedText, tools);
+    processedText = processedText.replace(/\[DECISION:\s*(?:ACCEPT_RESUME|REJECT_RESUME)\]/gi, '');
+
+    let streamPhase = 'IDLE';
+    let reasoningContent = '';
+    let spokenContent = '';
+
+    if (liveStreamInfo) {
+        streamPhase = liveStreamInfo.streamPhase || 'IDLE';
+        reasoningContent = cleanReasoningText(liveStreamInfo.reasoningBuffer || '').trim();
+        // Don't render responseBuffer as spoken content while still thinking or idle — only show it once RESPONDING
+        spokenContent = (streamPhase === 'RESPONDING' || streamPhase === 'COMPLETED') ? (liveStreamInfo.responseBuffer || '') : '';
+    } else {
+        const firstOpenIdx = processedText.indexOf('<think>');
+        const firstCloseIdx = processedText.indexOf('</think>');
+        if (firstCloseIdx !== -1 && (firstOpenIdx === -1 || firstCloseIdx < firstOpenIdx)) {
+            processedText = '<think>' + processedText;
         }
-        if (!answerText.trim() && thinkContent) {
-            // Edge case: Model concluded generation immediately after </think> without speaking any dialogue.
-            // Keep the thinking block open and clearly indicate the model only output reasoning.
-            if (!isGenerating) {
-                answerText = '<em style="opacity: 0.7; font-size: 0.9em;">(Completed thinking without spoken output)</em>';
+
+        if (!isGenerating && processedText.includes('<think>') && !processedText.includes('</think>')) {
+            processedText = sealUnclosedThoughts(processedText);
+        }
+
+        const thinkRegex = /<think>([\s\S]*?)<\/think>/gi;
+        const thinkMatches = [];
+        let tMatch;
+        while ((tMatch = thinkRegex.exec(processedText)) !== null) {
+            if (tMatch[1].trim()) thinkMatches.push(tMatch[1].trim());
+        }
+
+        if (thinkMatches.length > 0 || processedText.includes('</think>')) {
+            const lastCloseIdx = processedText.lastIndexOf('</think>');
+            if (lastCloseIdx !== -1) {
+                const rawThoughts = processedText.substring(0, lastCloseIdx);
+                reasoningContent = cleanReasoningText(rawThoughts.replace(/<\/?think>/gi, '').trim());
+                spokenContent = processedText.substring(lastCloseIdx + 8).replace(/<\/?think>/gi, '').trim();
+            } else {
+                reasoningContent = cleanReasoningText(thinkMatches.join('\n\n'));
+                spokenContent = processedText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+            }
+            streamPhase = isGenerating ? 'RESPONDING' : 'COMPLETED';
+        } else if (isGenerating && processedText.includes('<think>')) {
+            const parts = processedText.split('<think>');
+            spokenContent = parts[0].trim();
+            reasoningContent = cleanReasoningText((parts[1] || '').trim());
+            streamPhase = 'THINKING';
+        } else {
+            reasoningContent = '';
+            spokenContent = processedText.trim();
+            streamPhase = isGenerating ? 'RESPONDING' : 'COMPLETED';
+        }
+    }
+
+    spokenContent = deduplicateConsecutiveParagraphs(spokenContent);
+    spokenContent = spokenContent.replace(/<\/?think>/gi, '').trim();
+
+    const hasThoughts = Boolean(reasoningContent || streamPhase === 'THINKING');
+    let reasoningPanel = bubbleElement.querySelector('.reasoning-panel');
+
+    if (hasThoughts) {
+        if (!reasoningPanel) {
+            reasoningPanel = document.createElement('div');
+            reasoningPanel.className = 'reasoning-panel';
+            reasoningPanel.innerHTML = `
+                <div class="reasoning-header">
+                    <div class="reasoning-header-left">
+                        <span class="reasoning-icon-badge"><i class="fa-solid fa-brain"></i></span>
+                        <span class="reasoning-title">Thinking…</span>
+                    </div>
+                    <div class="reasoning-energy-rail">
+                        <div class="reasoning-energy-track">
+                            <div class="reasoning-energy-beam"></div>
+                        </div>
+                    </div>
+                    <div class="reasoning-header-right">
+                        <i class="fa-solid fa-chevron-down reasoning-toggle-btn"></i>
+                    </div>
+                </div>
+                <div class="reasoning-live-window">
+                    <div class="reasoning-live-scroll"></div>
+                </div>
+                <div class="reasoning-full-body">
+                    <div class="reasoning-body-header">
+                        <span>Reasoning Process</span>
+                        <button class="reasoning-copy-btn" type="button"><i class="fa-regular fa-copy"></i> Copy thoughts</button>
+                    </div>
+                    <div class="reasoning-body-content markdown-body"></div>
+                </div>
+            `;
+            bubbleElement.prepend(reasoningPanel);
+
+            const headerEl = reasoningPanel.querySelector('.reasoning-header');
+            headerEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                reasoningPanel.classList.toggle('is-expanded');
+                if (reasoningPanel.classList.contains('is-expanded')) {
+                    const contentEl = reasoningPanel.querySelector('.reasoning-body-content');
+                    if (contentEl && reasoningPanel._lastReasoning) {
+                        contentEl.innerHTML = window.marked ? marked.parse(reasoningPanel._lastReasoning) : escapeHtml(reasoningPanel._lastReasoning);
+                        attachCodeCopyButtons(contentEl);
+                    }
+                }
+            });
+
+            const copyBtn = reasoningPanel.querySelector('.reasoning-copy-btn');
+            copyBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const thoughtsToCopy = reasoningPanel._lastReasoning || '';
+                navigator.clipboard.writeText(thoughtsToCopy);
+                copyBtn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+                setTimeout(() => {
+                    copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i> Copy thoughts';
+                }, 2000);
+            });
+        }
+
+        reasoningPanel._lastReasoning = reasoningContent;
+
+        const titleEl = reasoningPanel.querySelector('.reasoning-title');
+        const liveScrollEl = reasoningPanel.querySelector('.reasoning-live-scroll');
+        const bodyContentEl = reasoningPanel.querySelector('.reasoning-body-content');
+
+        if (streamPhase === 'THINKING') {
+            reasoningPanel.classList.add('is-thinking');
+
+            const hasStreamText = reasoningContent.trim().length > 0;
+            reasoningPanel.classList.toggle('has-stream', hasStreamText);
+
+            const thinkDuration = resolveThinkDuration(thinkStartTimeOrDuration, true);
+            const liveSeconds = thinkDuration !== null ? `${thinkDuration.toFixed(1)}s` : '';
+            if (titleEl) {
+                titleEl.textContent = liveSeconds ? `Thinking · ${liveSeconds}` : 'Thinking…';
+            }
+
+            if (liveScrollEl) {
+                const cleanSnippet = reasoningContent.replace(/<[^>]*>/g, '').trim();
+                const lines = cleanSnippet.split('\n').filter(l => l.trim().length > 0);
+                const lastLines = lines.slice(-2).join('\n') || cleanSnippet.slice(-120);
+                liveScrollEl.textContent = lastLines;
+
+                // Auto-scroll if user is already near the bottom
+                const vp = dom.chatViewport;
+                if (vp) {
+                    const distFromBottom = vp.scrollHeight - vp.scrollTop - vp.clientHeight;
+                    if (distFromBottom < 120) {
+                        requestAnimationFrame(() => { vp.scrollTop = vp.scrollHeight; });
+                    }
+                }
+            }
+
+            if (reasoningPanel.classList.contains('is-expanded') && bodyContentEl) {
+                bodyContentEl.innerHTML = window.marked ? marked.parse(reasoningContent) : escapeHtml(reasoningContent);
+                attachCodeCopyButtons(bodyContentEl);
+            }
+        } else {
+            reasoningPanel.classList.remove('is-thinking');
+            reasoningPanel.classList.remove('has-stream');
+
+            const thinkDuration = resolveThinkDuration(thinkStartTimeOrDuration, false);
+            const durationLabel = thinkDuration !== null ? getCreativeDuration(thinkDuration) : 'Thought for a moment';
+            if (titleEl) {
+                titleEl.textContent = durationLabel;
+            }
+
+            if (bodyContentEl && (reasoningPanel.classList.contains('is-expanded') || !isGenerating)) {
+                if (bodyContentEl._renderedContent !== reasoningContent) {
+                    bodyContentEl._renderedContent = reasoningContent;
+                    bodyContentEl.innerHTML = window.marked ? marked.parse(reasoningContent) : escapeHtml(reasoningContent);
+                    attachCodeCopyButtons(bodyContentEl);
+                }
             }
         }
-        
-        if (thinkContent) {
-            const thinkDuration = resolveThinkDuration(thinkStartTimeOrDuration, isGenerating);
-            const durationLabel = thinkDuration !== null ? getCreativeDuration(thinkDuration) : 'Thought for a moment';
-            const parsedThink = window.marked ? marked.parse(thinkContent) : escapeHtml(thinkContent);
-            thinkingHtml = `
-            <details class="thinking-block"${openAttr}>
-                <summary class="thinking-summary">
-                    <div class="thinking-summary-left">
-                        <span class="think-icon-badge"><i class="fa-solid fa-brain"></i></span>
-                        <span class="think-status">${durationLabel}</span>
-                    </div>
-                    <div class="thinking-summary-right">
-                        <i class="fa-solid fa-chevron-right think-toggle-icon"></i>
-                    </div>
-                </summary>
-                <div class="thinking-content">${parsedThink}</div>
-            </details>`;
-        }
-    } else if (isGenerating && processedText.includes('<think>')) {
-        stopThinkingPhraseRotation();
-        const parts = processedText.split('<think>');
-        answerText = deduplicateConsecutiveParagraphs(parts[0].trim());
-        const streamingThinkContent = (parts[1] || '').trim();
-        const currentPhrase = thinkingPhrases[thinkPhraseIndex] || 'Thinking…';
-        const parsedStreaming = window.marked && streamingThinkContent ? marked.parse(streamingThinkContent) : escapeHtml(streamingThinkContent);
-        thinkingHtml = `
-        <details class="thinking-block is-streaming"${openAttr}>
-            <summary class="thinking-summary">
-                <div class="thinking-summary-left">
-                    <span class="think-icon-badge streaming"><i class="fa-solid fa-brain"></i></span>
-                    <span class="think-status">${currentPhrase}</span>
-                    <span class="think-stream-indicator">
-                        <span class="think-dot"></span>
-                        <span class="think-dot"></span>
-                        <span class="think-dot"></span>
-                    </span>
-                </div>
-                <div class="thinking-summary-right">
-                    <i class="fa-solid fa-chevron-right think-toggle-icon"></i>
-                </div>
-            </summary>
-            <div class="thinking-content">${parsedStreaming}</div>
-        </details>`;
-    } else if (!isGenerating && processedText.includes('<think>')) {
-        // Generation completed with an unclosed <think> tag:
-        // Automatically enclose the thoughts in a thinking dropdown so they never leak into answerText
-        stopThinkingPhraseRotation();
-        const parts = processedText.split('<think>');
-        answerText = deduplicateConsecutiveParagraphs(parts[0].trim());
-        const thinkContent = (parts[1] || '').replace(/<\/think>/gi, '').trim();
-        if (thinkContent) {
-            const thinkDuration = resolveThinkDuration(thinkStartTimeOrDuration, isGenerating);
-            const durationLabel = thinkDuration !== null ? getCreativeDuration(thinkDuration) : 'Thought for a moment';
-            const parsedThink = window.marked ? marked.parse(thinkContent) : escapeHtml(thinkContent);
-            thinkingHtml = `
-            <details class="thinking-block"${openAttr}>
-                <summary class="thinking-summary">
-                    <div class="thinking-summary-left">
-                        <span class="think-icon-badge"><i class="fa-solid fa-brain"></i></span>
-                        <span class="think-status">${durationLabel}</span>
-                    </div>
-                    <div class="thinking-summary-right">
-                        <i class="fa-solid fa-chevron-right think-toggle-icon"></i>
-                    </div>
-                </summary>
-                <div class="thinking-content">${parsedThink}</div>
-            </details>`;
-        }
-    } else if (isGenerating && processedText.trim() === '') {
-        const pendingStatus = bubbleElement.dataset.initialStatus;
-        const pendingIcon = bubbleElement.dataset.initialIcon;
-        
-        let currentPhrase;
-        let iconHtml;
-        if (pendingStatus) {
-            currentPhrase = pendingStatus;
-            iconHtml = `<i class="fa-solid ${pendingIcon || 'fa-file-lines'}"></i>`;
-        } else {
-            startThinkingPhraseRotation();
-            currentPhrase = thinkingPhrases[thinkPhraseIndex] || 'Thinking…';
-            iconHtml = '<i class="fa-solid fa-brain"></i>';
-        }
+    } else if (reasoningPanel) {
+        reasoningPanel.remove();
+    }
 
-        thinkingHtml = `
-        <div class="thinking-block is-streaming">
-            <div class="thinking-summary">
-                <div class="thinking-summary-left">
-                    <span class="think-icon-badge streaming">${iconHtml}</span>
-                    <span class="think-status">${currentPhrase}</span>
-                    <span class="think-stream-indicator">
-                        <span class="think-dot"></span>
-                        <span class="think-dot"></span>
-                        <span class="think-dot"></span>
-                    </span>
-                </div>
-            </div>
-        </div>`;
-        answerText = '';
+    let responsePanel = bubbleElement.querySelector('.response-panel');
+    if (!responsePanel) {
+        responsePanel = document.createElement('div');
+        responsePanel.className = 'response-panel markdown-body';
+        bubbleElement.appendChild(responsePanel);
+    }
+
+    if (spokenContent) {
+        const parsed = window.marked ? marked.parse(spokenContent) : escapeHtml(spokenContent);
+        if (responsePanel.innerHTML !== parsed) {
+            responsePanel.innerHTML = parsed;
+            attachCodeCopyButtons(responsePanel);
+        }
     } else {
-        stopThinkingPhraseRotation();
-        answerText = deduplicateConsecutiveParagraphs(answerText);
-    }
-
-    if (!answerText.trim()) {
-        if (isGenerating && !thinkingHtml) {
-            answerText = '<div style="opacity: 0.6; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-circle-notch fa-spin"></i> <span>Processing...</span></div>';
-        } else if (isGenerating && thinkingHtml && !thinkingHtml.includes('is-streaming')) {
-            answerText = '<div class="streaming-cursor-placeholder" style="opacity: 0.5; font-size: 0.85em; margin-top: 8px; display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-circle-notch fa-spin"></i> <span>Responding…</span></div>';
+        // Clean empty state — completely avoids printing "Responding…"
+        if (isGenerating && !hasThoughts) {
+            const pendingStatus = bubbleElement.dataset.initialStatus;
+            const pendingIcon = bubbleElement.dataset.initialIcon;
+            if (pendingStatus) {
+                responsePanel.innerHTML = `<div style="opacity: 0.6; display: flex; align-items: center; gap: 8px;"><i class="fa-solid ${pendingIcon || 'fa-circle-notch fa-spin'}"></i> <span>${escapeHtml(pendingStatus)}</span></div>`;
+            } else {
+                responsePanel.innerHTML = '<div style="opacity: 0.6; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-circle-notch fa-spin"></i> <span>Processing...</span></div>';
+            }
         } else {
-            answerText = '';
+            responsePanel.innerHTML = '';
         }
     }
 
-    let parsedAnswer = '';
-    if (window.marked && answerText) {
-        parsedAnswer = marked.parse(answerText);
-    } else if (answerText) {
-        parsedAnswer = escapeHtml(answerText);
-    }
-
-    bubbleElement.innerHTML = thinkingHtml + parsedAnswer;
-
-    // If completely blank (no thoughts and no answer), hide the empty bubble wrapper only when NOT generating
-    if (!isGenerating && !thinkingHtml && !parsedAnswer.trim()) {
+    const hasAnyContent = hasThoughts || Boolean(spokenContent.trim());
+    if (!isGenerating && !hasAnyContent) {
         bubbleElement.style.display = 'none';
         const actionsEl = bubbleElement.closest('.message-wrapper')?.querySelector('.message-actions');
         if (actionsEl) actionsEl.style.display = 'none';
@@ -1239,11 +1278,7 @@ function deduplicateConsecutiveParagraphs(text) {
         bubbleElement.style.display = '';
         const actionsEl = bubbleElement.closest('.message-wrapper')?.querySelector('.message-actions');
         if (actionsEl) {
-            if (!parsedAnswer.trim() || isGenerating) {
-                actionsEl.style.display = 'none';
-            } else {
-                actionsEl.style.display = '';
-            }
+            actionsEl.style.display = (isGenerating || !spokenContent.trim()) ? 'none' : '';
         }
     }
 

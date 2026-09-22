@@ -1,4 +1,4 @@
-# nivm — Sovereign On-Premise Multimodal AI Workbench
+# Project NIVM — Sovereign On-Premise Multimodal AI Workbench
 
 > 100% Offline • Zero Cloud Leakage • Native GGUF Acceleration • Bidirectional Neural Voice • Local Image Studio • Multimodal Vision • Air-Gapped Sentinel
 
@@ -22,7 +22,7 @@
 [![Air--Gap Verified](https://img.shields.io/badge/Air--Gap-100%25%20Verified%20Local-success.svg)]()
 
 <p align="center">
-  <img src="assets/thumbnail.png" alt="nivm — Sovereign On-Premise Multimodal AI Workbench" width="100%">
+  <img src="assets/thumbnail.png" alt="Project NIVM — Sovereign On-Premise Multimodal AI Workbench" width="100%">
 </p>
 
 ---
@@ -31,9 +31,9 @@
 
 > **Note**: This is a personal hobby project built for myself to have a fast, private, all-in-one local AI environment on my own machine—not a commercial product, SaaS, or startup. Feel free to explore, fork, or adapt it for your own personal setups.
 
-**nivm** (*Native Inference Virtual Machine*) is a fully air-gapped local AI workbench built for private technical work. It runs open-weight Large Language Models (LLMs), Vision-Language Models (VLMs), neural speech models, and diffusion image generation pipelines directly on your local hardware with verifiable zero-byte external network egress.
+**Project NIVM** (*Native Inference Virtual Machine*) is a fully air-gapped local AI workbench built for private technical work. It runs open-weight Large Language Models (LLMs), Vision-Language Models (VLMs), neural speech models, and diffusion image generation pipelines directly on your local hardware with verifiable zero-byte external network egress.
 
-From parsing multi-page technical PDFs and natural bidirectional voice conversations to agentic host terminal execution and local image synthesis, **nivm keeps 100% of your data, models, audio, and visual assets strictly on your physical machine.**
+From parsing multi-page technical PDFs and natural bidirectional voice conversations to agentic host terminal execution and local image synthesis, **Project NIVM keeps 100% of your data, models, audio, and visual assets strictly on your physical machine.**
 
 ---
 

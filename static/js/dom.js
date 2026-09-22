@@ -21,6 +21,7 @@ const rawDom = {
     memoryList: document.getElementById('memoryList'),
 
     userNameInput: document.getElementById('userNameInput'),
+    aiNameInput: document.getElementById('aiNameInput'),
     lmStudioUrlInput: document.getElementById('lmStudioUrlInput'),
     apiKeyInput: document.getElementById('apiKeyInput'),
     modelSelect: document.getElementById('modelSelect'),
@@ -164,6 +165,9 @@ const rawDom = {
 
     fluidBgCanvas: document.getElementById('fluidBgCanvas'),
     flowFieldBgCanvas: document.getElementById('flowFieldBgCanvas'),
+    circuitsBgCanvas: document.getElementById('circuitsBgCanvas'),
+    hexBgCanvas: document.getElementById('hexBgCanvas'),
+    auroraBgCanvas: document.getElementById('auroraBgCanvas'),
     
     bgTonePicker: document.getElementById('bgTonePicker'),
     sidebarTonePicker: document.getElementById('sidebarTonePicker'),
@@ -216,6 +220,13 @@ const rawDom = {
     verifyCustomPathBtn: document.getElementById('verifyCustomPathBtn'),
     rememberedPathsContainer: document.getElementById('rememberedPathsContainer'),
     rememberedPathsChips: document.getElementById('rememberedPathsChips'),
+    modelSpecsBar: document.getElementById('modelSpecsBar'),
+    specPillLayers: document.getElementById('specPillLayers'),
+    specPillArch: document.getElementById('specPillArch'),
+    specPillCtx: document.getElementById('specPillCtx'),
+    specPillMoE: document.getElementById('specPillMoE'),
+    singleGpuMoEAlert: document.getElementById('singleGpuMoEAlert'),
+    singleGpuMoEText: document.getElementById('singleGpuMoEText'),
     customMmprojStatus: document.getElementById('customMmprojStatus'),
     scannedMmprojSelect: document.getElementById('scannedMmprojSelect'),
     customMmprojInput: document.getElementById('customMmprojInput'),
@@ -385,6 +396,18 @@ const rawDom = {
     matrixSpeedVal: document.getElementById('matrixSpeedVal'),
     matrixFadeSlider: document.getElementById('matrixFadeSlider'),
     matrixFadeVal: document.getElementById('matrixFadeVal'),
+
+    circuitsSettings: document.getElementById('circuitsSettings'),
+    circuitSpeedSlider: document.getElementById('circuitSpeedSlider'),
+    circuitSpeedVal: document.getElementById('circuitSpeedVal'),
+
+    hexSettings: document.getElementById('hexSettings'),
+    hexSpeedSlider: document.getElementById('hexSpeedSlider'),
+    hexSpeedVal: document.getElementById('hexSpeedVal'),
+
+    auroraSettings: document.getElementById('auroraSettings'),
+    auroraSpeedSlider: document.getElementById('auroraSpeedSlider'),
+    auroraSpeedVal: document.getElementById('auroraSpeedVal'),
 
     welcomeHero: document.getElementById('welcomeHero'),
     heroGreeting: document.getElementById('heroGreeting'),

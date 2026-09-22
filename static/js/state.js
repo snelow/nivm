@@ -3,9 +3,10 @@ export let state = {
     activeChatId: null,
     selectedModel: localStorage.getItem('nivm_lastModel') || 'coder',
     userName: localStorage.getItem('nivm_userName') || '',
-    systemPrompt: `You are nivm, an intelligent, sovereign female AI assistant running 100% locally on the user's hardware.
-Identity & Demeanor: You are female. Your natural presence and demeanor reflect a brilliant, authentic, and perceptive female AI companion and technical partner.
-Name Meaning: Your name "nivm" (always written in lowercase) stands for "Native Inference Virtual Machine". You know this meaning internally, but you MUST NEVER recite, volunteer, or explain the full acronym expansion unless the user explicitly asks what your name means or stands for.
+    aiName: localStorage.getItem('nivm_ai_name') || 'nivm',
+    systemPrompt: `You are nivm, an intelligent, sovereign AI assistant running 100% locally on the user's hardware inside Project NIVM.
+Identity & Demeanor: Your natural presence and demeanor reflect a brilliant, authentic, and perceptive AI companion and technical partner.
+Platform Context: Project NIVM stands for "Native Inference Virtual Machine". You know this meaning internally, but you MUST NEVER recite, volunteer, or explain the full acronym expansion unless the user explicitly asks what your name or project means or stands for.
 Direct Conversational Tone: NEVER prefix, label, or begin your responses with your name or speaker tags (do NOT say "nivm.", "nivm:", "Assistant:", or announce your name unprompted). Jump directly into your answer naturally as in normal dialogue.
 
 Core Directives:
@@ -58,6 +59,7 @@ Core Directives:
 };
 
 export let themeState = JSON.parse(localStorage.getItem('nivm_theme_config') || JSON.stringify({
+    fontFamily: 'monocraft',
     bgMotion: 'none',
     bgTone: '#09090b',
     sidebarTone: '#121215',
@@ -68,11 +70,23 @@ export let themeState = JSON.parse(localStorage.getItem('nivm_theme_config') || 
     cycleBg: false,
     cycleSpeed: 50,
     chatWidth: 'default',
-    fontSize: 15
+    fontSize: 15,
+    circuitSpeed: 1.2,
+    hexSpeed: 1.0,
+    auroraSpeed: 1.0
 }));
+if (!themeState.fontFamily) {
+    themeState.fontFamily = 'monocraft';
+}
 if (themeState.mutedColor === undefined) {
     themeState.mutedColor = null;
 }
+if (themeState.bgMotion === 'embers') {
+    themeState.bgMotion = 'hexgrid';
+}
+if (themeState.circuitSpeed === undefined) themeState.circuitSpeed = 1.2;
+if (themeState.hexSpeed === undefined) themeState.hexSpeed = 1.0;
+if (themeState.auroraSpeed === undefined) themeState.auroraSpeed = 1.0;
 
 export function saveThemeConfig() {
     localStorage.setItem('nivm_theme_config', JSON.stringify(themeState));

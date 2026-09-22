@@ -8,6 +8,10 @@ import { setVisionEnabled, updateVisionAvailabilityUI, initImageStudioSettings }
 import { handleBrowseFile, openFileBrowserModal } from './file_browser.js';
 
 let scannedModelsCache = [];
+try {
+    const cachedModels = localStorage.getItem('nivm_cached_scanned_models');
+    if (cachedModels) scannedModelsCache = JSON.parse(cachedModels);
+} catch (_) {}
 let fetchModelsDebounce = null;
 
 export function setInferenceMode(mode) {
@@ -168,112 +172,257 @@ export function syncSelectWithInput(selectEl, path) {
     }
 }
 
+export function removeRememberedPath(pathToRemove) {
+    state.rememberedPaths = (state.rememberedPaths || []).filter(p => p !== pathToRemove);
+    saveApiSettings();
+    refreshScannedModelsList();
+}
+
+export function updateGpuSliderLabel(slider, valSpan, value, totalLayers) {
+    if (!valSpan) return;
+    const layers = totalLayers || (slider ? parseInt(slider.dataset.totalLayers || slider.max, 10) : 128);
+    const numVal = parseInt(value, 10);
+    if (numVal === -1) {
+        valSpan.textContent = layers > 0 && layers < 128 ? `-1 (All ${layers} Layers)` : '-1 (Max)';
+    } else if (numVal === 0) {
+        valSpan.textContent = '0 (CPU only)';
+    } else if (layers > 0 && layers < 128) {
+        const pct = Math.min(100, Math.round((numVal / layers) * 100));
+        valSpan.textContent = `${numVal} / ${layers} Layers (${pct}% GPU)`;
+    } else {
+        valSpan.textContent = String(numVal);
+    }
+}
+
+export function applyModelMetadataToUI(meta) {
+    if (!meta) return;
+
+    // 1. Update Model Specs Bar
+    if (dom.modelSpecsBar) {
+        if (meta.layers || meta.arch) {
+            dom.modelSpecsBar.classList.remove('hidden');
+            if (dom.specPillLayers) {
+                if (meta.layers) {
+                    dom.specPillLayers.classList.remove('hidden');
+                    const span = dom.specPillLayers.querySelector('span');
+                    if (span) span.textContent = `${meta.layers} Layers`;
+                } else {
+                    dom.specPillLayers.classList.add('hidden');
+                }
+            }
+            if (dom.specPillArch) {
+                if (meta.arch && meta.arch !== 'unknown') {
+                    dom.specPillArch.classList.remove('hidden');
+                    const span = dom.specPillArch.querySelector('span');
+                    if (span) span.textContent = meta.arch;
+                } else {
+                    dom.specPillArch.classList.add('hidden');
+                }
+            }
+            if (dom.specPillCtx) {
+                if (meta.context_length) {
+                    dom.specPillCtx.classList.remove('hidden');
+                    const ctxK = Math.round(meta.context_length / 1024);
+                    const span = dom.specPillCtx.querySelector('span');
+                    if (span) span.textContent = `${ctxK >= 1 ? ctxK + 'k' : meta.context_length} Ctx`;
+                } else {
+                    dom.specPillCtx.classList.add('hidden');
+                }
+            }
+            if (dom.specPillMoE) {
+                if (meta.is_moe) {
+                    dom.specPillMoE.classList.remove('hidden');
+                    const expText = meta.expert_count ? `MoE: ${meta.expert_count} Experts (${meta.expert_used_count || '?'} active)` : 'MoE Model';
+                    const span = dom.specPillMoE.querySelector('span');
+                    if (span) span.textContent = expText;
+                } else {
+                    dom.specPillMoE.classList.add('hidden');
+                }
+            }
+        } else {
+            dom.modelSpecsBar.classList.add('hidden');
+        }
+    }
+
+    // 2. Dynamically update GPU layers slider
+    if (dom.singleGpuSlider && meta.layers && meta.layers > 0) {
+        dom.singleGpuSlider.max = String(meta.layers);
+        dom.singleGpuSlider.dataset.totalLayers = String(meta.layers);
+        const currentVal = parseInt(dom.singleGpuSlider.value, 10);
+        updateGpuSliderLabel(dom.singleGpuSlider, dom.singleGpuVal, currentVal, meta.layers);
+    }
+
+    // 3. Update MoE alert banner below GPU slider
+    if (dom.singleGpuMoEAlert) {
+        if (meta.is_moe) {
+            dom.singleGpuMoEAlert.classList.remove('hidden');
+            if (dom.singleGpuMoEText) {
+                const totalExp = meta.expert_count || 'multiple';
+                const actExp = meta.expert_used_count || 'active';
+                dom.singleGpuMoEText.textContent = `MoE Architecture (${totalExp} experts, ${actExp} active/token): In llama.cpp, setting GPU layers offloads all ${totalExp} experts for those layers into VRAM.`;
+            }
+        } else {
+            dom.singleGpuMoEAlert.classList.add('hidden');
+        }
+    }
+
+    // 4. Update memory estimator
+    updateMemoryEstimator();
+}
+window.applyModelMetadataToUI = applyModelMetadataToUI;
+
+export async function fetchModelInspection(path) {
+    if (!path) return null;
+    try {
+        const res = await fetch(`/api/models/inspect?path=${encodeURIComponent(path)}`);
+        if (res.ok) {
+            const data = await res.json();
+            applyModelMetadataToUI(data);
+            return data;
+        }
+    } catch (e) {
+        console.debug('Failed to inspect model metadata:', e);
+    }
+    return null;
+}
+
+export function renderScannedDropdowns(models, remembered) {
+    if (dom.scannedGgufSelect) {
+        const currentVal = dom.customModelPathInput ? dom.customModelPathInput.value.trim() : (state.customModelPath || '');
+        dom.scannedGgufSelect.innerHTML = '<option value="">-- Select detected model --</option>';
+        let foundCurrent = false;
+
+        models.forEach(m => {
+            const isMmproj = m.filename.toLowerCase().includes('mmproj');
+            const opt = document.createElement('option');
+            opt.value = m.path;
+            const specSuffix = m.layers ? `, ${m.layers}L` : '';
+            const moeSuffix = m.is_moe ? ', MoE' : '';
+            opt.textContent = `${m.filename} (${m.size_gb} GB${specSuffix}${moeSuffix})${isMmproj ? ' [Projector]' : ''}`;
+            if (m.path === currentVal) {
+                opt.selected = true;
+                foundCurrent = true;
+                applyModelMetadataToUI(m);
+            }
+            dom.scannedGgufSelect.appendChild(opt);
+        });
+
+        if (currentVal && !foundCurrent) {
+            const opt = document.createElement('option');
+            opt.value = currentVal;
+            opt.dataset.custom = 'true';
+            opt.textContent = `Custom: ${currentVal.split('/').pop() || currentVal}`;
+            opt.selected = true;
+            dom.scannedGgufSelect.appendChild(opt);
+            fetchModelInspection(currentVal);
+        }
+        if (!currentVal) {
+            dom.scannedGgufSelect.value = '';
+        }
+    }
+
+    if (dom.scannedMmprojSelect) {
+        const currentMmproj = dom.customMmprojInput ? dom.customMmprojInput.value.trim() : (state.customMmprojPath || '');
+        dom.scannedMmprojSelect.innerHTML = '<option value="">-- None (Disabled) --</option>';
+        let foundMmproj = false;
+
+        models.forEach(m => {
+            const isMmproj = m.filename.toLowerCase().includes('mmproj');
+            const opt = document.createElement('option');
+            opt.value = m.path;
+            opt.textContent = `${m.filename} (${m.size_gb} GB)${isMmproj ? ' ★' : ''}`;
+            if (m.path === currentMmproj) {
+                opt.selected = true;
+                foundMmproj = true;
+            }
+            dom.scannedMmprojSelect.appendChild(opt);
+        });
+
+        if (currentMmproj && !foundMmproj) {
+            const opt = document.createElement('option');
+            opt.value = currentMmproj;
+            opt.dataset.custom = 'true';
+            opt.textContent = `Custom: ${currentMmproj.split('/').pop() || currentMmproj}`;
+            opt.selected = true;
+            dom.scannedMmprojSelect.appendChild(opt);
+        }
+        if (!currentMmproj) {
+            dom.scannedMmprojSelect.value = '';
+        }
+        if (dom.customMmprojCpu) {
+            dom.customMmprojCpu.disabled = !currentMmproj;
+        }
+    }
+
+    if (dom.rememberedPathsChips && dom.rememberedPathsContainer) {
+        dom.rememberedPathsChips.innerHTML = '';
+        if (Array.isArray(remembered) && remembered.length > 0) {
+            dom.rememberedPathsContainer.classList.remove('hidden');
+            remembered.forEach(p => {
+                const chip = document.createElement('div');
+                chip.className = 'path-chip';
+                const fname = p.split('/').pop();
+
+                const label = document.createElement('span');
+                label.className = 'path-chip-text';
+                label.textContent = fname;
+                label.title = p;
+                chip.appendChild(label);
+
+                const removeBtn = document.createElement('span');
+                removeBtn.className = 'path-chip-remove';
+                removeBtn.innerHTML = '&times;';
+                removeBtn.title = 'Remove from recent paths';
+                removeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    removeRememberedPath(p);
+                });
+                chip.appendChild(removeBtn);
+
+                if (dom.customModelPathInput && dom.customModelPathInput.value.trim() === p) {
+                    chip.classList.add('active');
+                }
+                chip.addEventListener('click', () => {
+                    if (dom.customModelPathInput) {
+                        dom.customModelPathInput.value = p;
+                        syncSelectWithInput(dom.scannedGgufSelect, p);
+                        verifyPathStatus(p, dom.customModelPathStatus);
+                        saveApiSettings();
+                        document.querySelectorAll('.path-chip').forEach(c => c.classList.remove('active'));
+                        chip.classList.add('active');
+                    }
+                });
+                dom.rememberedPathsChips.appendChild(chip);
+            });
+        } else {
+            dom.rememberedPathsContainer.classList.add('hidden');
+        }
+    }
+
+    if (dom.customModelPathInput && dom.customModelPathStatus) {
+        verifyPathStatus(dom.customModelPathInput.value.trim(), dom.customModelPathStatus);
+    }
+    if (dom.customMmprojInput && dom.customMmprojStatus) {
+        verifyPathStatus(dom.customMmprojInput.value.trim(), dom.customMmprojStatus, true);
+    }
+}
+
 export async function refreshScannedModelsList() {
+    // 1. Immediately render cached models on frame 0 to avoid empty UI
+    if (scannedModelsCache && scannedModelsCache.length > 0 && dom.scannedGgufSelect && dom.scannedGgufSelect.options.length <= 1) {
+        renderScannedDropdowns(scannedModelsCache, state.rememberedPaths || []);
+    }
+
     try {
         const data = await scanLocalGgufs();
         scannedModelsCache = data.models || [];
+        try {
+            localStorage.setItem('nivm_cached_scanned_models', JSON.stringify(scannedModelsCache));
+        } catch (_) {}
         const remembered = data.remembered_paths || state.rememberedPaths || [];
         state.rememberedPaths = remembered;
 
-        if (dom.scannedGgufSelect) {
-            const currentVal = dom.customModelPathInput ? dom.customModelPathInput.value.trim() : (state.customModelPath || '');
-            dom.scannedGgufSelect.innerHTML = '<option value="">-- Select detected model --</option>';
-            let foundCurrent = false;
-
-            scannedModelsCache.forEach(m => {
-                const isMmproj = m.filename.toLowerCase().includes('mmproj');
-                const opt = document.createElement('option');
-                opt.value = m.path;
-                opt.textContent = `${m.filename} (${m.size_gb} GB)${isMmproj ? ' [Projector]' : ''}`;
-                if (m.path === currentVal) {
-                    opt.selected = true;
-                    foundCurrent = true;
-                }
-                dom.scannedGgufSelect.appendChild(opt);
-            });
-
-            if (currentVal && !foundCurrent) {
-                const opt = document.createElement('option');
-                opt.value = currentVal;
-                opt.dataset.custom = 'true';
-                opt.textContent = `Custom: ${currentVal.split('/').pop() || currentVal}`;
-                opt.selected = true;
-                dom.scannedGgufSelect.appendChild(opt);
-            }
-            if (!currentVal) {
-                dom.scannedGgufSelect.value = '';
-            }
-        }
-
-        if (dom.scannedMmprojSelect) {
-            const currentMmproj = dom.customMmprojInput ? dom.customMmprojInput.value.trim() : (state.customMmprojPath || '');
-            dom.scannedMmprojSelect.innerHTML = '<option value="">-- None (Disabled) --</option>';
-            let foundMmproj = false;
-
-            scannedModelsCache.forEach(m => {
-                const isMmproj = m.filename.toLowerCase().includes('mmproj');
-                const opt = document.createElement('option');
-                opt.value = m.path;
-                opt.textContent = `${m.filename} (${m.size_gb} GB)${isMmproj ? ' ★' : ''}`;
-                if (m.path === currentMmproj) {
-                    opt.selected = true;
-                    foundMmproj = true;
-                }
-                dom.scannedMmprojSelect.appendChild(opt);
-            });
-
-            if (currentMmproj && !foundMmproj) {
-                const opt = document.createElement('option');
-                opt.value = currentMmproj;
-                opt.dataset.custom = 'true';
-                opt.textContent = `Custom: ${currentMmproj.split('/').pop() || currentMmproj}`;
-                opt.selected = true;
-                dom.scannedMmprojSelect.appendChild(opt);
-            }
-            if (!currentMmproj) {
-                dom.scannedMmprojSelect.value = '';
-            }
-            if (dom.customMmprojCpu) {
-                dom.customMmprojCpu.disabled = !currentMmproj;
-            }
-        }
-
-        if (dom.rememberedPathsChips && dom.rememberedPathsContainer) {
-            dom.rememberedPathsChips.innerHTML = '';
-            if (remembered.length > 0) {
-                dom.rememberedPathsContainer.classList.remove('hidden');
-                remembered.forEach(p => {
-                    const chip = document.createElement('div');
-                    chip.className = 'path-chip';
-                    const fname = p.split('/').pop();
-                    chip.textContent = fname;
-                    chip.title = p;
-                    if (dom.customModelPathInput && dom.customModelPathInput.value.trim() === p) {
-                        chip.classList.add('active');
-                    }
-                    chip.addEventListener('click', () => {
-                        if (dom.customModelPathInput) {
-                            dom.customModelPathInput.value = p;
-                            syncSelectWithInput(dom.scannedGgufSelect, p);
-                            verifyPathStatus(p, dom.customModelPathStatus);
-                            saveApiSettings();
-                            document.querySelectorAll('.path-chip').forEach(c => c.classList.remove('active'));
-                            chip.classList.add('active');
-                        }
-                    });
-                    dom.rememberedPathsChips.appendChild(chip);
-                });
-            } else {
-                dom.rememberedPathsContainer.classList.add('hidden');
-            }
-        }
-
-        if (dom.customModelPathInput && dom.customModelPathStatus) {
-            verifyPathStatus(dom.customModelPathInput.value.trim(), dom.customModelPathStatus);
-        }
-        if (dom.customMmprojInput && dom.customMmprojStatus) {
-            verifyPathStatus(dom.customMmprojInput.value.trim(), dom.customMmprojStatus, true);
-        }
+        renderScannedDropdowns(scannedModelsCache, remembered);
     } catch (err) {
         console.warn('Failed to refresh scanned models:', err);
     }
@@ -284,12 +433,18 @@ export async function verifyPathStatus(path, statusEl, isOptional = false) {
     if (!path) {
         statusEl.textContent = isOptional ? 'None' : 'No file selected';
         statusEl.className = 'file-status-pill status-unknown';
+        if (!isOptional) {
+            applyModelMetadataToUI({ layers: null, arch: null, is_moe: false });
+        }
         return;
     }
-    const foundInCache = scannedModelsCache.find(m => m.path === path);
+    const foundInCache = scannedModelsCache.find(m => m.path === path || m.filename === path.split('/').pop());
     if (foundInCache) {
         statusEl.textContent = `Found (${foundInCache.size_gb} GB)`;
         statusEl.className = 'file-status-pill status-found';
+        if (!isOptional) {
+            applyModelMetadataToUI(foundInCache);
+        }
         return;
     }
     statusEl.textContent = 'Checking...';
@@ -299,13 +454,19 @@ export async function verifyPathStatus(path, statusEl, isOptional = false) {
         if (check.exists) {
             statusEl.textContent = `Found (${check.size_gb} GB)`;
             statusEl.className = 'file-status-pill status-found';
+            if (!isOptional) {
+                fetchModelInspection(path);
+            }
         } else {
             statusEl.textContent = check.is_directory ? 'Directory' : 'Not found';
             statusEl.className = 'file-status-pill status-missing';
+            if (!isOptional) {
+                applyModelMetadataToUI({ layers: null, arch: null, is_moe: false });
+            }
         }
     } catch (e) {
-        statusEl.textContent = 'Custom Path';
-        statusEl.className = 'file-status-pill status-unknown';
+        statusEl.textContent = 'Error';
+        statusEl.className = 'file-status-pill status-missing';
     }
 }
 
@@ -321,7 +482,7 @@ export async function handleUnloadAllModels(triggerBtn) {
         state.isModelLoaded = false;
 
         if (dom.engineStatusText) {
-            dom.engineStatusText.textContent = 'Status: All Unloaded';
+            dom.engineStatusText.textContent = 'Ready';
             dom.engineStatusText.style.color = 'var(--text-tertiary)';
         }
         if (dom.smartToggleBtn) {
@@ -363,7 +524,7 @@ export async function refreshEngineStatusUI() {
                     if (dom.smartToggleBtn) dom.smartToggleBtn.classList.add('is-loaded');
                     if (dom.smartToggleLabel) dom.smartToggleLabel.textContent = 'Unload';
                 } else {
-                    dom.engineStatusText.textContent = 'Not Loaded';
+                    dom.engineStatusText.textContent = 'Ready';
                     dom.engineStatusText.style.color = 'var(--text-tertiary)';
                     if (dom.smartToggleBtn) dom.smartToggleBtn.classList.remove('is-loaded');
                     if (dom.smartToggleLabel) dom.smartToggleLabel.textContent = 'Load Engine';
@@ -376,6 +537,9 @@ export async function refreshEngineStatusUI() {
 
             if (data.hardware) {
                 state.hardwareInfo = data.hardware;
+                try {
+                    localStorage.setItem('nivm_cached_hardware', JSON.stringify(data.hardware));
+                } catch (_) {}
                 if (dom.engineHardwareSub) {
                     if (data.hardware.gpu_available && data.hardware.vram_total_gb > 0) {
                         let name = (data.hardware.gpu_name || 'GPU')
@@ -425,6 +589,12 @@ export function updateMemoryEstimator() {
     if (dom.memoryEstimatorCard) dom.memoryEstimatorCard.classList.remove('hidden');
 
     if (!dom.estVramVal || !dom.totalVramVal) return;
+    if (!state.hardwareInfo) {
+        try {
+            const cachedHw = localStorage.getItem('nivm_cached_hardware');
+            if (cachedHw) state.hardwareInfo = JSON.parse(cachedHw);
+        } catch (_) {}
+    }
     const hw = state.hardwareInfo;
     if (!hw) {
         if (dom.engineHardwareSub) dom.engineHardwareSub.textContent = 'Detecting hardware...';
@@ -509,11 +679,13 @@ export function updateMemoryEstimator() {
     // 2. Weights split between GPU and RAM
     let weightsVram = 0;
     let weightsRam = 0;
-    const offloadRatio = (gpuLayers === -1 || gpuLayers >= 64) ? 1.0 : Math.min(1.0, Math.max(0.0, gpuLayers / 32));
+    const totalLayers = (dom.singleGpuSlider && parseInt(dom.singleGpuSlider.dataset.totalLayers || dom.singleGpuSlider.max, 10)) || 32;
+    const effectiveLayers = (totalLayers > 0 && totalLayers < 128) ? totalLayers : 32;
+    const offloadRatio = (gpuLayers === -1 || gpuLayers >= effectiveLayers) ? 1.0 : Math.min(1.0, Math.max(0.0, gpuLayers / effectiveLayers));
     if (!isGpu || gpuLayers === 0) {
         weightsVram = 0;
         weightsRam = modelSizeGb;
-    } else if (gpuLayers === -1 || gpuLayers >= 64) {
+    } else if (gpuLayers === -1 || gpuLayers >= effectiveLayers) {
         weightsVram = modelSizeGb;
         weightsRam = 0;
     } else {
@@ -804,6 +976,28 @@ export function openSettingsForModelLoad(targetTab = 'inference') {
 window.openSettingsForModelLoad = openSettingsForModelLoad;
 
 export function setupSettingsUI() {
+    // Immediate hardware hydration from localStorage on frame 0
+    if (!state.hardwareInfo) {
+        try {
+            const cachedHw = localStorage.getItem('nivm_cached_hardware');
+            if (cachedHw) {
+                state.hardwareInfo = JSON.parse(cachedHw);
+                if (dom.engineHardwareSub && state.hardwareInfo) {
+                    if (state.hardwareInfo.gpu_available && state.hardwareInfo.vram_total_gb > 0) {
+                        let name = (state.hardwareInfo.gpu_name || 'GPU')
+                            .replace(/^NVIDIA\s+(GeForce\s+)?/i, '')
+                            .replace(/\s+(Laptop\s+)?GPU/i, '')
+                            .trim();
+                        if (name.length > 22) name = name.slice(0, 21) + '…';
+                        dom.engineHardwareSub.textContent = name;
+                    } else {
+                        dom.engineHardwareSub.textContent = 'CPU Mode';
+                    }
+                }
+            }
+        } catch (_) {}
+    }
+
     const roleSliderSetup = [
         ['router', 'Gpu', true], ['router', 'Ctx', false], ['router', 'Batch', false],
         ['coder', 'Gpu', true], ['coder', 'Ctx', false], ['coder', 'Batch', false],
@@ -815,7 +1009,12 @@ export function setupSettingsUI() {
         const val = dom[prefix + suffix + 'Val'];
         if (slider && val) {
             slider.addEventListener('input', () => {
-                val.textContent = isGpu && slider.value == -1 ? '-1 (Max)' : slider.value;
+                if (isGpu) {
+                    const totalLayers = parseInt(slider.dataset.totalLayers || slider.max, 10);
+                    updateGpuSliderLabel(slider, val, slider.value, totalLayers);
+                } else {
+                    val.textContent = slider.value;
+                }
             });
         }
     });
@@ -990,6 +1189,12 @@ export function setupSettingsUI() {
             const val = dom.scannedGgufSelect.value.trim();
             if (dom.customModelPathInput) dom.customModelPathInput.value = val;
             verifyPathStatus(val, dom.customModelPathStatus);
+            const foundMeta = scannedModelsCache.find(m => m.path === val);
+            if (foundMeta) {
+                applyModelMetadataToUI(foundMeta);
+            } else if (val) {
+                fetchModelInspection(val);
+            }
             saveApiSettings();
         });
     }
@@ -999,6 +1204,12 @@ export function setupSettingsUI() {
             const val = dom.customModelPathInput.value.trim();
             syncSelectWithInput(dom.scannedGgufSelect, val);
             verifyPathStatus(val, dom.customModelPathStatus);
+            const foundMeta = scannedModelsCache.find(m => m.path === val || m.filename === val.split('/').pop());
+            if (foundMeta) {
+                applyModelMetadataToUI(foundMeta);
+            } else if (val) {
+                fetchModelInspection(val);
+            }
             saveApiSettings();
         });
     }
@@ -1008,6 +1219,12 @@ export function setupSettingsUI() {
             if (dom.customModelPathInput) dom.customModelPathInput.value = '';
             if (dom.scannedGgufSelect) dom.scannedGgufSelect.value = '';
             verifyPathStatus('', dom.customModelPathStatus);
+            applyModelMetadataToUI({ layers: null, arch: null, is_moe: false });
+            if (dom.singleGpuSlider) {
+                dom.singleGpuSlider.max = '128';
+                delete dom.singleGpuSlider.dataset.totalLayers;
+                updateGpuSliderLabel(dom.singleGpuSlider, dom.singleGpuVal, dom.singleGpuSlider.value, 128);
+            }
             saveApiSettings();
         });
     }
@@ -1106,7 +1323,7 @@ export function setupSettingsUI() {
                         icon: 'fa-bolt'
                     });
                 } else {
-                    dom.engineStatusText.textContent = 'Not Loaded';
+                    dom.engineStatusText.textContent = 'Ready';
                     dom.engineStatusText.style.color = 'var(--text-tertiary)';
                     dom.smartToggleBtn.classList.remove('is-loaded');
                     dom.smartToggleLabel.textContent = 'Load Engine';

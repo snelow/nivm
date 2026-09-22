@@ -982,3 +982,29 @@
     height: 100vh;
 }
 
+/* Circuit Traces Canvas */
+.circuits-layer {
+    width: 100vw;
+    height: 100vh;
+}
+.circuits-layer.active {
+    opacity: 0.95;
+}
+
+/* Cyber Hex Canvas */
+.hex-layer {
+    width: 100vw;
+    height: 100vh;
+}
+.hex-layer.active {
+    opacity: 0.95;
+}
+
+/* Aurora Waves Canvas */
+.aurora-layer {
+    width: 100vw;
+    height: 100vh;
+}
+.aurora-layer.active {
+    opacity: 0.9;
+}

@@ -1,72 +1,89 @@
 /* -----------------------------------------
-   Thinking Block (Refined & Collapsible)
+   Reasoning Panel (Neural Shimmer Glass)
+   Theme-Adaptive with site customizable UI colors
 ----------------------------------------- */
+.reasoning-panel,
 .thinking-block {
-    margin: 2px 0 6px 0;
+    margin: 4px 0 10px 0;
     width: fit-content;
     max-width: 100%;
-    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-    border-radius: var(--radius-md);
-    background: rgba(var(--bg-surface-rgb, 18, 18, 21), 0.6);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.25);
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(var(--bg-surface-rgb, 18, 18, 21), 0.85) 0%, rgba(var(--bg-surface-rgb, 18, 18, 21), 0.7) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     overflow: hidden;
-    transition: all var(--transition-fast);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
     display: inline-block;
-    box-shadow: var(--shadow-subtle, 0 2px 12px rgba(0, 0, 0, 0.15));
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    position: relative;
+    user-select: none;
+    box-sizing: border-box;
 }
 
+.reasoning-panel:hover,
 .thinking-block:hover {
-    border-color: var(--border-focus, rgba(255, 255, 255, 0.25));
-    background: rgba(var(--bg-surface-rgb, 18, 18, 21), 0.75);
+    border-color: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.5);
+    background: linear-gradient(135deg, rgba(var(--bg-surface-rgb, 18, 18, 21), 0.95) 0%, rgba(var(--bg-surface-rgb, 18, 18, 21), 0.85) 100%);
+    box-shadow: 0 4px 20px rgba(var(--accent-purple-rgb, 168, 85, 247), 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
+.reasoning-panel.is-expanded,
 .thinking-block[open] {
     display: block;
     width: 100%;
     margin: 6px 0 12px 0;
-    border-color: var(--border-focus, rgba(255, 255, 255, 0.25));
-    background: rgba(var(--bg-surface-rgb, 18, 18, 21), 0.75);
-    box-shadow: var(--shadow-subtle, 0 4px 20px rgba(0, 0, 0, 0.25));
+    border-color: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.4);
+    background: rgba(var(--bg-surface-rgb, 18, 18, 21), 0.92);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-.thinking-block + p,
-.thinking-block + div,
-.thinking-block + pre,
-.thinking-block + ul,
-.thinking-block + ol,
-.thinking-block + blockquote,
-.thinking-block + table {
-    margin-top: 8px !important;
+/* Active Thinking State with Neural Shimmer Beam */
+.reasoning-panel.is-thinking,
+.thinking-block.is-streaming {
+    min-width: 260px;
+    max-width: min(540px, 100%);
+    width: 100%;
+    border-color: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.55);
+    box-shadow: 0 4px 24px rgba(var(--accent-purple-rgb, 168, 85, 247), 0.25), 0 0 0 1px rgba(var(--accent-purple-rgb, 168, 85, 247), 0.2);
 }
 
-.thinking-block summary,
-.thinking-block .thinking-summary {
-    min-height: 32px;
-    height: 32px;
-    padding: 0 11px;
+
+
+.reasoning-header,
+.thinking-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 12px;
     cursor: pointer;
     font-size: 0.8rem;
     color: var(--text-primary);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    user-select: none;
-    transition: all var(--transition-fast);
-    list-style: none;
+    position: relative;
+    z-index: 2;
     box-sizing: border-box;
-}
-
-.thinking-block[open] summary,
-.thinking-block[open] .thinking-summary {
     width: 100%;
-    justify-content: space-between;
+    list-style: none;
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .thinking-block summary::-webkit-details-marker {
     display: none;
 }
 
+.reasoning-panel:focus,
+.reasoning-panel:focus-visible,
+.thinking-block:focus,
+.thinking-block:focus-visible,
+.reasoning-header:focus,
+.reasoning-header:focus-visible,
+.thinking-summary:focus,
+.thinking-summary:focus-visible {
+    outline: none !important;
+}
+
+.reasoning-header-left,
 .thinking-summary-left {
     display: inline-flex;
     align-items: center;
@@ -75,139 +92,325 @@
     line-height: 1;
 }
 
+.reasoning-header-right,
 .thinking-summary-right {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    color: var(--text-primary);
-    opacity: 0.7;
-    margin-left: 6px;
+    margin-left: auto;
+    color: var(--accent-purple, #a855f7);
+    opacity: 0.8;
     line-height: 1;
 }
 
-.thinking-block[open] .thinking-summary-right {
-    margin-left: auto;
-}
-
+.reasoning-icon-badge,
 .think-icon-badge {
     width: 22px;
     height: 22px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 6px;
-    background: rgba(var(--bg-surface-rgb, 18, 18, 21), 0.5);
-    color: var(--text-primary);
-    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
-    font-size: 0.76rem;
+    border-radius: 7px;
+    background: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.18);
+    color: var(--accent-purple, #c084fc);
+    border: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.35);
+    font-size: 0.74rem;
     flex-shrink: 0;
     line-height: 1;
     box-sizing: border-box;
-    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+    transition: all 0.2s ease;
 }
 
-.think-icon-badge i {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 1;
-    vertical-align: 0;
-}
-
-.thinking-block:hover .think-icon-badge {
-    border-color: var(--border-focus, rgba(255, 255, 255, 0.25));
-}
-
+.reasoning-panel.is-thinking .reasoning-icon-badge,
 .think-icon-badge.streaming {
-    background: rgba(var(--bg-surface-rgb, 18, 18, 21), 0.8);
-    border-color: var(--border-focus, rgba(255, 255, 255, 0.3));
-    animation: thinkIconPulse 1.8s ease-in-out infinite alternate;
+    background: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.28);
+    border-color: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.65);
+    color: var(--accent-purple, #d8b4fe);
+    animation: iconBreathe 2s ease-in-out infinite alternate;
 }
 
-@keyframes thinkIconPulse {
-    from {
+@keyframes iconBreathe {
+    0% {
         transform: scale(0.96);
+        box-shadow: 0 0 6px rgba(var(--accent-purple-rgb, 168, 85, 247), 0.25);
     }
-    to {
+    100% {
         transform: scale(1.06);
+        box-shadow: 0 0 16px rgba(var(--accent-purple-rgb, 168, 85, 247), 0.6);
     }
 }
 
+.reasoning-title,
 .think-status {
-    display: inline-flex;
-    align-items: center;
-    line-height: 1;
+    font-size: 0.78rem;
     font-weight: 500;
     color: var(--text-primary);
-    opacity: 0.9;
     letter-spacing: 0.01em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    transition: opacity var(--transition-fast);
-}
-
-.thinking-block:hover .think-status {
-    opacity: 1;
-}
-
-.think-toggle-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
     line-height: 1;
-    font-size: 0.72rem;
-    color: var(--text-primary);
-    opacity: 0.65;
-    vertical-align: 0;
-    transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1), opacity var(--transition-fast);
 }
 
-.thinking-block summary:hover .think-toggle-icon {
-    opacity: 1;
-}
-
-.thinking-block[open] .think-toggle-icon {
-    transform: rotate(90deg);
-}
-
-/* Streaming live indicator dots */
-.think-stream-indicator {
-    display: inline-flex;
+/* Full-Length Energy Synapse Rail while Thinking */
+.reasoning-energy-rail {
+    flex: 1;
+    min-width: 40px;
+    margin: 0 12px;
+    display: none;
     align-items: center;
-    gap: 3.5px;
-    margin-left: 2px;
+    position: relative;
+    height: 12px;
 }
 
-.think-dot {
-    width: 3.5px;
-    height: 3.5px;
-    border-radius: 50%;
-    background-color: var(--accent-purple, #a855f7);
-    opacity: 0.4;
-    animation: thinkDotBlink 1.4s infinite ease-in-out both;
-}
-.think-dot:nth-child(1) { animation-delay: -0.32s; }
-.think-dot:nth-child(2) { animation-delay: -0.16s; }
-
-@keyframes thinkDotBlink {
-    0%, 80%, 100% { opacity: 0.3; transform: scale(0.85); }
-    40% { opacity: 1; transform: scale(1.25); }
+.reasoning-panel.is-thinking .reasoning-energy-rail {
+    display: flex;
 }
 
-/* Thinking Content Area */
+.reasoning-energy-track {
+    width: 100%;
+    height: 2.5px;
+    border-radius: 999px;
+    background: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.16);
+    position: relative;
+    overflow: hidden;
+}
+
+.reasoning-energy-beam,
+.reasoning-energy-runner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 36%;
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(var(--accent-purple-rgb, 168, 85, 247), 0.2) 20%,
+        rgba(var(--accent-purple-rgb, 168, 85, 247), 0.7) 60%,
+        var(--accent-purple, #a855f7) 85%,
+        #ffffff 94%,
+        var(--accent-purple, #a855f7) 100%
+    );
+    filter: drop-shadow(0 0 6px var(--accent-purple, #a855f7));
+    will-change: transform;
+    animation: seamlessLaserGlide 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes seamlessLaserGlide {
+    0% {
+        transform: translateX(-140%);
+    }
+    100% {
+        transform: translateX(380%);
+    }
+}
+
+.reasoning-toggle-btn,
+.think-toggle-icon {
+    font-size: 0.68rem;
+    color: var(--accent-purple, #a855f7);
+    opacity: 0.8;
+    transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+
+.reasoning-panel.is-expanded .reasoning-toggle-btn,
+.thinking-block[open] .think-toggle-icon {
+    transform: rotate(180deg);
+}
+
+/* 2-Line Rolling Window while Thinking */
+.reasoning-live-window,
+.think-live-preview {
+    width: 100%;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    padding: 0 12px;
+    border-top: 1px solid transparent;
+    transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                padding 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 0.2s ease;
+    mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.9) 32%, black 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.9) 32%, black 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    position: relative;
+    z-index: 2;
+    box-sizing: border-box;
+    pointer-events: none;
+}
+
+/* Only when thought tokens start streaming, smoothly expand the 2-line window */
+.reasoning-panel.is-thinking.has-stream .reasoning-live-window,
+.thinking-block.is-streaming.has-stream .think-live-preview {
+    max-height: 88px;
+    opacity: 1 !important;
+    padding: 6px 12px;
+    border-top-color: var(--border-subtle, rgba(255, 255, 255, 0.07));
+}
+
+.reasoning-panel.is-expanded .reasoning-live-window,
+.reasoning-panel:not(.is-thinking) .reasoning-live-window,
+.thinking-block[open] .think-live-preview,
+.thinking-block:not(.is-streaming) .think-live-preview {
+    max-height: 0 !important;
+    opacity: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    border-top-color: transparent !important;
+    transition: max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1), padding 0.25s ease !important;
+}
+
+.reasoning-live-scroll,
+.think-preview-inner {
+    margin-top: auto;
+    font-family: var(--font-mono, 'Consolas', monospace);
+    font-size: 0.72rem;
+    line-height: 1.35;
+    color: var(--text-secondary);
+    word-break: break-word;
+    white-space: pre-wrap;
+    transition: transform 0.1s ease-out;
+}
+
+/* Full Expanded Reasoning Body */
+.reasoning-full-body,
 .thinking-content {
-    border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-    background: rgba(var(--bg-surface-rgb, 18, 18, 21), 0.45);
-    padding: 14px 18px;
-    max-height: 440px;
+    display: none;
+    padding: 10px 14px 14px 14px;
+    border-top: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.12);
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    background: rgba(0, 0, 0, 0.2);
+    max-height: 460px;
     overflow-y: auto;
-    font-size: 0.86rem;
+    font-size: 0.82rem;
     line-height: 1.62;
     color: var(--text-primary);
-    opacity: 0.92;
+    user-select: text;
     position: relative;
-    border-left: 2px solid var(--border-focus, rgba(255, 255, 255, 0.3));
+    z-index: 2;
+    box-sizing: border-box;
+}
+
+.reasoning-full-body::-webkit-scrollbar,
+.thinking-content::-webkit-scrollbar {
+    width: 5px;
+}
+
+.reasoning-full-body::-webkit-scrollbar-track,
+.thinking-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.reasoning-full-body::-webkit-scrollbar-thumb,
+.thinking-content::-webkit-scrollbar-thumb {
+    background: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.25);
+    border-radius: 4px;
+}
+
+.reasoning-full-body::-webkit-scrollbar-thumb:hover,
+.thinking-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.5);
+}
+
+.reasoning-panel.is-expanded .reasoning-full-body,
+.thinking-block[open] .thinking-content {
+    display: block;
+}
+
+.reasoning-body-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    padding: 2px 2px 6px 2px;
+}
+
+.reasoning-body-content {
+    position: relative;
+    padding: 4px 2px 2px 2px;
+    border: none;
+    font-size: 0.82rem;
+    line-height: 1.65;
+    color: var(--text-secondary);
+}
+
+.reasoning-body-content p {
+    margin-bottom: 8px;
+}
+
+.reasoning-body-content p:last-child {
+    margin-bottom: 0;
+}
+
+.reasoning-copy-btn {
+    background: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.08);
+    border: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.22);
+    color: var(--text-secondary);
+    border-radius: 6px;
+    padding: 3px 9px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s ease;
+}
+
+.reasoning-copy-btn:hover {
+    background: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.22);
+    border-color: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.5);
+    color: var(--text-primary);
+    box-shadow: 0 0 10px rgba(var(--accent-purple-rgb, 168, 85, 247), 0.25);
+}
+
+/* Response Panel & Streaming Indicator */
+.response-panel {
+    width: 100%;
+    line-height: 1.8;
+}
+
+.response-panel:empty {
+    display: none;
+}
+
+.response-streaming-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-top: 6px;
+    padding: 4px 10px;
+    background: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.08);
+    border: 1px solid rgba(var(--accent-purple-rgb, 168, 85, 247), 0.16);
+    border-radius: 8px;
+    width: fit-content;
+}
+
+.response-streaming-indicator .pulse-indicator-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-purple, #c084fc);
+    box-shadow: 0 0 8px var(--accent-purple-glow, rgba(168, 85, 247, 0.5));
+    animation: pulseDot 1.2s infinite ease-in-out;
+}
+
+@keyframes pulseDot {
+    0%, 100% { opacity: 0.35; transform: scale(0.85); }
+    50% { opacity: 1; transform: scale(1.15); }
 }
 
 .thinking-content p,

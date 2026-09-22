@@ -12,12 +12,12 @@ import { showAlert, showNotification } from '../modals/dialogs.js';
 import { populateStatsModal } from '../modals/tools_settings.js';
 import { openCreatorModal } from '../extras.js';
 import { saveImageDuration } from '../image_editor.js';
+import { normalizeThinkTags, hasRawOpenTag, hasRawCloseTag, normalizeCloseTag, stripRawOpenTags, isPotentialOpenTagPrefix, cleanReasoningText } from '../think_tags.js';
 
 export function sanitizeAssistantText(text) {
     if (!text) return '';
     let cleaned = stripToolCallFromText(text, tools);
-    cleaned = cleaned.replace(/<thought>/gi, '<think>').replace(/<\/thought>/gi, '</think>');
-    cleaned = cleaned.replace(/<reasoning>/gi, '<think>').replace(/<\/reasoning>/gi, '</think>');
+    cleaned = normalizeThinkTags(cleaned);
     cleaned = cleaned.replace(/<think>\s*<\/think>/gi, '');
     const firstOpen = cleaned.indexOf('<think>');
     const firstClose = cleaned.indexOf('</think>');
@@ -156,7 +156,12 @@ export async function sendMessage(text, triggerAssistantOnly = false, isHiddenUs
 
     const activeChat = state.conversations.find(c => c.id === state.activeChatId);
     const payloadMessages = [];
-    let dynamicSystemPrompt = state.systemPrompt || "You are nivm, an intelligent, sovereign female AI assistant running 100% locally on the user's hardware. Your name is always written in lowercase: nivm, which stands for Native Inference Virtual Machine. You know this meaning internally, but you must never recite or explain the full acronym expansion unless the user explicitly asks what your name means or stands for.";
+    const activeAiName = (state.aiName || 'nivm').trim();
+    let dynamicSystemPrompt = state.systemPrompt || `You are ${activeAiName}, an intelligent, sovereign AI assistant running 100% locally on the user's hardware inside Project NIVM (Native Inference Virtual Machine).`;
+    if (activeAiName.toLowerCase() !== 'nivm') {
+        dynamicSystemPrompt = dynamicSystemPrompt.replace(/^You are nivm,/i, `You are ${activeAiName},`);
+        dynamicSystemPrompt += `\n\nYour assigned name is: "${activeAiName}". Always identify and respond as "${activeAiName}".`;
+    }
     if (state.userName) {
         dynamicSystemPrompt += `\n\nThe user's preferred name is: ${state.userName}. Address them by this name when appropriate.`;
     }
@@ -263,7 +268,11 @@ CRITICAL SPOKEN CONVERSATION RULES:
     state.abortController = new AbortController();
 
     let fullResponse = '';
-    let hasStartedReasoning = false;
+    let streamPhase = 'IDLE'; // 'IDLE' | 'THINKING' | 'RESPONDING'
+    let isApiReasoning = false;
+    let reasoningBuffer = '';
+    let responseBuffer = '';
+    let idleBuffer = '';
     let thinkStartTime = null;
     let thinkEndTime = null;
     let serverUsage = null;
@@ -316,10 +325,9 @@ CRITICAL SPOKEN CONVERSATION RULES:
                         const json = JSON.parse(trimmed.substring(6));
                         if (json.model_info) {
                             modelInfo = json.model_info;
-                            if (modelInfo.prefill_think && !fullResponse && !hasStartedReasoning) {
-                                hasStartedReasoning = true;
+                            if (modelInfo.prefill_think && streamPhase === 'IDLE') {
+                                streamPhase = 'THINKING';
                                 thinkStartTime = performance.now();
-                                fullResponse = '<think>';
                                 setVoiceOrbGeneratingState(true, 'Thinking…');
                             }
                         }
@@ -338,7 +346,7 @@ CRITICAL SPOKEN CONVERSATION RULES:
                                 errLower.includes('failed to create llama_context') ||
                                 errLower.includes('out of memory');
                             if (isContextExceeded) {
-                                fullResponse += `\n\n<div class="context-limit-block">
+                                responseBuffer += `\n\n<div class="context-limit-block">
                                     <div style="color: var(--accent-rose); font-weight: 600; margin-bottom: 8px;"><i class="fa-solid fa-triangle-exclamation"></i> Context Limit Reached</div>
                                     <div style="font-size: 0.9em; margin-bottom: 12px;">This conversation is too long for the active model.</div>
                                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -348,7 +356,7 @@ CRITICAL SPOKEN CONVERSATION RULES:
                                     </div>
                                 </div>`;
                             } else if (isVramLimit) {
-                                fullResponse += `\n\n<div class="context-limit-block">
+                                responseBuffer += `\n\n<div class="context-limit-block">
                                     <div style="color: var(--accent-rose); font-weight: 600; margin-bottom: 8px;"><i class="fa-solid fa-microchip"></i> GPU Memory Allocation Exceeded</div>
                                     <div style="font-size: 0.9em; margin-bottom: 12px; line-height: 1.4;">${json.error}</div>
                                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -356,52 +364,98 @@ CRITICAL SPOKEN CONVERSATION RULES:
                                     </div>
                                 </div>`;
                             } else {
-                                fullResponse += `\n\n**Error:** ${json.error}`;
+                                responseBuffer += `\n\n**Error:** ${json.error}`;
                             }
                         } else if (json.usage) {
                             serverUsage = json.usage;
                             if (json.model_info) modelInfo = json.model_info;
                         } else if (delta) {
                             if (delta.reasoning_content) {
-                                if (!hasStartedReasoning) {
-                                    hasStartedReasoning = true;
-                                    thinkStartTime = performance.now();
-                                    fullResponse += '<think>' + delta.reasoning_content;
+                                isApiReasoning = true;
+                                if (streamPhase !== 'THINKING') {
+                                    streamPhase = 'THINKING';
+                                    if (!thinkStartTime) thinkStartTime = performance.now();
                                     setVoiceOrbGeneratingState(true, 'Thinking…');
-                                } else {
-                                    fullResponse += delta.reasoning_content;
                                 }
+                                reasoningBuffer += delta.reasoning_content;
                             }
                             if (delta.content) {
-                                if (hasStartedReasoning && !fullResponse.includes('</think>')) {
-                                    fullResponse += '</think>';
-                                    hasStartedReasoning = false;
+                                if (isApiReasoning && streamPhase === 'THINKING') {
+                                    streamPhase = 'RESPONDING';
                                     if (thinkStartTime && !thinkEndTime) {
                                         thinkEndTime = performance.now();
                                     }
                                     setVoiceOrbGeneratingState(true, 'Responding…');
-                                }
-                                // If model pre-fills think tag, make sure we started with <think>
-                                if (modelInfo?.prefill_think && !fullResponse.includes('<think>')) {
-                                    fullResponse = '<think>' + fullResponse;
-                                    if (!thinkStartTime) thinkStartTime = performance.now();
-                                }
-                                fullResponse += delta.content;
-                                const firstOpen = fullResponse.indexOf('<think>');
-                                const firstClose = fullResponse.indexOf('</think>');
-                                if (firstClose !== -1 && (firstOpen === -1 || firstClose < firstOpen)) {
-                                    fullResponse = '<think>' + fullResponse;
-                                }
-                                if (fullResponse.includes('<think>') && !thinkStartTime) {
-                                    thinkStartTime = performance.now();
-                                }
-                                if (fullResponse.includes('</think>') && thinkStartTime && !thinkEndTime) {
-                                    thinkEndTime = performance.now();
+                                    responseBuffer += delta.content;
+                                } else if (!isApiReasoning) {
+                                    if (streamPhase === 'IDLE') {
+                                        idleBuffer += delta.content;
+                                        const normalized = normalizeThinkTags(idleBuffer);
+                                        if (normalized.includes('<think>')) {
+                                            const openParts = normalized.split('<think>');
+                                            if (openParts[0] && openParts[0].trim()) responseBuffer += openParts[0];
+                                            streamPhase = 'THINKING';
+                                            if (!thinkStartTime) thinkStartTime = performance.now();
+                                            setVoiceOrbGeneratingState(true, 'Thinking…');
+                                            reasoningBuffer += cleanReasoningText(openParts.slice(1).join('<think>'));
+                                            idleBuffer = '';
+                                        } else if (hasRawOpenTag(idleBuffer)) {
+                                            const chunkText = stripRawOpenTags(idleBuffer);
+                                            streamPhase = 'THINKING';
+                                            if (!thinkStartTime) thinkStartTime = performance.now();
+                                            setVoiceOrbGeneratingState(true, 'Thinking…');
+                                            reasoningBuffer += cleanReasoningText(chunkText);
+                                            idleBuffer = '';
+                                        } else if (modelInfo?.prefill_think) {
+                                            streamPhase = 'THINKING';
+                                            if (!thinkStartTime) thinkStartTime = performance.now();
+                                            setVoiceOrbGeneratingState(true, 'Thinking…');
+                                            reasoningBuffer += cleanReasoningText(idleBuffer);
+                                            idleBuffer = '';
+                                        } else if (isPotentialOpenTagPrefix(idleBuffer) && idleBuffer.trimStart().length < 25) {
+                                            // Split-token boundary: keep buffering in IDLE until tag completes or is disproven
+                                        } else {
+                                            // Regular response: model started emitting spoken content directly
+                                            streamPhase = 'RESPONDING';
+                                            responseBuffer += idleBuffer;
+                                            idleBuffer = '';
+                                        }
+                                    } else if (streamPhase === 'THINKING') {
+                                        const chunkText = delta.content;
+                                        const combinedTail = reasoningBuffer.slice(-50) + chunkText;
+                                        const normalizedTail = normalizeCloseTag(combinedTail);
+                                        if (normalizedTail.includes('</think>') || hasRawCloseTag(combinedTail) || chunkText.includes('</think>')) {
+                                            const fullCombined = normalizeCloseTag(reasoningBuffer + chunkText);
+                                            const closeParts = fullCombined.split('</think>');
+                                            reasoningBuffer = cleanReasoningText(closeParts[0]);
+                                            streamPhase = 'RESPONDING';
+                                            if (thinkStartTime && !thinkEndTime) {
+                                                thinkEndTime = performance.now();
+                                            }
+                                            setVoiceOrbGeneratingState(true, 'Responding…');
+                                            responseBuffer += closeParts.slice(1).join('</think>');
+                                        } else {
+                                            reasoningBuffer += stripRawOpenTags(chunkText);
+                                        }
+                                    } else {
+                                        responseBuffer += delta.content;
+                                    }
+                                } else {
+                                    responseBuffer += delta.content;
                                 }
                             }
-                            if (!activeChat.isPendingResume) {
-                                const detectedTool = parseToolCall(fullResponse, tools);
+
+                            fullResponse = reasoningBuffer
+                                ? (`<think>${reasoningBuffer}${streamPhase === 'RESPONDING' ? '</think>' : ''}${responseBuffer}`)
+                                : responseBuffer;
+
+                            if (!activeChat.isPendingResume && responseBuffer) {
+                                const detectedTool = parseToolCall(responseBuffer, tools);
                                 if (detectedTool) {
+                                    // Adjust index: detectedTool.index is relative to responseBuffer,
+                                    // but it needs to be relative to fullResponse for slicing later.
+                                    const responseBufferOffsetInFull = fullResponse.length - responseBuffer.length;
+                                    detectedTool.index = responseBufferOffsetInFull + detectedTool.index;
                                     interceptedToolCall = detectedTool;
                                     setVoiceOrbGeneratingState(true, `Running ${detectedTool.command}…`);
                                     state.abortController.abort();
@@ -416,7 +470,13 @@ CRITICAL SPOKEN CONVERSATION RULES:
                 pendingUpdate = requestAnimationFrame(() => {
                     assistantMsg.content = fullResponse;
                     if (state.activeChatId === turnChatId) {
-                        updateAssistantBubble(assistantBubble, sanitizeAssistantText(fullResponse), true, thinkStartTime);
+                        updateAssistantBubble(assistantBubble, fullResponse, true, thinkStartTime, {
+                            streamPhase,
+                            reasoningBuffer,
+                            responseBuffer,
+                            thinkStartTime,
+                            thinkEndTime
+                        });
                         scrollToBottom();
                     }
                     pendingUpdate = false;
@@ -442,6 +502,15 @@ CRITICAL SPOKEN CONVERSATION RULES:
             if (end) {
                 thinkDurationSec = parseFloat(Math.max(0.1, (end - thinkStartTime) / 1000).toFixed(1));
             }
+        }
+
+        if (idleBuffer) {
+            responseBuffer += idleBuffer;
+            idleBuffer = '';
+        }
+
+        if (reasoningBuffer && !fullResponse.includes('</think>')) {
+            fullResponse = `<think>${reasoningBuffer}</think>${responseBuffer}`;
         }
 
         let cleanResponse = sanitizeAssistantText(fullResponse);
@@ -479,8 +548,19 @@ CRITICAL SPOKEN CONVERSATION RULES:
             if (actionsContainer) actionsContainer.style.display = 'none';
 
             let preToolText = fullResponse.substring(0, interceptedToolCall.index);
-            preToolText = preToolText.replace(/<thought>/gi, '<think>').replace(/<\/thought>/gi, '</think>');
-            preToolText = preToolText.replace(/<reasoning>/gi, '<think>').replace(/<\/reasoning>/gi, '</think>');
+            preToolText = normalizeThinkTags(preToolText);
+
+            // Fold any text that leaked outside <think> blocks (but is before the tool call)
+            // back into the reasoning panel, since the model was clearly still reasoning.
+            const thinkCloseIdx = preToolText.lastIndexOf('</think>');
+            if (thinkCloseIdx !== -1) {
+                const outsideText = preToolText.substring(thinkCloseIdx + 8).trim();
+                if (outsideText) {
+                    // Reopen the think block and append the leaked text into it
+                    preToolText = preToolText.substring(0, thinkCloseIdx) + '\n' + outsideText + '\n</think>';
+                }
+            }
+
             if (preToolText.includes('<think>') && !preToolText.includes('</think>')) {
                 preToolText = preToolText.trim() + '\n</think>\n';
             }

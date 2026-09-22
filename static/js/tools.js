@@ -1,6 +1,7 @@
 import { state } from './state.js';
 import { saveMemoryAPI, executeTerminalAPI } from './api.js';
 import { createImageProgressCard } from './image_editor.js';
+import { normalizeThinkTags } from './think_tags.js';
 
 function mountImageProgressCard(cardElement) {
     const container = document.getElementById('messagesContainer');
@@ -956,9 +957,9 @@ export function parseToolCall(text, activeTools = tools) {
     const toolNamesPattern = toolNames.join('|');
 
     // 1. Separate thoughts from actionable content.
-    // Strip all completed thoughts (<think>...</think>, <thought>...</thought>, <reasoning>...</reasoning>)
-    // AND strip any currently streaming unclosed thought (<think>...) so private reasoning is NEVER parsed as tools.
-    const actionableText = text
+    // Normalize all model-specific tags first, then strip thoughts so they're NEVER parsed as tools.
+    const normalizedForParse = normalizeThinkTags(text);
+    const actionableText = normalizedForParse
         .replace(/<(think|thought|reasoning)>[\s\S]*?<\/\1>/gi, '')
         .replace(/<(think|thought|reasoning)>[\s\S]*$/gi, '')
         .trim();

@@ -456,7 +456,7 @@ export async function initImageStudioSettings() {
                     comfyBadge.style.color = '#34d399';
                     comfyBadge.style.background = 'rgba(52, 211, 153, 0.15)';
                     comfyBadge.style.borderColor = 'rgba(52, 211, 153, 0.3)';
-                    comfyPathDisplay.innerHTML = `<i class="fa-solid fa-folder-check" style="color: #34d399; margin-right: 5px;"></i>${escapeHtml(comfyRes.comfyui.path)}<br><span style="color: var(--text-muted); font-size: 0.7rem;">Python: ${escapeHtml(comfyRes.comfyui.python_bin)} | GGUF Nodes: ${comfyRes.comfyui.has_gguf_nodes ? '<span style="color:#34d399;">Installed</span>' : '<span style="color:#f59e0b;">Missing</span>'}</span>`;
+                    comfyPathDisplay.innerHTML = `<div style="overflow-wrap: anywhere; word-break: break-all; margin-bottom: 3px;"><i class="fa-solid fa-folder-check" style="color: #34d399; margin-right: 5px;"></i>${escapeHtml(comfyRes.comfyui.path)}</div><div style="color: var(--text-muted); font-size: 0.7rem; overflow-wrap: anywhere; word-break: break-all; margin-bottom: 2px;">Python: ${escapeHtml(comfyRes.comfyui.python_bin)}</div><div style="color: var(--text-muted); font-size: 0.7rem;">GGUF Nodes: ${comfyRes.comfyui.has_gguf_nodes ? '<span style="color:#34d399; font-weight: 500;">Installed</span>' : '<span style="color:#f59e0b; font-weight: 500;">Missing</span>'}</div>`;
                     if (autoSetupBtn) {
                         autoSetupBtn.innerHTML = '<i class="fa-solid fa-check"></i> ComfyUI Engine Ready';
                         autoSetupBtn.className = 'btn-secondary';
@@ -515,19 +515,16 @@ export async function initImageStudioSettings() {
 
             // Update Models Checklist (Shows checkmark if file is already there, indicates missing otherwise)
             if (unetCheck && modelsRes?.unet) {
-                unetCheck.innerHTML = modelsRes.unet.installed
-                    ? `<span style="color: #34d399; font-weight: 500;"><i class="fa-solid fa-circle-check" style="margin-right: 5px;"></i>UNet (Qwen-Rapid-NSFW-v23_Q4_K.gguf)</span>`
-                    : `<span style="color: #f59e0b;"><i class="fa-regular fa-circle" style="margin-right: 5px;"></i>UNet (Qwen-Rapid-NSFW-v23_Q4_K.gguf)</span>`;
+                const unetInstalled = !!modelsRes.unet.installed;
+                unetCheck.innerHTML = `<span style="color: ${unetInstalled ? '#34d399' : '#f59e0b'}; font-weight: 500; display: inline-flex; align-items: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="UNet (Qwen-Rapid-NSFW-v23_Q4_K.gguf)"><i class="${unetInstalled ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle'}" style="margin-right: 5px; flex-shrink: 0;"></i><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">UNet (Qwen-Rapid-NSFW-v23_Q4_K.gguf)</span></span>`;
             }
             if (clipCheck && modelsRes?.text_encoder) {
-                clipCheck.innerHTML = modelsRes.text_encoder.installed
-                    ? `<span style="color: #34d399; font-weight: 500;"><i class="fa-solid fa-circle-check" style="margin-right: 5px;"></i>Text Encoder (Qwen2.5-VL CLIP)</span>`
-                    : `<span style="color: #f59e0b;"><i class="fa-regular fa-circle" style="margin-right: 5px;"></i>Text Encoder (Qwen2.5-VL CLIP)</span>`;
+                const clipInstalled = !!modelsRes.text_encoder.installed;
+                clipCheck.innerHTML = `<span style="color: ${clipInstalled ? '#34d399' : '#f59e0b'}; font-weight: 500; display: inline-flex; align-items: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="Text Encoder (Qwen2.5-VL CLIP)"><i class="${clipInstalled ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle'}" style="margin-right: 5px; flex-shrink: 0;"></i><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Text Encoder (Qwen2.5-VL CLIP)</span></span>`;
             }
             if (vaeCheck && modelsRes?.vae) {
-                vaeCheck.innerHTML = modelsRes.vae.installed
-                    ? `<span style="color: #34d399; font-weight: 500;"><i class="fa-solid fa-circle-check" style="margin-right: 5px;"></i>VAE (qwen_image_vae.safetensors)</span>`
-                    : `<span style="color: #f59e0b;"><i class="fa-regular fa-circle" style="margin-right: 5px;"></i>VAE (qwen_image_vae.safetensors)</span>`;
+                const vaeInstalled = !!modelsRes.vae.installed;
+                vaeCheck.innerHTML = `<span style="color: ${vaeInstalled ? '#34d399' : '#f59e0b'}; font-weight: 500; display: inline-flex; align-items: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="VAE (qwen_image_vae.safetensors)"><i class="${vaeInstalled ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle'}" style="margin-right: 5px; flex-shrink: 0;"></i><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">VAE (qwen_image_vae.safetensors)</span></span>`;
             }
 
             // Update Models Badge & Download Button:
@@ -579,17 +576,25 @@ export async function initImageStudioSettings() {
             const animeInstalled = animeInfo?.installed === true;
 
             if (animeCkptCheck && animeInfo?.checkpoint) {
-                if (animeCkptNameLabel) animeCkptNameLabel.textContent = animeInfo.checkpoint.name;
-                if (animeCkptSizeLabel) animeCkptSizeLabel.textContent = animeInfo.checkpoint.size_str || '6.5 GB';
-                animeCkptCheck.innerHTML = animeInfo.checkpoint.installed
-                    ? `<span style="color: #34d399; font-weight: 500;"><i class="fa-solid fa-circle-check" style="margin-right: 5px;"></i>Checkpoint (${escapeHtml(animeInfo.checkpoint.name)})</span>`
-                    : `<span style="color: #f59e0b;"><i class="fa-regular fa-circle" style="margin-right: 5px;"></i>Checkpoint (${escapeHtml(animeInfo.checkpoint.name)})</span>`;
+                const ckptName = animeInfo.checkpoint.name || 'waiIllustriousSDXL_v150.safetensors';
+                if (animeCkptNameLabel) animeCkptNameLabel.textContent = ckptName;
+                if (animeCkptSizeLabel) {
+                    animeCkptSizeLabel.textContent = animeInfo.checkpoint.size_str || '6.5 GB';
+                    animeCkptSizeLabel.style.whiteSpace = 'nowrap';
+                    animeCkptSizeLabel.style.flexShrink = '0';
+                }
+                const isCkptInstalled = !!animeInfo.checkpoint.installed;
+                animeCkptCheck.innerHTML = `<span style="color: ${isCkptInstalled ? '#34d399' : '#f59e0b'}; font-weight: 500; display: inline-flex; align-items: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="Checkpoint (${escapeHtml(ckptName)})"><i class="${isCkptInstalled ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle'}" style="margin-right: 5px; flex-shrink: 0;"></i><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Checkpoint (${escapeHtml(ckptName)})</span></span>`;
             }
             if (animeLcmCheck && animeInfo?.lcm_lora) {
-                if (animeLcmSizeLabel) animeLcmSizeLabel.textContent = animeInfo.lcm_lora.size_str || '376 MB';
-                animeLcmCheck.innerHTML = animeInfo.lcm_lora.installed
-                    ? `<span style="color: #34d399; font-weight: 500;"><i class="fa-solid fa-circle-check" style="margin-right: 5px;"></i>Fast Turbo LCM (${escapeHtml(animeInfo.lcm_lora.name)})</span>`
-                    : `<span style="color: #f59e0b;"><i class="fa-regular fa-circle" style="margin-right: 5px;"></i>Fast Turbo LCM (${escapeHtml(animeInfo.lcm_lora.name)})</span>`;
+                const lcmName = animeInfo.lcm_lora.name || 'turbo_lcm_sdxl.safetensors';
+                if (animeLcmSizeLabel) {
+                    animeLcmSizeLabel.textContent = animeInfo.lcm_lora.size_str || '376 MB';
+                    animeLcmSizeLabel.style.whiteSpace = 'nowrap';
+                    animeLcmSizeLabel.style.flexShrink = '0';
+                }
+                const isLcmInstalled = !!animeInfo.lcm_lora.installed;
+                animeLcmCheck.innerHTML = `<span style="color: ${isLcmInstalled ? '#34d399' : '#f59e0b'}; font-weight: 500; display: inline-flex; align-items: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="Fast Turbo LCM (${escapeHtml(lcmName)})"><i class="${isLcmInstalled ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle'}" style="margin-right: 5px; flex-shrink: 0;"></i><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Fast Turbo LCM (${escapeHtml(lcmName)})</span></span>`;
             }
 
             if (animeModelsBadge) {

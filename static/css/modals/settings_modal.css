@@ -645,6 +645,105 @@
     color: var(--text-primary);
 }
 
+.path-chip-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.path-chip-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    font-size: 0.65rem;
+    color: var(--text-tertiary);
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.path-chip-remove:hover {
+    background: rgba(239, 68, 68, 0.25);
+    color: #ef4444;
+}
+
+/* Model Specs Bar & Badges */
+.model-specs-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.model-spec-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-secondary);
+}
+
+.model-spec-pill.pill-layers {
+    background: rgba(168, 85, 247, 0.12);
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    color: #c084fc;
+}
+
+.model-spec-pill.pill-arch {
+    background: rgba(96, 165, 250, 0.12);
+    border: 1px solid rgba(96, 165, 250, 0.25);
+    color: #93c5fd;
+}
+
+.model-spec-pill.pill-ctx {
+    background: rgba(52, 211, 153, 0.12);
+    border: 1px solid rgba(52, 211, 153, 0.25);
+    color: #6ee7b7;
+}
+
+.model-spec-pill.pill-moe {
+    background: rgba(245, 158, 11, 0.14);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #fbbf24;
+    font-weight: 600;
+}
+
+.moe-info-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.22);
+    color: #fde68a;
+    font-size: 0.73rem;
+    line-height: 1.35;
+    margin-top: 6px;
+}
+
+.moe-info-banner i {
+    font-size: 0.85rem;
+    color: #fbbf24;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+
 /* Accelerated Download Card & Badge */
 .engine-badge-pill {
     display: flex;
@@ -1208,15 +1307,14 @@
 }
 
 .settings-tab-btn {
-    flex: 1 1 0;
     min-width: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
+    gap: 4px;
     padding: 6px 6px;
     border-radius: 7px;
-    font-size: 0.74rem;
+    font-size: 0.73rem;
     font-weight: 500;
     color: var(--text-secondary);
     background: transparent;
@@ -1227,11 +1325,30 @@
     user-select: none;
 }
 
+.settings-tab-btn[data-tab="inference"] {
+    flex: 1 1 0;
+}
+
+.settings-tab-btn[data-tab="imageStudio"] {
+    flex: 0 0 auto;
+    padding: 6px 8px;
+}
+
+.settings-tab-btn[data-tab="downloader"] {
+    flex: 1.15 1 0;
+}
+
+.settings-tab-btn[data-tab="preferences"] {
+    flex: 1.25 1 0;
+}
+
 .settings-tab-btn span {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+
 
 .settings-tab-btn i {
     font-size: 0.8rem;

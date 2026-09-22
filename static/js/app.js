@@ -3,8 +3,8 @@
 import { state, themeState, saveConversations, saveUsageStats } from './state.js';
 import { dom } from './dom.js';
 import { fetchApiSettings, saveApiSettings, checkBackendHealth, fetchEngineStatus, loadAvailableModels, fetchChats, fetchMemoryAPI, fetchBackendConfig } from './api.js';
-import { setupNodesCanvas, setupMatrixCanvas, setupFluidCanvas, setupFlowFieldCanvas, applyThemeState, saveThemeConfig } from './theme.js';
-import { makeDraggable, setupDynamicGreeting, renderChatHistory, renderActiveChat, switchChat, createNewChat, appendMessageToDOM, renderMemoryDrawer, renderToolsSettings, initImageStudioSettings, showAlert, showConfirm, showNotification, setupHistoryUI, setupMobileNav, setupVisionUI, setupAudioRecording, updateVisionAvailabilityUI, populateStatsModal, updateChatInputState } from './ui.js';
+import { setupNodesCanvas, setupMatrixCanvas, setupFluidCanvas, setupFlowFieldCanvas, setupCircuitsCanvas, setupHexCanvas, setupAuroraCanvas, applyThemeState, saveThemeConfig } from './theme.js';
+import { makeDraggable, setupDynamicGreeting, renderChatHistory, renderActiveChat, switchChat, createNewChat, appendMessageToDOM, renderMemoryDrawer, renderToolsSettings, initImageStudioSettings, showAlert, showConfirm, showNotification, setupHistoryUI, setupMobileNav, setupVisionUI, setupAudioRecording, updateVisionAvailabilityUI, populateStatsModal, updateChatInputState, updateAssistantNameUI } from './ui.js';
 import { setupVoiceUI, stopSpeaking } from './voice.js';
 import { initExtras } from './extras.js';
 import { sendMessage, stopGeneration, checkAndResumeActiveGeneration } from './chat/chat_stream.js';
@@ -78,10 +78,17 @@ const startApp = async () => {
             if (dom.userNameInput) {
                 dom.userNameInput.value = state.userName;
             }
+            if (dom.aiNameInput) {
+                dom.aiNameInput.value = (state.aiName && state.aiName !== 'nivm') ? state.aiName : '';
+            }
+            updateAssistantNameUI();
             try { setupNodesCanvas(); } catch (e) { console.warn('Nodes canvas setup:', e); }
             try { setupMatrixCanvas(); } catch (e) { console.warn('Matrix canvas setup:', e); }
             try { setupFluidCanvas(); } catch (e) { console.warn('Fluid canvas setup:', e); }
             try { setupFlowFieldCanvas(); } catch (e) { console.warn('FlowField canvas setup:', e); }
+            try { setupCircuitsCanvas(); } catch (e) { console.warn('Circuits canvas setup:', e); }
+            try { setupHexCanvas(); } catch (e) { console.warn('Hex canvas setup:', e); }
+            try { setupAuroraCanvas(); } catch (e) { console.warn('Aurora canvas setup:', e); }
             applyThemeState();
 
             makeDraggable(dom.settingsWindow, dom.settingsWindowHeader);
@@ -132,26 +139,31 @@ const startApp = async () => {
             setupAudioRecording();
             updateModelAvailabilityUI(false);
 
-            await fetchApiSettings();
-            await fetchBackendConfig();
-            await checkBackendHealth();
-            await fetchEngineStatus();
-            await loadAvailableModels();
+            await Promise.all([
+                fetchApiSettings(),
+                fetchBackendConfig(),
+                checkBackendHealth(),
+                fetchEngineStatus(),
+                loadAvailableModels()
+            ]);
             updateVisionAvailabilityUI();
             initImageStudioSettings();
 
-            // Sync server chats
+            // Sync server chats & memory concurrently
             try {
-                const serverChats = await fetchChats();
+                const [serverChats, memory] = await Promise.all([
+                    fetchChats().catch(err => { console.warn('Server chats fetch warning:', err); return null; }),
+                    fetchMemoryAPI().catch(err => { console.warn('Memory fetch warning:', err); return null; })
+                ]);
                 if (Array.isArray(serverChats) && serverChats.length > 0) {
                     state.conversations = serverChats;
                 }
+                if (memory) {
+                    state.memory = memory;
+                }
             } catch (err) {
-                console.warn('Server chats fetch warning:', err);
+                console.warn('Server chats/memory sync warning:', err);
             }
-
-            // Sync memory
-            state.memory = await fetchMemoryAPI();
 
             if (state.conversations.length > 0) {
                 if (!state.activeChatId || !state.conversations.some(c => c.id === state.activeChatId)) {
@@ -306,6 +318,19 @@ const startApp = async () => {
                 state.userName = e.target.value;
                 localStorage.setItem('nivm_userName', state.userName);
                 setupDynamicGreeting();
+            });
+        }
+
+        if (dom.aiNameInput) {
+            dom.aiNameInput.addEventListener('input', (e) => {
+                const val = e.target.value.trim();
+                state.aiName = val || 'nivm';
+                if (val) {
+                    localStorage.setItem('nivm_ai_name', val);
+                } else {
+                    localStorage.removeItem('nivm_ai_name');
+                }
+                updateAssistantNameUI();
             });
         }
 
@@ -563,12 +588,42 @@ const startApp = async () => {
             });
         }
 
+        document.querySelectorAll('button[data-font]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                themeState.fontFamily = btn.getAttribute('data-font');
+                applyThemeState();
+                saveThemeConfig();
+            });
+        });
+
         document.querySelectorAll('button[data-width]').forEach(btn => {
             btn.addEventListener('click', () => {
                 themeState.chatWidth = btn.getAttribute('data-width');
                 saveThemeConfig();
             });
         });
+
+        if (dom.circuitSpeedSlider) {
+            dom.circuitSpeedSlider.addEventListener('input', (e) => {
+                themeState.circuitSpeed = parseFloat(e.target.value);
+                if (dom.circuitSpeedVal) dom.circuitSpeedVal.textContent = themeState.circuitSpeed + 'x';
+                saveThemeConfig();
+            });
+        }
+        if (dom.hexSpeedSlider) {
+            dom.hexSpeedSlider.addEventListener('input', (e) => {
+                themeState.hexSpeed = parseFloat(e.target.value);
+                if (dom.hexSpeedVal) dom.hexSpeedVal.textContent = themeState.hexSpeed + 'x';
+                saveThemeConfig();
+            });
+        }
+        if (dom.auroraSpeedSlider) {
+            dom.auroraSpeedSlider.addEventListener('input', (e) => {
+                themeState.auroraSpeed = parseFloat(e.target.value);
+                if (dom.auroraSpeedVal) dom.auroraSpeedVal.textContent = themeState.auroraSpeed + 'x';
+                saveThemeConfig();
+            });
+        }
 
         if (dom.fontSizeSlider) {
             dom.fontSizeSlider.addEventListener('input', (e) => {
@@ -583,6 +638,7 @@ const startApp = async () => {
         if (dom.resetThemeBtn) {
             dom.resetThemeBtn.addEventListener('click', () => {
                 Object.assign(themeState, {
+                    fontFamily: 'monocraft',
                     bgMotion: 'none',
                     bgTone: '#09090b',
                     sidebarTone: '#121215',
@@ -593,7 +649,10 @@ const startApp = async () => {
                     cycleBg: false,
                     cycleSpeed: 50,
                     chatWidth: 'default',
-                    fontSize: 15
+                    fontSize: 15,
+                    circuitSpeed: 1.2,
+                    hexSpeed: 1.0,
+                    auroraSpeed: 1.0
                 });
                 document.documentElement.style.setProperty('--font-size-base', '15px');
                 if (dom.fontSizeSlider) dom.fontSizeSlider.value = 15;

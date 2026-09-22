@@ -14,7 +14,7 @@ from pydantic import BaseModel
 import httpx
 
 from .config import SETTINGS_FILE
-from .engine import model_manager, HAS_LLAMA_CPP, scan_local_ggufs
+from .engine import model_manager, HAS_LLAMA_CPP, scan_local_ggufs, get_gguf_metadata
 from .downloader import downloader
 from .storage import get_user_settings, _apply_all_overrides
 from .router import get_resident_role
@@ -146,11 +146,12 @@ def get_system_memory_info() -> dict:
 @router.get("/api/engine/status")
 async def engine_status():
     """Get current engine, model, and hardware VRAM/RAM status."""
+    hw_info = await asyncio.to_thread(get_system_memory_info)
     return {
         "has_llama_cpp": HAS_LLAMA_CPP,
         "active": model_manager.get_active_info(),
         "available": model_manager.list_available(),
-        "hardware": get_system_memory_info(),
+        "hardware": hw_info,
     }
 
 
@@ -242,15 +243,41 @@ async def engine_smart_toggle():
 
 @router.get("/api/models/scan")
 async def scan_models_endpoint():
-    """Scan local models directory and remembered paths for GGUF files."""
+    """Scan local models directory and remembered paths for GGUF files with metadata."""
     settings = get_user_settings()
     remembered = settings.get("remembered_model_paths", [])
+    valid_remembered = [p for p in remembered if p and os.path.isfile(p)]
+    if len(valid_remembered) != len(remembered):
+        settings["remembered_model_paths"] = valid_remembered
+        try:
+            with open(SETTINGS_FILE, "w") as f:
+                json.dump(settings, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Failed to update pruned remembered paths in settings: {e}")
+    remembered = valid_remembered
     extra_dirs = [os.path.dirname(p) for p in remembered if p and os.path.isabs(p)]
-    discovered = scan_local_ggufs(extra_dirs=list(set(extra_dirs)))
+    discovered = await asyncio.to_thread(scan_local_ggufs, extra_dirs=list(set(extra_dirs)))
     return {
         "models": discovered,
         "remembered_paths": remembered,
     }
+
+
+@router.get("/api/models/inspect")
+async def inspect_model_endpoint(path: str):
+    """Inspect a GGUF model's metadata (layers, architecture, context, MoE info) without loading weights into RAM."""
+    if not path or not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Model file not found on disk")
+    meta = await asyncio.to_thread(get_gguf_metadata, path)
+    size = os.path.getsize(path)
+    return {
+        "path": path,
+        "filename": os.path.basename(path),
+        "size_bytes": size,
+        "size_gb": round(size / (1024**3), 2),
+        **meta
+    }
+
 
 
 @router.post("/api/models/download")

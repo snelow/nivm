@@ -111,9 +111,22 @@ def get_user_settings() -> dict:
         try:
             with open(SETTINGS_FILE, "r") as f:
                 saved = json.load(f)
+                if "remembered_model_paths" in saved and isinstance(saved["remembered_model_paths"], list):
+                    pruned = [p for p in saved["remembered_model_paths"] if p and os.path.isfile(p)]
+                    if len(pruned) != len(saved["remembered_model_paths"]):
+                        saved["remembered_model_paths"] = pruned
+                        try:
+                            with open(SETTINGS_FILE, "w") as sf:
+                                json.dump(saved, sf, indent=2)
+                        except Exception:
+                            pass
                 default_settings.update(saved)
         except Exception as e:
             logger.warning(f"Failed to read settings file: {e}")
+    if "remembered_model_paths" in default_settings and isinstance(default_settings["remembered_model_paths"], list):
+        default_settings["remembered_model_paths"] = [
+            p for p in default_settings["remembered_model_paths"] if p and os.path.isfile(p)
+        ]
     return default_settings
 
 
@@ -253,6 +266,10 @@ async def get_settings_endpoint():
 
 def save_user_settings(data: Dict[str, Any]):
     """Save settings dictionary to settings.json and apply overrides."""
+    if "remembered_model_paths" in data and isinstance(data["remembered_model_paths"], list):
+        data["remembered_model_paths"] = [
+            p for p in data["remembered_model_paths"] if p and os.path.isfile(p)
+        ]
     with open(SETTINGS_FILE, "w") as f:
         json.dump(data, f, indent=2)
     _apply_all_overrides()

@@ -4,7 +4,24 @@ import { dom } from './dom.js';
 // Helper: set slider + val span for a role prefix
 function _setSlider(slider, valSpan, value, isGpu) {
     if (slider) slider.value = value;
-    if (valSpan) valSpan.textContent = isGpu && value == -1 ? '-1 (Max)' : value;
+    if (valSpan) {
+        if (isGpu) {
+            const layers = parseInt(slider?.dataset?.totalLayers || slider?.max || '128', 10);
+            const numVal = parseInt(value, 10);
+            if (numVal === -1) {
+                valSpan.textContent = layers > 0 && layers < 128 ? `-1 (All ${layers} Layers)` : '-1 (Max)';
+            } else if (numVal === 0) {
+                valSpan.textContent = '0 (CPU only)';
+            } else if (layers > 0 && layers < 128) {
+                const pct = Math.min(100, Math.round((numVal / layers) * 100));
+                valSpan.textContent = `${numVal} / ${layers} Layers (${pct}% GPU)`;
+            } else {
+                valSpan.textContent = String(numVal);
+            }
+        } else {
+            valSpan.textContent = value;
+        }
+    }
 }
 
 // Helper: read per-role config from DOM into a flat settings object
@@ -376,7 +393,7 @@ export async function fetchEngineStatus() {
                     if (dom.smartToggleBtn) dom.smartToggleBtn.classList.add('is-loaded');
                     if (dom.smartToggleLabel) dom.smartToggleLabel.textContent = 'Unload Engine';
                 } else if (data.has_llama_cpp) {
-                    dom.engineStatusText.textContent = "Status: Ready (no model active)";
+                    dom.engineStatusText.textContent = "Ready";
                     dom.engineStatusText.style.color = "var(--text-tertiary)";
                     if (dom.smartToggleBtn) dom.smartToggleBtn.classList.remove('is-loaded');
                     if (dom.smartToggleLabel) dom.smartToggleLabel.textContent = 'Load Engine';
@@ -388,6 +405,9 @@ export async function fetchEngineStatus() {
 
             if (window.updateModelAvailabilityUI) {
                 window.updateModelAvailabilityUI(isLoaded);
+            }
+            if (isLoaded && data.active && window.applyModelMetadataToUI) {
+                window.applyModelMetadataToUI(data.active);
             }
             return data;
         }

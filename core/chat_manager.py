@@ -22,6 +22,55 @@ from core.router import get_resident_role
 logger = logging.getLogger("nivm.chat_manager")
 
 
+import re
+
+def _normalize_think_tags(text: str) -> str:
+    """Normalize all model-specific thinking tags to standard <think>...</think>.
+    
+    This is the Python counterpart to static/js/think_tags.js.
+    
+    HOW TO ADD A NEW MODEL:
+        1. Add re.sub() lines below for both open and close tags.
+        2. Add matching entries in static/js/think_tags.js (OPEN_TAGS, CLOSE_TAGS, RAW_OPEN_TAGS, RAW_CLOSE_TAGS).
+        3. Add the open-tag string to PREFILL_MARKERS in core/engine.py → get_active_info().
+    See the HOW-TO in static/js/think_tags.js for a full example.
+    """
+    if not text:
+        return text
+
+    # ── Open tags → <think> ──
+    # Standard variants
+    text = re.sub(r'<thought>', '<think>', text, flags=re.IGNORECASE)
+    text = re.sub(r'<reasoning>', '<think>', text, flags=re.IGNORECASE)
+    text = re.sub(r'<internal_thought>', '<think>', text, flags=re.IGNORECASE)
+    # Gemma 4
+    text = re.sub(r'<\|channel\|?>\s*thought\s*\n?', '<think>', text, flags=re.IGNORECASE)
+    text = re.sub(r'<\|channel>thought', '<think>', text, flags=re.IGNORECASE)
+    text = re.sub(r'<\|channel\|>thought', '<think>', text, flags=re.IGNORECASE)
+    # Mistral
+    text = re.sub(r'\[THINK\]', '<think>', text, flags=re.IGNORECASE)
+    # Llama-style
+    text = re.sub(r'<\|thinking\|>', '<think>', text, flags=re.IGNORECASE)
+    text = re.sub(r'<\|start_thinking\|>', '<think>', text, flags=re.IGNORECASE)
+
+    # ── Close tags → </think> ──
+    # Standard variants
+    text = re.sub(r'</thought>', '</think>', text, flags=re.IGNORECASE)
+    text = re.sub(r'</reasoning>', '</think>', text, flags=re.IGNORECASE)
+    text = re.sub(r'</internal_thought>', '</think>', text, flags=re.IGNORECASE)
+    # Gemma 4
+    text = re.sub(r'<channel\|>', '</think>', text, flags=re.IGNORECASE)
+    text = re.sub(r'<\|channel\|>model', '</think>', text, flags=re.IGNORECASE)
+    text = re.sub(r'<\|channel\|>', '</think>', text, flags=re.IGNORECASE)
+    # Mistral
+    text = re.sub(r'\[/THINK\]', '</think>', text, flags=re.IGNORECASE)
+    # Llama-style
+    text = re.sub(r'<\|/thinking\|>', '</think>', text, flags=re.IGNORECASE)
+    text = re.sub(r'<\|end_thinking\|>', '</think>', text, flags=re.IGNORECASE)
+
+    return text
+
+
 def _calc_tokens(c) -> int:
     """Helper to estimate token count from string or multimodal message content."""
     if isinstance(c, str):
@@ -185,6 +234,7 @@ class ChatGenerationManager:
             # Save whatever partial response exists
             if job.full_text.strip():
                 final_content = job.full_text
+                final_content = _normalize_think_tags(final_content)
                 if job.reasoning_text and not final_content.startswith("<think>"):
                     final_content = f"<think>{job.reasoning_text}</think>\n\n{final_content}"
                 partial_msg = {
@@ -314,6 +364,7 @@ class ChatGenerationManager:
             job.broadcast_chunk("data: [DONE]\n\n")
 
             final_content = job.full_text
+            final_content = _normalize_think_tags(final_content)
             if job.reasoning_text and not final_content.startswith("<think>"):
                 final_content = f"<think>{job.reasoning_text}</think>\n\n{final_content}"
 
@@ -482,6 +533,7 @@ class ChatGenerationManager:
             job.broadcast_chunk("data: [DONE]\n\n")
 
             final_content = job.full_text
+            final_content = _normalize_think_tags(final_content)
             if job.reasoning_text and not final_content.startswith("<think>"):
                 final_content = f"<think>{job.reasoning_text}</think>\n\n{final_content}"
             else:

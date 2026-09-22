@@ -9,6 +9,9 @@ PORT="8000"
 RELOAD="true"
 FORCE_SETUP="false"
 KILL_EXISTING="false"
+ENABLE_SSL="false"
+SSL_CERT=""
+SSL_KEY=""
 
 # Terminal Color Palette
 GREEN='\033[0;32m'
@@ -19,17 +22,17 @@ PURPLE='\033[0;35m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-# Clean trap on interrupt/termination
-trap "echo -e '\n${YELLOW}[!] Stopping nivm server...${NC}'; exit 0" SIGINT SIGTERM
-
 # Function to show usage help
 show_help() {
-    echo -e "${CYAN}${BOLD}nivm — Native Inference Virtual Machine${NC}"
+    echo -e "${CYAN}${BOLD}Project NIVM — Native Inference Virtual Machine${NC}"
     echo "Usage: ./run.sh [OPTIONS]"
     echo ""
     echo "Options:"
     echo "  -h, --host HOST         Set server bind address (default: 0.0.0.0)"
     echo "  -p, --port PORT         Set server port (default: 8000)"
+    echo "  --ssl                   Enable native SSL / HTTPS (auto-generates certs if needed)"
+    echo "  --ssl-cert PATH         Path to custom SSL certificate (PEM)"
+    echo "  --ssl-key PATH          Path to custom SSL private key (PEM)"
     echo "  --no-reload             Disable Uvicorn auto-reload"
     echo "  -k, --kill              Kill any existing process currently bound to the target port"
     echo "  -s, --setup             Force re-installation of dependencies and assets"
@@ -46,6 +49,20 @@ while [[ $# -gt 0 ]]; do
             ;;
         -p|--port)
             PORT="$2"
+            shift 2
+            ;;
+        --ssl)
+            ENABLE_SSL="true"
+            shift
+            ;;
+        --ssl-cert)
+            SSL_CERT="$2"
+            ENABLE_SSL="true"
+            shift 2
+            ;;
+        --ssl-key)
+            SSL_KEY="$2"
+            ENABLE_SSL="true"
             shift 2
             ;;
         --no-reload)
@@ -300,27 +317,219 @@ get_local_ip() {
 }
 LOCAL_IP=$(get_local_ip)
 
+# Determine protocol & SSL configuration
+PROTOCOL="http"
+if [ "$ENABLE_SSL" = "true" ]; then
+    PROTOCOL="https"
+    CERTS_DIR="User files/certs"
+    mkdir -p "$CERTS_DIR"
+    SSL_CERT="${SSL_CERT:-$CERTS_DIR/cert.pem}"
+    SSL_KEY="${SSL_KEY:-$CERTS_DIR/key.pem}"
+
+    if [ ! -f "$SSL_CERT" ] || [ ! -f "$SSL_KEY" ]; then
+        echo -e "${YELLOW}[*] Generating self-signed SSL certificate for encrypted transfers...${NC}"
+        SAN_PARAM="DNS:localhost,IP:127.0.0.1"
+        if [ -n "$LOCAL_IP" ]; then
+            SAN_PARAM="${SAN_PARAM},IP:${LOCAL_IP}"
+        fi
+        openssl req -x509 -newkey rsa:2048 -keyout "$SSL_KEY" -out "$SSL_CERT" -days 365 -nodes \
+            -subj "/CN=Project-NIVM/O=Local-Inference" \
+            -addext "subjectAltName = ${SAN_PARAM}" 2>/dev/null || \
+        openssl req -x509 -newkey rsa:2048 -keyout "$SSL_KEY" -out "$SSL_CERT" -days 365 -nodes \
+            -subj "/CN=localhost" 2>/dev/null
+        echo -e "${GREEN}[✓] SSL certificates generated in ${CERTS_DIR}/${NC}"
+    fi
+fi
+
 # Export environment variables for config.py
 export SERVER_HOST="$HOST"
 export SERVER_PORT="$PORT"
+export SERVER_PROTOCOL="$PROTOCOL"
 export RELOAD="$RELOAD"
 
 echo -e "${CYAN}----------------------------------------------------${NC}"
-echo -e "${GREEN}${BOLD}[✓] nivm ready to launch:${NC}"
-echo -e "  • Local Interface:   ${BOLD}${CYAN}http://localhost:${PORT}${NC}"
+echo -e "${GREEN}${BOLD}[✓] Project NIVM ready to launch:${NC}"
+echo -e "  • Local Interface:   ${BOLD}${CYAN}${PROTOCOL}://localhost:${PORT}${NC}"
 if [ -n "$LOCAL_IP" ]; then
-    echo -e "  • Network Link:      ${BOLD}${GREEN}http://${LOCAL_IP}:${PORT}${NC}"
+    echo -e "  • Network Link:      ${BOLD}${GREEN}${PROTOCOL}://${LOCAL_IP}:${PORT}${NC}"
 fi
-echo -e "  • Operational Mode:  ${CYAN}100% Local / Air-Gapped${NC}"
+echo -e "  • Transfer Security: ${CYAN}$([ "$ENABLE_SSL" = "true" ] && echo "Encrypted (HTTPS/TLS)" || echo "Plain HTTP (pass --ssl for HTTPS)")${NC}"
 echo -e "  • Hot Reloading:     ${CYAN}${RELOAD}${NC}"
 echo -e "${CYAN}----------------------------------------------------${NC}"
-echo -e "${GREEN}[+] Starting server... (Press Ctrl+C to gracefully stop)${NC}"
 
-# Build Uvicorn arguments
-UVICORN_ARGS="main:app --host $HOST --port $PORT --log-level warning"
+# Build Uvicorn command array (handles paths with spaces safely)
+UVICORN_CMD=(python -m uvicorn main:app --host "$HOST" --port "$PORT" --log-level warning)
 if [ "$RELOAD" = "true" ]; then
-    UVICORN_ARGS="$UVICORN_ARGS --reload"
+    UVICORN_CMD+=(--reload)
+fi
+if [ "$ENABLE_SSL" = "true" ]; then
+    UVICORN_CMD+=(--ssl-keyfile "$SSL_KEY" --ssl-certfile "$SSL_CERT")
 fi
 
-# Launch Server
-exec python -m uvicorn $UVICORN_ARGS
+# Clean shutdown function (fast, zero hang)
+SERVER_PID=""
+cleanup() {
+    echo -e "\n${YELLOW}[!] Terminating Project NIVM server...${NC}"
+    if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
+        kill -TERM "$SERVER_PID" 2>/dev/null || true
+        for i in {1..15}; do
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+                break
+            fi
+            sleep 0.1
+        done
+        if kill -0 "$SERVER_PID" 2>/dev/null; then
+            kill -9 "$SERVER_PID" 2>/dev/null || true
+        fi
+    fi
+    # Free port if child process lingers
+    local lingering=$(lsof -ti :"$PORT" 2>/dev/null || true)
+    if [ -n "$lingering" ]; then
+        kill -9 $lingering 2>/dev/null || true
+    fi
+    echo -e "${GREEN}[✓] Server stopped.${NC}"
+    exit 0
+}
+
+trap cleanup SIGINT SIGTERM
+
+# Launch Server in background with managed PID and file logging
+LOG_FILE="User files/nivm.log"
+mkdir -p "User files"
+echo -e "${GREEN}[+] Starting server...${NC}"
+"${UVICORN_CMD[@]}" >> "$LOG_FILE" 2>&1 &
+SERVER_PID=$!
+
+# Wait for server and model to initialize
+echo -ne "${YELLOW}[*] Initializing engine & model...${NC}"
+SERVER_READY=false
+for i in {1..60}; do
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+        echo -e "\n${RED}[!] Server failed to start or crashed on launch.${NC}"
+        echo -e "${YELLOW}Last 25 log entries from ${LOG_FILE}:${NC}"
+        tail -n 25 "$LOG_FILE" 2>/dev/null || true
+        exit 1
+    fi
+    if curl -s -k "${PROTOCOL}://127.0.0.1:${PORT}/api/health" 2>/dev/null | grep -q '"status":"online"'; then
+        SERVER_READY=true
+        break
+    fi
+    sleep 0.25
+done
+
+if [ "$SERVER_READY" = "true" ]; then
+    echo -e " ${GREEN}[Online & Ready]${NC}"
+else
+    echo -e " ${YELLOW}[Started]${NC}"
+fi
+
+echo -e "${CYAN}Interactive console active.${NC} Type ${BOLD}help${NC} for options or ${BOLD}quit${NC} to exit."
+echo -e "Server logs saved to: ${PURPLE}${LOG_FILE}${NC} (type ${BOLD}logs${NC} to view)"
+echo ""
+
+CURL_OPTS="-s -k"
+
+while kill -0 "$SERVER_PID" 2>/dev/null; do
+    if [ -t 0 ]; then
+        read -r -p "$(echo -e "${BOLD}${PURPLE}[nivm]>${NC} ")" CMD || break
+    else
+        read -r CMD || break
+    fi
+    CMD="$(echo "$CMD" | xargs 2>/dev/null || echo "$CMD")"
+
+    case "$CMD" in
+        "q"|"quit"|"exit")
+            cleanup
+            ;;
+        "help"|"?")
+            echo -e "${CYAN}Available Terminal Commands:${NC}"
+            echo -e "  ${BOLD}quit, exit, q${NC}    - Instantly terminate server and clean up port"
+            echo -e "  ${BOLD}status${NC}           - Show active model, engine status, and VRAM/RAM"
+            echo -e "  ${BOLD}logs${NC}             - Print recent server logs"
+            echo -e "  ${BOLD}logs -f${NC}          - Stream live server logs (Ctrl+C returns to prompt)"
+            echo -e "  ${BOLD}logs clear${NC}       - Clear/truncate the server log file"
+            echo -e "  ${BOLD}urls${NC}             - Print local and network access links"
+            echo -e "  ${BOLD}models${NC}           - List discovered local GGUF models"
+            echo -e "  ${BOLD}clear${NC}            - Clear terminal screen"
+            echo -e "  ${BOLD}help${NC}             - Show this help message"
+            ;;
+        "logs"|"log")
+            if [ -f "$LOG_FILE" ]; then
+                echo -e "${CYAN}--- Recent Logs (${LOG_FILE}) ---${NC}"
+                tail -n 30 "$LOG_FILE"
+                echo -e "${CYAN}--- End of recent logs (type 'logs -f' for live stream) ---${NC}"
+            else
+                echo -e "${YELLOW}No log file found at ${LOG_FILE}.${NC}"
+            fi
+            ;;
+        "logs -f"|"logs -tail"|"tail")
+            if [ -f "$LOG_FILE" ]; then
+                echo -e "${CYAN}Streaming live logs from ${LOG_FILE} (Press Ctrl+C to return to console)...${NC}"
+                trap '' SIGINT
+                tail -n 30 -f "$LOG_FILE" &
+                TAIL_PID=$!
+                trap 'kill -9 "$TAIL_PID" 2>/dev/null; echo "";' SIGINT
+                wait "$TAIL_PID" 2>/dev/null || true
+                trap cleanup SIGINT SIGTERM
+                echo -e "${CYAN}[Console resumed]${NC}"
+            else
+                echo -e "${YELLOW}No log file found at ${LOG_FILE}.${NC}"
+            fi
+            ;;
+        "logs clear"|"clear-logs")
+            > "$LOG_FILE"
+            echo -e "${GREEN}[✓] Log file cleared.${NC}"
+            ;;
+        "status")
+            curl $CURL_OPTS "${PROTOCOL}://127.0.0.1:${PORT}/api/engine/status" 2>/dev/null | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    act = d.get('active') or {}
+    hw = d.get('hardware') or {}
+    print('-----------------------------------------')
+    print(f'Engine Status:  {\"Active (Model Loaded)\" if act.get(\"loaded\") else \"Standby (No Model)\"}')
+    print(f'Active Model:   {act.get(\"name\", \"None\")} ({act.get(\"arch\", \"N/A\")})')
+    if hw:
+        v_used = hw.get(\"vram_used_gb\", 0) or 0
+        v_total = hw.get(\"vram_total_gb\", 0) or 0
+        r_used = hw.get(\"ram_used_gb\", 0) or 0
+        r_total = hw.get(\"ram_total_gb\", 0) or 0
+        print(f'GPU VRAM:       {v_used:.1f} / {v_total:.1f} GB')
+        print(f'System RAM:     {r_used:.1f} / {r_total:.1f} GB')
+    print('-----------------------------------------')
+except Exception:
+    print('Server busy or still initializing...')
+" || echo -e "${YELLOW}Server unreachable.${NC}"
+            ;;
+        "urls")
+            echo -e "  • Local:   ${BOLD}${CYAN}${PROTOCOL}://localhost:${PORT}${NC}"
+            if [ -n "$LOCAL_IP" ]; then
+                echo -e "  • Network: ${BOLD}${GREEN}${PROTOCOL}://${LOCAL_IP}:${PORT}${NC}"
+            fi
+            ;;
+        "models")
+            curl $CURL_OPTS "${PROTOCOL}://127.0.0.1:${PORT}/api/models" 2>/dev/null | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    models = d.get('models', [])
+    print(f'Discovered Models ({len(models)}):')
+    for m in models:
+        print(f' • {m.get(\"filename\", \"\")} [{m.get(\"size_gb\", 0):.2f} GB]')
+except Exception:
+    print('Unable to fetch models.')
+" || echo -e "${YELLOW}Unable to fetch models.${NC}"
+            ;;
+        "clear")
+            clear
+            ;;
+        "")
+            ;;
+        *)
+            echo -e "${YELLOW}Unknown command: '$CMD'. Type 'help' for options or 'quit' to exit.${NC}"
+            ;;
+    esac
+done
+
+cleanup

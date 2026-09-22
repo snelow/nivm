@@ -6,6 +6,7 @@ import os
 # Server configuration
 SERVER_HOST = os.getenv("SERVER_HOST", "0.0.0.0")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "8000"))
+SERVER_PROTOCOL = os.getenv("SERVER_PROTOCOL", "http")
 RELOAD = os.getenv("RELOAD", "True").lower() in ("true", "1", "t")
 
 # Directory & File Paths

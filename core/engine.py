@@ -731,7 +731,31 @@ class ModelManager:
         if model_path and os.path.abspath(mmproj_path) == os.path.abspath(model_path):
             logger.warning(f"mmproj_path is identical to model_path ({mmproj_path}); skipping chat handler.")
             return None
-        
+
+        # Safeguard: Validate model and projector variant compatibility (e.g. e2b vs e4b)
+        if model_path:
+            model_fname = os.path.basename(model_path).lower()
+            mmproj_fname = os.path.basename(mmproj_path).lower()
+            size_tokens = ["e2b", "2b", "e4b", "4b", "7b", "8b", "9b", "14b", "27b", "32b", "70b", "72b"]
+            m_size = next((s for s in size_tokens if s in model_fname), None)
+            p_size = next((s for s in size_tokens if s in mmproj_fname), None)
+            if m_size and p_size and m_size != p_size:
+                logger.warning(f"Multimodal projector size mismatch: model '{model_fname}' ({m_size}) vs mmproj '{mmproj_fname}' ({p_size}).")
+                # Look for matching mmproj in MODELS_DIR
+                matched_path = None
+                if os.path.isdir(MODELS_DIR):
+                    for fname in os.listdir(MODELS_DIR):
+                        lf = fname.lower()
+                        if "mmproj" in lf and m_size in lf and lf.endswith(".gguf"):
+                            matched_path = os.path.join(MODELS_DIR, fname)
+                            break
+                if matched_path and os.path.isfile(matched_path):
+                    logger.info(f"Auto-corrected to matching projector: {matched_path}")
+                    mmproj_path = matched_path
+                else:
+                    logger.warning("No matching multimodal projector found for this model variant. Disabling chat handler to prevent crash.")
+                    return None
+
         # Auto-detect handler type if not specified
         if not handler_type or handler_type == "auto":
             fname = os.path.basename(mmproj_path).lower()
@@ -954,16 +978,37 @@ class ModelManager:
                         stream=stream,
                         enable_thinking=enable_thinking,
                     )
+                except ValueError as ve:
+                    if "Failed to load mtmd context" in str(ve):
+                        logger.warning(f"Direct chat_handler mtmd failed ({ve}). Detaching chat handler and retrying text-only...")
+                        model.chat_handler = None
+                    else:
+                        logger.warning(f"Direct chat_handler invocation failed: {ve}")
                 except Exception as e:
                     logger.warning(f"Direct chat_handler invocation failed: {e}")
-            return model.create_chat_completion(
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                repeat_penalty=repeat_penalty,
-                stream=stream,
-            )
+
+            try:
+                return model.create_chat_completion(
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    top_p=top_p,
+                    repeat_penalty=repeat_penalty,
+                    stream=stream,
+                )
+            except ValueError as ve:
+                if "Failed to load mtmd context" in str(ve) and getattr(model, "chat_handler", None):
+                    logger.warning(f"Multimodal projector context load failed ({ve}). Detaching incompatible projector and retrying text generation...")
+                    model.chat_handler = None
+                    return model.create_chat_completion(
+                        messages=messages,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        top_p=top_p,
+                        repeat_penalty=repeat_penalty,
+                        stream=stream,
+                    )
+                raise
 
     def get_active_model(self):
         """Return the active Llama model instance if loaded."""

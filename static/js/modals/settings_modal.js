@@ -1184,11 +1184,48 @@ export function setupSettingsUI() {
         });
     }
 
+    function autoPairMmprojForModel(modelPath) {
+        if (!modelPath || !dom.scannedMmprojSelect) return;
+        const lower = modelPath.toLowerCase();
+        const sizeTokens = ['e2b', '2b', 'e4b', '4b', '7b', '8b', '9b', '14b', '27b', '32b', '70b'];
+        const matchedSize = sizeTokens.find(tok => lower.includes(tok));
+
+        let matchingMmprojVal = null;
+        for (const opt of dom.scannedMmprojSelect.options) {
+            const optVal = opt.value.toLowerCase();
+            if (!optVal) continue;
+            if (matchedSize && optVal.includes('mmproj') && optVal.includes(matchedSize)) {
+                matchingMmprojVal = opt.value;
+                break;
+            }
+        }
+
+        const currentVal = dom.customMmprojInput ? dom.customMmprojInput.value.trim().toLowerCase() : '';
+        const currentSize = sizeTokens.find(tok => currentVal.includes(tok));
+
+        if (matchingMmprojVal) {
+            dom.scannedMmprojSelect.value = matchingMmprojVal;
+            if (dom.customMmprojInput) dom.customMmprojInput.value = matchingMmprojVal;
+            state.customMmprojPath = matchingMmprojVal;
+            verifyPathStatus(matchingMmprojVal, dom.customMmprojStatus, true);
+            if (dom.customMmprojCpu) dom.customMmprojCpu.disabled = false;
+            setVisionEnabled(true);
+        } else if (matchedSize && currentSize && matchedSize !== currentSize) {
+            dom.scannedMmprojSelect.value = '';
+            if (dom.customMmprojInput) dom.customMmprojInput.value = '';
+            state.customMmprojPath = '';
+            verifyPathStatus('', dom.customMmprojStatus, true);
+            if (dom.customMmprojCpu) dom.customMmprojCpu.disabled = true;
+            setVisionEnabled(false);
+        }
+    }
+
     if (dom.scannedGgufSelect) {
         dom.scannedGgufSelect.addEventListener('change', () => {
             const val = dom.scannedGgufSelect.value.trim();
             if (dom.customModelPathInput) dom.customModelPathInput.value = val;
             verifyPathStatus(val, dom.customModelPathStatus);
+            autoPairMmprojForModel(val);
             const foundMeta = scannedModelsCache.find(m => m.path === val);
             if (foundMeta) {
                 applyModelMetadataToUI(foundMeta);
@@ -1204,6 +1241,7 @@ export function setupSettingsUI() {
             const val = dom.customModelPathInput.value.trim();
             syncSelectWithInput(dom.scannedGgufSelect, val);
             verifyPathStatus(val, dom.customModelPathStatus);
+            autoPairMmprojForModel(val);
             const foundMeta = scannedModelsCache.find(m => m.path === val || m.filename === val.split('/').pop());
             if (foundMeta) {
                 applyModelMetadataToUI(foundMeta);

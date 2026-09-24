@@ -44,11 +44,40 @@ EOF
     echo ""
 }
 
+# Helper: Prompt and confirm password
+prompt_password() {
+    local prompt="$1" var="$2" p1 p2
+    while true; do
+        read -s -p "$(echo -e "${WHITE}  $prompt: ${NC}")" p1; echo ""
+        if [ ${#p1} -lt 4 ]; then
+            echo -e "${RED}  [!] Password must be at least 4 characters long.${NC}"
+            continue
+        fi
+        read -s -p "$(echo -e "${WHITE}  Confirm $prompt: ${NC}")" p2; echo ""
+        if [ "$p1" != "$p2" ]; then
+            echo -e "${RED}  [!] Passwords do not match. Try again.${NC}"
+            continue
+        fi
+        eval "$var=\$p1"
+        break
+    done
+}
+
+# Helper: Show recovery key
+show_recovery_key() {
+    if [ -f "$REC_KEY_FILE" ]; then
+        echo -e "${CYAN}┌─ Emergency Recovery Key ──────────────────────────────────────${NC}"
+        while IFS= read -r line; do echo -e "${CYAN}│${NC}  ${WHITE}$line${NC}"; done < "$REC_KEY_FILE"
+        echo -e "${CYAN}└───────────────────────────────────────────────────────────────${NC}"
+    else
+        echo -e "${YELLOW}[!] No recovery key file found at ${REC_KEY_FILE}.${NC}"
+    fi
+}
+
 # Function to show usage help
 show_help() {
     print_banner
-    echo -e "${CYAN}Usage:${NC} ./run.sh [OPTIONS]"
-    echo ""
+    echo -e "${CYAN}Usage:${NC} ./run.sh [OPTIONS]\n"
     echo -e "${WHITE}Options:${NC}"
     echo -e "  ${CYAN}-h, --host HOST${NC}         Set server bind address (default: 0.0.0.0)"
     echo -e "  ${CYAN}-p, --port PORT${NC}         Set server port (default: 8000)"
@@ -61,68 +90,25 @@ show_help() {
     echo -e "  ${CYAN}--setup-auth${NC}            Configure or re-create Owner credentials"
     echo -e "  ${CYAN}--reset-password${NC}        Reset Owner Master Password from terminal"
     echo -e "  ${CYAN}--show-key${NC}              Display current Emergency Recovery Key"
-    echo -e "  ${CYAN}--help${NC}                  Show this help message and exit"
-    echo ""
+    echo -e "  ${CYAN}--help${NC}                  Show this help message and exit\n"
 }
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -h|--host)
-            HOST="$2"
-            shift 2
-            ;;
-        -p|--port)
-            PORT="$2"
-            shift 2
-            ;;
-        --ssl)
-            ENABLE_SSL="true"
-            shift
-            ;;
-        --ssl-cert)
-            SSL_CERT="$2"
-            ENABLE_SSL="true"
-            shift 2
-            ;;
-        --ssl-key)
-            SSL_KEY="$2"
-            ENABLE_SSL="true"
-            shift 2
-            ;;
-        --no-reload)
-            RELOAD="false"
-            shift
-            ;;
-        -k|--kill)
-            KILL_EXISTING="true"
-            shift
-            ;;
-        -s|--setup)
-            FORCE_SETUP="true"
-            shift
-            ;;
-        --setup-auth)
-            SETUP_AUTH="true"
-            shift
-            ;;
-        --reset-password)
-            RESET_PASS="true"
-            shift
-            ;;
-        --show-key)
-            SHOW_KEY="true"
-            shift
-            ;;
-        --help)
-            show_help
-            exit 0
-            ;;
-        *)
-            echo -e "${RED}[!] Unknown option: $1${NC}"
-            show_help
-            exit 1
-            ;;
+        -h|--host) HOST="$2"; shift 2 ;;
+        -p|--port) PORT="$2"; shift 2 ;;
+        --ssl) ENABLE_SSL="true"; shift ;;
+        --ssl-cert) SSL_CERT="$2"; ENABLE_SSL="true"; shift 2 ;;
+        --ssl-key) SSL_KEY="$2"; ENABLE_SSL="true"; shift 2 ;;
+        --no-reload) RELOAD="false"; shift ;;
+        -k|--kill) KILL_EXISTING="true"; shift ;;
+        -s|--setup) FORCE_SETUP="true"; shift ;;
+        --setup-auth) SETUP_AUTH="true"; shift ;;
+        --reset-password) RESET_PASS="true"; shift ;;
+        --show-key) SHOW_KEY="true"; shift ;;
+        --help) show_help; exit 0 ;;
+        *) echo -e "${RED}[!] Unknown option: $1${NC}"; show_help; exit 1 ;;
     esac
 done
 
@@ -133,19 +119,11 @@ VENV_DIR="venv"
 
 if [ "$FORCE_SETUP" = "true" ] || [ ! -d "$VENV_DIR" ]; then
     echo -e "${YELLOW}[+] Preparing Python virtual environment...${NC}"
-    if command -v python3.14 &>/dev/null; then
-        PYTHON_BIN="python3.14"
-    elif command -v python3.12 &>/dev/null; then
-        PYTHON_BIN="python3.12"
-    elif command -v python3.11 &>/dev/null; then
-        PYTHON_BIN="python3.11"
-    elif command -v python3 &>/dev/null; then
-        PYTHON_BIN="python3"
-    elif command -v python &>/dev/null; then
-        PYTHON_BIN="python"
-    else
-        echo -e "${RED}[!] Error: Python 3 is not installed or not in PATH.${NC}"
-        exit 1
+    for py in python3.14 python3.12 python3.11 python3 python; do
+        if command -v "$py" &>/dev/null; then PYTHON_BIN="$py"; break; fi
+    done
+    if [ -z "$PYTHON_BIN" ]; then
+        echo -e "${RED}[!] Error: Python 3 is not installed or not in PATH.${NC}"; exit 1
     fi
 
     if [ ! -d "$VENV_DIR" ]; then
@@ -170,15 +148,7 @@ REC_KEY_FILE="User files/recovery_key.txt"
 
 # 1. Show Recovery Key
 if [ "$SHOW_KEY" = "true" ]; then
-    if [ -f "$REC_KEY_FILE" ]; then
-        echo -e "${CYAN}┌─ Emergency Recovery Key ──────────────────────────────────────${NC}"
-        while IFS= read -r line; do
-            echo -e "${CYAN}│${NC}  ${WHITE}$line${NC}"
-        done < "$REC_KEY_FILE"
-        echo -e "${CYAN}└───────────────────────────────────────────────────────────────${NC}"
-    else
-        echo -e "${YELLOW}[!] No recovery key file found at ${REC_KEY_FILE}.${NC}"
-    fi
+    show_recovery_key
     exit 0
 fi
 
@@ -186,33 +156,16 @@ fi
 if [ "$RESET_PASS" = "true" ]; then
     echo -e "${CYAN}┌─ Owner Password Reset ────────────────────────────────────────${NC}"
     echo -e "${CYAN}│${NC}  ${GRAY}Resetting the Project NIVM master password directly.${NC}"
-    echo -e "${CYAN}└───────────────────────────────────────────────────────────────${NC}"
-    echo ""
-    while true; do
-        read -s -p "$(echo -e "${WHITE}  New Master Password: ${NC}")" NEW_P1
-        echo ""
-        if [ ${#NEW_P1} -lt 4 ]; then
-            echo -e "${RED}  [!] Password must be at least 4 characters long.${NC}"
-            continue
-        fi
-        read -s -p "$(echo -e "${WHITE}  Confirm Master Password: ${NC}")" NEW_P2
-        echo ""
-        if [ "$NEW_P1" != "$NEW_P2" ]; then
-            echo -e "${RED}  [!] Passwords do not match. Try again.${NC}"
-            continue
-        fi
-        break
-    done
+    echo -e "${CYAN}└───────────────────────────────────────────────────────────────${NC}\n"
+    prompt_password "New Master Password" NEW_P1
 
     python3 -c "
-import sys
-sys.path.insert(0, '.')
+import sys; sys.path.insert(0, '.')
 from core.auth import reset_password_direct
 if reset_password_direct('$NEW_P1'):
     print('\033[1;32m[✓] Master password updated. All previous sessions revoked.\033[0m')
 else:
-    print('\033[1;31m[!] Failed to reset password.\033[0m')
-    sys.exit(1)
+    print('\033[1;31m[!] Failed to reset password.\033[0m'); sys.exit(1)
 "
     exit 0
 fi
@@ -224,26 +177,10 @@ if [ "$IS_CONFIGURED" != "true" ] || [ "$SETUP_AUTH" = "true" ]; then
     echo -e "${CYAN}┌─ Security Setup: Master Password ─────────────────────────────${NC}"
     echo -e "${CYAN}│${NC}  ${GRAY}Project NIVM requires a Master Password to safeguard${NC}"
     echo -e "${CYAN}│${NC}  ${GRAY}private chat histories, neural memories, and tools.${NC}"
-    echo -e "${CYAN}└───────────────────────────────────────────────────────────────${NC}"
-    echo ""
+    echo -e "${CYAN}└───────────────────────────────────────────────────────────────${NC}\n"
 
     OWNER_USER="admin"
-
-    while true; do
-        read -s -p "$(echo -e "${WHITE}  Master Password: ${NC}")" OWNER_P1
-        echo ""
-        if [ ${#OWNER_P1} -lt 4 ]; then
-            echo -e "${RED}  [!] Password must be at least 4 characters long.${NC}"
-            continue
-        fi
-        read -s -p "$(echo -e "${WHITE}  Confirm Password: ${NC}")" OWNER_P2
-        echo ""
-        if [ "$OWNER_P1" != "$OWNER_P2" ]; then
-            echo -e "${RED}  [!] Passwords do not match. Try again.${NC}"
-            continue
-        fi
-        break
-    done
+    prompt_password "Master Password" OWNER_P1
 
     RECOVERY_KEY=$(python3 -c "
 import sys
@@ -596,21 +533,9 @@ while kill -0 "$SERVER_PID" 2>/dev/null; do
             ;;
         "passwd"|"reset-pass")
             echo -e "${CYAN}┌─ Change Master Password ──────────────────────────────────────${NC}"
-            read -s -p "$(echo -e "${WHITE}  New Master Password: ${NC}")" NP1
-            echo ""
-            if [ ${#NP1} -lt 4 ]; then
-                echo -e "${RED}  [!] Password must be at least 4 characters long.${NC}"
-                continue
-            fi
-            read -s -p "$(echo -e "${WHITE}  Confirm Password: ${NC}")" NP2
-            echo ""
-            if [ "$NP1" != "$NP2" ]; then
-                echo -e "${RED}  [!] Passwords did not match.${NC}"
-                continue
-            fi
+            prompt_password "New Master Password" NP1
             python3 -c "
-import sys
-sys.path.insert(0, '.')
+import sys; sys.path.insert(0, '.')
 from core.auth import reset_password_direct
 if reset_password_direct('$NP1'):
     print('\033[1;32m  [✓] Password successfully changed. All active sessions refreshed.\033[0m')
@@ -620,15 +545,7 @@ else:
             echo -e "${CYAN}└───────────────────────────────────────────────────────────────${NC}"
             ;;
         "rec-key"|"recovery"|"key")
-            if [ -f "$REC_KEY_FILE" ]; then
-                echo -e "${CYAN}┌─ Emergency Recovery Key ──────────────────────────────────────${NC}"
-                while IFS= read -r line; do
-                    echo -e "${CYAN}│${NC}  ${WHITE}$line${NC}"
-                done < "$REC_KEY_FILE"
-                echo -e "${CYAN}└───────────────────────────────────────────────────────────────${NC}"
-            else
-                echo -e "${YELLOW}[!] No recovery key file found at ${REC_KEY_FILE}.${NC}"
-            fi
+            show_recovery_key
             ;;
         "logs"|"log")
             if [ -f "$LOG_FILE" ]; then

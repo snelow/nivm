@@ -535,6 +535,7 @@ class ModelManager:
     def __init__(self):
         self.loaded_models: Dict[str, Llama] = {}
         self.loaded_paths: Dict[str, str] = {}
+        self.loaded_configs: Dict[str, Dict[str, Any]] = {}
         self.last_known_good_paths: Dict[str, str] = {}
         self.last_load_warning: Optional[str] = None
         self.active_role: Optional[str] = None
@@ -553,6 +554,7 @@ class ModelManager:
         mmproj = active_cfg.get("mmproj_path", "")
         mmproj_valid = bool(mmproj and mmproj.strip().lower() != "none" and os.path.isfile(mmproj.strip()))
         has_vision = bool(mmproj_valid or active_cfg.get("chat_handler_type") is not None or self.active_role == "vision")
+        mmproj_use_gpu = active_cfg.get("mmproj_use_gpu", True)
         has_prefill_think = False
         layers = None
         arch = None
@@ -563,6 +565,10 @@ class ModelManager:
 
         if self.active_role and self.active_role in self.loaded_models:
             m = self.loaded_models[self.active_role]
+            if getattr(m, "chat_handler", None) is not None:
+                has_vision = True
+            elif not mmproj_valid:
+                has_vision = False
             if hasattr(m, "metadata") and isinstance(m.metadata, dict):
                 m_meta = extract_metadata_from_dict(m.metadata)
                 layers = m_meta.get("layers")
@@ -619,6 +625,8 @@ class ModelManager:
             "warning": self.last_load_warning,
             "has_vision": has_vision,
             "mmproj_path": mmproj if mmproj_valid else None,
+            "mmproj_use_gpu": mmproj_use_gpu,
+            "mmproj_device": "gpu" if mmproj_use_gpu else "cpu",
             "prefill_think": has_prefill_think,
             "layers": layers,
             "arch": arch,
@@ -690,15 +698,23 @@ class ModelManager:
     def unload_all(self):
         """Unload all models and free memory."""
         logger.warning(f"Unloading all {len(self.loaded_models)} models...")
-        for role, model in list(self.loaded_models.items()):
-            del model
+        for role in list(self.loaded_models.keys()):
+            model = self.loaded_models.pop(role, None)
+            if model is not None:
+                try:
+                    if hasattr(model, "close"):
+                        model.close()
+                except Exception as ce:
+                    logger.warning(f"Error closing model {role}: {ce}")
+                del model
         self.loaded_models.clear()
         self.loaded_paths.clear()
+        self.loaded_configs.clear()
         self.active_role = None
         self.active_name = ""
         gc.collect()
     
-    def _create_chat_handler(self, config: Dict[str, Any]):
+    def _create_chat_handler(self, config: Dict[str, Any], model_path: Optional[str] = None):
         """Create a multimodal chat handler if needed."""
         handler_type = config.get("chat_handler_type")
         mmproj_path = config.get("mmproj_path", "").strip()
@@ -707,14 +723,14 @@ class ModelManager:
             return None
         
         # Safeguard: Do not load base model as projector
-        model_path = config.get("path", "").strip()
-        if model_path and os.path.abspath(mmproj_path) == os.path.abspath(model_path):
+        resolved_model_path = model_path or config.get("path", "").strip()
+        if resolved_model_path and os.path.abspath(mmproj_path) == os.path.abspath(resolved_model_path):
             logger.warning(f"mmproj_path is identical to model_path ({mmproj_path}); skipping chat handler.")
             return None
 
         # Safeguard: Validate model and projector variant compatibility (e.g. e2b vs e4b)
-        if model_path:
-            model_fname = os.path.basename(model_path).lower()
+        if resolved_model_path:
+            model_fname = os.path.basename(resolved_model_path).lower()
             mmproj_fname = os.path.basename(mmproj_path).lower()
             size_tokens = ["e2b", "2b", "e4b", "4b", "7b", "8b", "9b", "14b", "27b", "32b", "70b", "72b"]
             m_size = next((s for s in size_tokens if s in model_fname), None)
@@ -826,6 +842,12 @@ class ModelManager:
                 
                 handler._create_bitmap_from_bytes = custom_create_bitmap
             
+            use_gpu_flag = config.get("mmproj_use_gpu", True)
+            device_str = "GPU" if use_gpu_flag else "CPU"
+            logger.warning(
+                f"Multimodal Vision Projector loaded: {os.path.basename(mmproj_path)} "
+                f"({HandlerClass.__name__} on {device_str})"
+            )
             return handler
         except Exception as e:
             logger.error(f"Failed to create chat handler: {e}")
@@ -840,29 +862,68 @@ class ModelManager:
         if not HAS_LLAMA_CPP:
             raise RuntimeError("llama-cpp-python is not installed.")
         
+        # Ensure latest settings overrides from settings.json are applied
+        try:
+            from core.storage import _apply_all_overrides
+            _apply_all_overrides()
+        except ImportError:
+            try:
+                from storage import _apply_all_overrides
+                _apply_all_overrides()
+            except Exception:
+                pass
+        except Exception:
+            pass
+
         if role not in MODEL_REGISTRY:
             raise ValueError(f"Unknown model role: {role}. Available: {list(MODEL_REGISTRY.keys())}")
         
         config = MODEL_REGISTRY[role]
-        
-        # Already loaded
-        if role in self.loaded_models:
-            self.active_role = role
-            self.active_name = config["name"]
-            return 0.0
-        
-        # Unload any currently loaded models to free VRAM for the new one
-        if self.loaded_models:
-            for loaded_role in list(self.loaded_models.keys()):
-                logger.warning(f"Unloading model: {loaded_role}")
-                del self.loaded_models[loaded_role]
-            self.loaded_paths.clear()
-        
+
         model_path = self.get_model_path(role)
         if not model_path:
             raise FileNotFoundError(
                 "No valid GGUF model files found on disk. Please download or select a GGUF model in Settings."
             )
+
+        # Build current configuration signature to detect changes (including mmproj & CPU/GPU flags)
+        raw_mmproj = (config.get("mmproj_path") or "").strip()
+        current_config_sig = {
+            "model_path": os.path.abspath(model_path) if model_path else "",
+            "mmproj_path": os.path.abspath(raw_mmproj) if raw_mmproj and raw_mmproj.lower() != "none" and os.path.isfile(raw_mmproj) else "",
+            "mmproj_use_gpu": config.get("mmproj_use_gpu", True),
+            "chat_handler_type": config.get("chat_handler_type", "auto"),
+            "n_gpu_layers": config.get("n_gpu_layers", -1),
+            "n_ctx": config.get("n_ctx", 8192),
+            "n_batch": config.get("n_batch", 512),
+            "flash_attn": config.get("flash_attn", True),
+            "offload_kqv": config.get("offload_kqv", True),
+            "kv_type": config.get("kv_type", "q4_0"),
+            "use_mlock": config.get("use_mlock", False),
+            "use_mmap": config.get("use_mmap", True),
+        }
+        
+        # Already loaded with identical configuration
+        if role in self.loaded_models and self.loaded_configs.get(role) == current_config_sig:
+            self.active_role = role
+            self.active_name = os.path.basename(model_path) if role == "custom" else config["name"]
+            return 0.0
+        
+        # Unload any currently loaded models to free VRAM for the new/updated one
+        if self.loaded_models:
+            for loaded_role in list(self.loaded_models.keys()):
+                logger.warning(f"Unloading model: {loaded_role}")
+                old_model = self.loaded_models.pop(loaded_role, None)
+                if old_model is not None:
+                    try:
+                        if hasattr(old_model, "close"):
+                            old_model.close()
+                    except Exception as ce:
+                        logger.warning(f"Error closing model {loaded_role}: {ce}")
+                    del old_model
+            self.loaded_paths.clear()
+            self.loaded_configs.clear()
+            gc.collect()
         
         self._loading = True
         start = time.time()
@@ -881,7 +942,7 @@ class ModelManager:
         type_v = type_k if config.get("flash_attn", True) else llama_cpp.GGML_TYPE_F16
         
         # Create chat handler for multimodal models
-        chat_handler = self._create_chat_handler(config)
+        chat_handler = self._create_chat_handler(config, model_path=model_path)
         
         def _try_load(path_to_load: str):
             with suppress_c():
@@ -904,6 +965,7 @@ class ModelManager:
             model = _try_load(model_path)
             self.loaded_models[role] = model
             self.loaded_paths[role] = model_path
+            self.loaded_configs[role] = current_config_sig
             self.last_known_good_paths[role] = model_path
             self.active_role = role
             self.active_name = os.path.basename(model_path) if role == "custom" else config["name"]
@@ -925,6 +987,7 @@ class ModelManager:
                 self.active_name = None
                 self.loaded_models.clear()
                 self.loaded_paths.clear()
+                self.loaded_configs.clear()
                 self.last_load_warning = friendly_msg
                 raise RuntimeError(friendly_msg)
 
@@ -933,6 +996,7 @@ class ModelManager:
             self.active_name = None
             self.loaded_models.clear()
             self.loaded_paths.clear()
+            self.loaded_configs.clear()
             self.last_load_warning = None
             raise RuntimeError(f"Failed to load model ({os.path.basename(model_path)}): {e}")
         finally:

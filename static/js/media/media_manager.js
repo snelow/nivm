@@ -24,12 +24,10 @@ export function isVisionSupported() {
         return true;
     }
     if (state.inferenceMode === 'single') {
-        const role = dom.singleModelRoleSelect ? dom.singleModelRoleSelect.value : (state.selectedModel || 'custom');
+        const mmproj = (state.customMmprojPath || dom.customMmprojInput?.value || '').trim();
+        if (mmproj && mmproj.toLowerCase() !== 'none') return true;
+        const role = state.singleModelRole || (dom.singleModelRoleSelect ? dom.singleModelRoleSelect.value : (state.selectedModel || ''));
         if (role === 'vision') return true;
-        if (role === 'custom') {
-            const mmproj = (state.customMmprojPath || '').trim();
-            return Boolean(mmproj && mmproj.toLowerCase() !== 'none');
-        }
         return false;
     }
     return false;

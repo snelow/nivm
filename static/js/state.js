@@ -23,6 +23,7 @@ export let state = {
     apiKey: '',
     engineMode: 'native',
     inferenceMode: 'single',
+    singleModelRole: _str('nivm_singleModelRole', 'custom'),
     apiMultimodal: null,
     isModelLoaded: false,
     sideNotifDismissed: false,

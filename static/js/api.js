@@ -103,7 +103,9 @@ export async function fetchApiSettings() {
     }
     if (window.updateVisionAvailabilityUI) window.updateVisionAvailabilityUI();
 
-    if (dom.singleModelRoleSelect) dom.singleModelRoleSelect.value = data.single_model_role || 'custom';
+    state.singleModelRole = data.single_model_role || 'custom';
+    localStorage.setItem('nivm_singleModelRole', state.singleModelRole);
+    if (dom.singleModelRoleSelect) dom.singleModelRoleSelect.value = state.singleModelRole;
 
     state.customModelPath = data.custom_model_path || '';
     state.customMmprojPath = data.custom_mmproj_path || '';

@@ -80,7 +80,7 @@ export async function populateStatsModal() {
         if (modeBadgeText) modeBadgeText.textContent = 'Local Engine';
         if (statsModelIcon) statsModelIcon.className = 'fa-solid fa-microchip';
 
-        const role = dom.singleModelRoleSelect?.value || 'coder';
+        const role = state.singleModelRole || dom.singleModelRoleSelect?.value || 'custom';
         const isCustom = role === 'custom';
         const prefix = isCustom ? 'single' : role;
         if (dom.statsModelName) dom.statsModelName.textContent = isCustom ? (state.customModelPath ? state.customModelPath.split(/[/\\]/).pop() : 'Custom GGUF Model') : `Local Engine (${role.toUpperCase()})`;

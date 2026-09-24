@@ -6,8 +6,7 @@
  * so the rest of the codebase only needs to handle one format.
  * 
  * 
- *  HOW TO ADD A NEW MODEL'S THINKING TAGS
- *  ──────────────────────────────────────────────────────
+ *  How to add a new model's thinking tags:
  * 
  * When a new model uses custom thinking tags (e.g. <|mystuff>reason),
  * you need to update 3 files. Here's exactly what to do:
@@ -37,10 +36,9 @@
  *   engine.py PREFILL_MARKERS:      "<|begin_reason|>"
  * 
  * That's it — stream token splitting and boundary buffering are handled automatically.
- * ──────────────────────────────────────────────────────
  */
 
-// ── Opening tags ──────────────────────────────────────────────────────
+// Opening tags
 // Each regex maps a model-specific "start thinking" token → <think>
 const OPEN_TAGS = [
     // Standard variants (QwQ, DeepSeek-R1, Phi-4, etc.)
@@ -61,7 +59,7 @@ const OPEN_TAGS = [
     { regex: /<\|start_thinking\|>/gi, replace: '<think>' },
 ];
 
-// ── Closing tags ──────────────────────────────────────────────────────
+// Closing tags
 // Each regex maps a model-specific "end thinking" token → </think>
 const CLOSE_TAGS = [
     // Standard variants
@@ -82,7 +80,7 @@ const CLOSE_TAGS = [
     { regex: /<\|end_thinking\|>/gi, replace: '</think>' },
 ];
 
-// ── Canonical list of known open tags (for token boundary buffering) ──
+// Canonical list of known open tags (for token boundary buffering)
 export const KNOWN_OPEN_TAGS = [
     '<think>',
     '<thought>',
@@ -95,7 +93,7 @@ export const KNOWN_OPEN_TAGS = [
     '<|start_thinking|>',
 ];
 
-// ── Raw open-tag strings for direct .includes() fallback checks ──────
+// Raw open-tag strings for direct .includes() fallback checks
 export const RAW_OPEN_TAGS = [
     '<|channel>thought',
     '<|channel|>thought',
@@ -104,7 +102,7 @@ export const RAW_OPEN_TAGS = [
     '<|start_thinking|>',
 ];
 
-// ── Raw close-tag strings for direct .includes() fallback checks ─────
+// Raw close-tag strings for direct .includes() fallback checks
 export const RAW_CLOSE_TAGS = [
     '<channel|>',
     '<|channel|>model',

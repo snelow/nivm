@@ -157,7 +157,7 @@ export async function sendMessage(text, triggerAssistantOnly = false, isHiddenUs
     const activeChat = state.conversations.find(c => c.id === state.activeChatId);
     const payloadMessages = [];
     const activeAiName = (state.aiName || 'nivm').trim();
-    let dynamicSystemPrompt = state.systemPrompt || `You are ${activeAiName}, an intelligent, sovereign AI assistant running 100% locally on the user's hardware inside Project NIVM (Native Inference Virtual Machine).`;
+    let dynamicSystemPrompt = state.systemPrompt || `You are ${activeAiName}, an intelligent, versatile AI companion running inside Project NIVM (Native Inference Virtual Machine).`;
     if (activeAiName.toLowerCase() !== 'nivm') {
         dynamicSystemPrompt = dynamicSystemPrompt.replace(/^You are nivm,/i, `You are ${activeAiName},`);
         dynamicSystemPrompt += `\n\nYour assigned name is: "${activeAiName}". Always identify and respond as "${activeAiName}".`;

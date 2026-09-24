@@ -30,7 +30,7 @@ export const VOICE_PREVIEWS = {
         "Local neural compute is ready. How does my pace and tone sound for you?"
     ],
     '2': [
-        "The best part about having a sovereign AI is that your conversations remain entirely private and completely yours. What shall we explore next?",
+        "The best part about having a private AI is that your conversations remain entirely private and completely yours. What shall we explore next?",
         "I hope you're having a wonderful and productive day! Let me know whatever you'd like to work on."
     ],
     '3': [
@@ -789,7 +789,7 @@ export function cleanTextForSpeech(text) {
     // 5. Normalize stutters (Wh-what -> What, h-h- hello -> hello, w-wait -> wait)
     cleaned = normalizeStutters(cleaned);
 
-    // 6. Apply sovereign & anime pronunciation lexicon (hmph -> humph, baka -> bah-ka, nivm -> Nim)
+    // 6. Apply custom & anime pronunciation lexicon (hmph -> humph, baka -> bah-ka, nivm -> Nim)
     cleaned = applyClientPronunciations(cleaned);
 
     // 7. Clean punctuation & whitespace
@@ -1126,7 +1126,7 @@ export async function setupVoiceUI() {
                     window.showNotification(
                         sttEngine === 'web'
                             ? 'Voice Input: Web Speech (Real-time streaming, zero lag)'
-                            : `Voice Input: Local Faster-Whisper (${whisperModel}, sovereign on-device)`,
+                            : `Voice Input: Local Faster-Whisper (${whisperModel}, on-device)`,
                         'info'
                     );
                 }

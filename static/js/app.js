@@ -13,6 +13,7 @@ import { setupPersonalityUI } from './modals/personality_modal.js';
 import { setupFileBrowserUI } from './modals/file_browser.js';
 import { setupSentinelUI } from './modals/sentinel_modal.js';
 import { setupImageStudioUI, openImageStudio, switchStudioTab } from './modals/image_studio_modal.js';
+import { setupAuthUI, checkAuthSession, showAuthLock, hideAuthLock } from './auth.js';
 
 // Global references for UI modules and HTML onclick handlers
 window.__nivm_state = state;
@@ -117,63 +118,60 @@ const startApp = async () => {
             setupHistoryUI();
             setupMobileNav();
 
-            // Cache hydration: render cached chats immediately
-            try {
-                const cachedChats = localStorage.getItem('nivm_saved_chats');
-                if (cachedChats) {
-                    const parsed = JSON.parse(cachedChats);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                        state.conversations = parsed;
-                        if (!state.activeChatId) {
-                            state.activeChatId = parsed[0].id;
-                        }
-                        renderChatHistory();
-                        renderActiveChat();
-                    }
-                }
-            } catch (e) {
-                console.warn('Instant chat cache hydration:', e);
-            }
-
+            state.conversations = [];
             setupVisionUI();
             setupAudioRecording();
             updateModelAvailabilityUI(false);
 
-            await Promise.all([
-                fetchApiSettings(),
-                fetchBackendConfig(),
-                checkBackendHealth(),
-                fetchEngineStatus(),
-                loadAvailableModels()
-            ]);
-            updateVisionAvailabilityUI();
-            initImageStudioSettings();
-
-            // Sync server chats & memory concurrently
-            try {
-                const [serverChats, memory] = await Promise.all([
-                    fetchChats().catch(err => { console.warn('Server chats fetch warning:', err); return null; }),
-                    fetchMemoryAPI().catch(err => { console.warn('Memory fetch warning:', err); return null; })
+            // Single-User Gatekeeper Data Loader
+            const loadAuthenticatedData = async () => {
+                await Promise.all([
+                    fetchApiSettings(),
+                    fetchBackendConfig(),
+                    checkBackendHealth(),
+                    fetchEngineStatus(),
+                    loadAvailableModels()
                 ]);
-                if (Array.isArray(serverChats) && serverChats.length > 0) {
-                    state.conversations = serverChats;
-                }
-                if (memory) {
-                    state.memory = memory;
-                }
-            } catch (err) {
-                console.warn('Server chats/memory sync warning:', err);
-            }
+                updateVisionAvailabilityUI();
+                initImageStudioSettings();
 
-            if (state.conversations.length > 0) {
-                if (!state.activeChatId || !state.conversations.some(c => c.id === state.activeChatId)) {
-                    state.activeChatId = state.conversations[0].id;
-                    switchChat(state.activeChatId);
+                // Sync server chats & memory concurrently
+                try {
+                    const [serverChats, memory] = await Promise.all([
+                        fetchChats().catch(err => { console.warn('Server chats fetch warning:', err); return null; }),
+                        fetchMemoryAPI().catch(err => { console.warn('Memory fetch warning:', err); return null; })
+                    ]);
+                    if (Array.isArray(serverChats) && serverChats.length > 0) {
+                        state.conversations = serverChats;
+                    }
+                    if (memory) {
+                        state.memory = memory;
+                    }
+                } catch (err) {
+                    console.warn('Server chats/memory sync warning:', err);
                 }
-                renderChatHistory();
-                checkAndResumeActiveGeneration(state.activeChatId);
+
+                if (state.conversations.length > 0) {
+                    if (!state.activeChatId || !state.conversations.some(c => c.id === state.activeChatId)) {
+                        state.activeChatId = state.conversations[0].id;
+                        switchChat(state.activeChatId);
+                    }
+                    renderChatHistory();
+                    checkAndResumeActiveGeneration(state.activeChatId);
+                } else {
+                    renderChatHistory();
+                }
+            };
+
+            setupAuthUI(loadAuthenticatedData);
+
+            // Check if current browser has an active session
+            const authSession = await checkAuthSession();
+            if (authSession && authSession.authenticated) {
+                hideAuthLock();
+                await loadAuthenticatedData();
             } else {
-                renderChatHistory();
+                showAuthLock();
             }
         } catch (error) {
             await showAlert("Initialization Error", error.stack);

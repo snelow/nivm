@@ -6,6 +6,7 @@
 
 /* Modals */
 @import 'modals/modals_base.css';
+@import 'modals/auth_modal.css';
 @import 'modals/theme_modal.css';
 @import 'modals/settings_modal.css';
 @import 'modals/sentinel_modal.css';

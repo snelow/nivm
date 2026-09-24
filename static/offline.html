@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Offline | Project NIVM</title>
+    <meta name="theme-color" content="#000000">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <style>
+        :root {
+            --bg-base: #000000;
+            --text-main: #ffffff;
+            --text-muted: #a1a1aa;
+            --text-dim: #71717a;
+            --cat-white: #ffffff;
+            --cat-outline: #18181b;
+            --box-base: #18181b;
+            --box-top: #222226;
+            --box-stroke: #33333b;
+            --tape-color: #2a2a30;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            overflow-x: hidden;
+            position: relative;
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        /* Subtle monochrome ambient glow */
+        .ambient-radial {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 580px;
+            height: 580px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 45%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Screen Shake Animation */
+        .screen-shake {
+            animation: screenShake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+        }
+
+        @keyframes screenShake {
+            10%, 90% { transform: translate3d(-3px, 0, 0); }
+            20%, 80% { transform: translate3d(4px, -1px, 0); }
+            30%, 50%, 70% { transform: translate3d(-5px, 2px, 0); }
+            40%, 60% { transform: translate3d(5px, -2px, 0); }
+        }
+
+        /* Open, borderless side-by-side / fluid scene */
+        .offline-scene {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 680px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 48px;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Interactive Cat & Box Stage (No text on top, pure monochrome) */
+        .interactive-stage {
+            flex-shrink: 0;
+            width: 250px;
+            height: 230px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            overflow: visible;
+        }
+
+        .cat-box-svg {
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+            pointer-events: none;
+        }
+
+        /* Idle Box Wiggle */
+        .box-stage.idle .box-group {
+            animation: boxShake 3.4s ease-in-out infinite;
+            transform-origin: 120px 170px;
+        }
+
+        @keyframes boxShake {
+            0%, 82%, 100% { transform: rotate(0deg); }
+            85% { transform: rotate(-3.5deg) translateY(-2px); }
+            88% { transform: rotate(3.5deg) translateY(-2px); }
+            91% { transform: rotate(-2deg); }
+            94% { transform: rotate(2deg); }
+            97% { transform: rotate(0deg); }
+        }
+
+        /* Cat emerging spring transition */
+        .cat-group {
+            transform-origin: 120px 150px;
+            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+        }
+
+        .box-stage.in-box .cat-group {
+            transform: translateY(75px) scale(0.55);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .box-stage.popped .cat-group {
+            transform: translateY(0) scale(1);
+            opacity: 1;
+        }
+
+        /* Box Flaps Animation */
+        .box-flap-left {
+            transform-origin: 60px 126px;
+            transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
+        }
+        .box-flap-right {
+            transform-origin: 180px 126px;
+            transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
+        }
+
+        .box-stage.popped .box-flap-left {
+            transform: rotate(-65deg) translate(-6px, 6px);
+        }
+        .box-stage.popped .box-flap-right {
+            transform: rotate(65deg) translate(6px, 6px);
+        }
+
+        .top-tape {
+            transition: opacity 0.25s ease;
+        }
+        .box-stage.popped .top-tape {
+            opacity: 0;
+        }
+
+        /* Head lunge / bounce on swat */
+        .cat-head-group {
+            transform-origin: 120px 90px;
+            transition: transform 0.1s cubic-bezier(0.2, 0.8, 0.4, 1.2);
+        }
+
+        /* Dynamic arm & paw paths */
+        .cat-arm {
+            transition: d 0.07s ease-out;
+        }
+
+        .cat-paw {
+            transform-origin: 0 0;
+            transition: transform 0.07s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+        }
+
+        /* Poof Smoke Particles - Pure Monochrome */
+        .poof-particle {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.35) 55%, transparent 100%);
+            pointer-events: none;
+            opacity: 0;
+            z-index: 10;
+        }
+
+        @keyframes boofBurst {
+            0% {
+                opacity: 1;
+                transform: translate(0, 0) scale(0.6);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(var(--dx), var(--dy)) scale(2.4);
+            }
+        }
+
+        /* Hit Impact Spark Effect - Pure Monochrome White */
+        .hit-impact-wrapper {
+            position: fixed;
+            pointer-events: none;
+            z-index: 9999;
+            transform: translate(-50%, -50%);
+        }
+
+        .hit-ring {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.8), inset 0 0 8px rgba(255, 255, 255, 0.4);
+            animation: hitRingAnim 0.28s ease-out forwards;
+        }
+
+        @keyframes hitRingAnim {
+            0% { transform: scale(0.4); opacity: 1; }
+            100% { transform: scale(2.2); opacity: 0; }
+        }
+
+        .hit-spark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
+            animation: hitSparkAnim 0.3s ease-out forwards;
+        }
+
+        @keyframes hitSparkAnim {
+            0% {
+                opacity: 1;
+                transform: translate(0, 0) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(var(--sx), var(--sy)) scale(0.2);
+            }
+        }
+
+        /* Cat Tail animation */
+        .cat-tail {
+            transform-origin: 75px 135px;
+            animation: tailIdle 3s ease-in-out infinite alternate;
+        }
+
+        @keyframes tailIdle {
+            0% { transform: rotate(0deg); }
+            50% { transform: rotate(-8deg); }
+            100% { transform: rotate(10deg); }
+        }
+
+        /* Screen text content side - Clean Monochrome */
+        .offline-content {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            text-align: left;
+            gap: 10px;
+        }
+
+        .title {
+            font-size: 42px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            line-height: 1.05;
+            color: var(--text-main);
+        }
+
+        .subtitle {
+            font-size: 16px;
+            line-height: 1.5;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        /* Status pill - Monochrome */
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            padding: 6px 14px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 100px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #f4f4f5;
+            margin-top: 2px;
+        }
+
+        .pulse-orb {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background-color: #ffffff;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.85);
+            animation: pulseOrb 1.6s infinite ease-in-out;
+        }
+
+        @keyframes pulseOrb {
+            0%, 100% { transform: scale(0.9); opacity: 0.6; }
+            50% { transform: scale(1.25); opacity: 1; }
+        }
+
+        .dots-wave span {
+            display: inline-block;
+            animation: dotWave 1.4s infinite ease-in-out both;
+        }
+
+        .dots-wave span:nth-child(1) { animation-delay: -0.32s; }
+        .dots-wave span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes dotWave {
+            0%, 80%, 100% { opacity: 0.25; }
+            40% { opacity: 1; }
+        }
+
+        /* Target address */
+        .target-url {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-top: 4px;
+            word-break: break-all;
+            opacity: 0.85;
+        }
+
+        /* Retry button - Monochrome */
+        .btn-retry {
+            margin-top: 14px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: var(--text-main);
+            padding: 8px 18px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-retry:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.3);
+            color: #ffffff;
+            transform: translateY(-1px);
+        }
+
+        .btn-retry:active {
+            transform: translateY(0);
+        }
+
+        .btn-retry.loading {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+
+        .spinner {
+            display: none;
+            width: 13px;
+            height: 13px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #ffffff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .btn-retry.loading .spinner {
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 620px) {
+            .offline-scene {
+                flex-direction: column;
+                gap: 28px;
+                text-align: center;
+            }
+
+            .offline-content {
+                align-items: center;
+                text-align: center;
+            }
+
+            .title {
+                font-size: 34px;
+            }
+
+            .subtitle {
+                font-size: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-radial"></div>
+
+    <main class="offline-scene">
+        <!-- Interactive Cat & Cardboard Box Stage (Bongo Cat with OwO Burst) -->
+        <div class="interactive-stage box-stage in-box idle" id="catStage">
+            <svg class="cat-box-svg" id="catSvg" viewBox="0 0 240 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Drop shadow beneath box -->
+                <ellipse cx="120" cy="195" rx="76" ry="12" fill="rgba(0, 0, 0, 0.6)"/>
+
+                <!-- 1. Box Interior Back Wall (Positioned cleanly BEHIND the cat) -->
+                <polygon points="62,126 178,126 166,104 74,104" fill="#09090b"/>
+
+                <!-- 2. Bongo Cat Tail (behind box & cat) -->
+                <path class="cat-tail" id="catTail" d="M72,130 C48,110 38,80 50,68 C56,62 64,68 58,76 C50,88 60,112 80,122" fill="#ffffff" stroke="var(--cat-outline)" stroke-width="2.6" stroke-linecap="round"/>
+
+                <!-- 3. Cat Character Group -->
+                <g class="cat-group" id="catGroup">
+                    <!-- Cat Lower Body (Solid white, extends inside box behind front face) -->
+                    <ellipse cx="120" cy="118" rx="40" ry="26" fill="var(--cat-white)" stroke="var(--cat-outline)" stroke-width="2.6"/>
+
+                    <!-- Bongo Cat Head Group (Smooth Rounded Shape, Zero Boxiness) -->
+                    <g class="cat-head-group" id="catHead">
+                        <!-- Head & Ears Unified Silhouette -->
+                        <path d="M 82,94 C 76,78 80,66 84,64 C 80,54 76,40 80,38 C 84,36 94,44 98,56 C 104,54 112,53 120,53 C 128,53 136,54 142,56 C 146,44 156,36 160,38 C 164,40 160,54 156,64 C 160,66 164,78 158,94 C 154,116 138,126 120,126 C 102,126 86,116 82,94 Z" fill="var(--cat-white)" stroke="var(--cat-outline)" stroke-width="2.8" stroke-linejoin="round"/>
+
+                        <!-- Left Inner Ear Contour -->
+                        <path d="M 83,60 Q 81,45 83,43 Q 88,47 93,56 Z" fill="#f4f4f5"/>
+
+                        <!-- Right Inner Ear Contour -->
+                        <path d="M 157,60 Q 159,45 157,43 Q 152,47 147,56 Z" fill="#f4f4f5"/>
+
+                        <!-- Cute Subtle Cheek Blush -->
+                        <ellipse cx="94" cy="90" rx="4.5" ry="2.5" fill="rgba(0, 0, 0, 0.06)"/>
+                        <ellipse cx="146" cy="90" rx="4.5" ry="2.5" fill="rgba(0, 0, 0, 0.06)"/>
+
+                        <!-- 1. Normal Bongo Cat Eyes (Curious anime eyes tracking cursor) -->
+                        <g id="catEyes">
+                            <!-- Left Eye -->
+                            <g id="pupilL">
+                                <ellipse cx="106" cy="83" rx="3.8" ry="4.8" fill="var(--cat-outline)"/>
+                                <circle cx="104.8" cy="81.2" r="1.3" fill="#ffffff"/>
+                                <circle cx="107.2" cy="84.5" r="0.7" fill="#ffffff" opacity="0.9"/>
+                            </g>
+
+                            <!-- Right Eye -->
+                            <g id="pupilR">
+                                <ellipse cx="134" cy="83" rx="3.8" ry="4.8" fill="var(--cat-outline)"/>
+                                <circle cx="132.8" cy="81.2" r="1.3" fill="#ffffff"/>
+                                <circle cx="135.2" cy="84.5" r="0.7" fill="#ffffff" opacity="0.9"/>
+                            </g>
+                        </g>
+
+                        <!-- 2. Surprise Anime OwO Eyes (Triggered during the 15-click burst!) -->
+                        <g id="animeOwOEyes" style="display: none;">
+                            <!-- Anime Shock Rays -->
+                            <path d="M 96,73 L 98,76 M 106,71 L 106,74 M 114,73 L 112,76" stroke="var(--cat-outline)" stroke-width="1.6" stroke-linecap="round"/>
+                            <path d="M 126,73 L 128,76 M 134,71 L 134,74 M 144,73 L 142,76" stroke="var(--cat-outline)" stroke-width="1.6" stroke-linecap="round"/>
+                            <!-- Left Big Surprised O Eye -->
+                            <ellipse cx="106" cy="82" rx="7.5" ry="9" fill="#ffffff" stroke="var(--cat-outline)" stroke-width="2.4"/>
+                            <ellipse cx="106" cy="82" rx="4.8" ry="6.2" fill="var(--cat-outline)"/>
+                            <circle cx="103.8" cy="79.5" r="2.2" fill="#ffffff"/>
+                            <circle cx="107.8" cy="85" r="1.1" fill="#ffffff"/>
+                            <!-- Right Big Surprised O Eye -->
+                            <ellipse cx="134" cy="82" rx="7.5" ry="9" fill="#ffffff" stroke="var(--cat-outline)" stroke-width="2.4"/>
+                            <ellipse cx="134" cy="82" rx="4.8" ry="6.2" fill="var(--cat-outline)"/>
+                            <circle cx="131.8" cy="79.5" r="2.2" fill="#ffffff"/>
+                            <circle cx="135.8" cy="85" r="1.1" fill="#ffffff"/>
+                            <!-- Anime Shock Sweat Drop -->
+                            <path d="M 87,66 C 87,63 88.5,60 90,57 C 91.5,60 93,63 93,66 C 93,68 91.5,69.5 90,69.5 C 88.5,69.5 87,68 87,66 Z" fill="#ffffff" stroke="var(--cat-outline)" stroke-width="1.4"/>
+                        </g>
+
+                        <!-- 3. Happy Crescent Slap / Retreat Eyes (^ ^) -->
+                        <g id="animeHappyEyes" style="display: none;">
+                            <path d="M 101,84 Q 106,78 111,84" stroke="var(--cat-outline)" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+                            <path d="M 129,84 Q 134,78 139,84" stroke="var(--cat-outline)" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+                        </g>
+
+                        <!-- 4. Blink Eyes -->
+                        <g id="animeBlinkEyes" style="display: none;">
+                            <path d="M 102,83 L 110,83" stroke="var(--cat-outline)" stroke-width="2.4" stroke-linecap="round"/>
+                            <path d="M 130,83 L 138,83" stroke="var(--cat-outline)" stroke-width="2.4" stroke-linecap="round"/>
+                        </g>
+
+                        <!-- Normal Bongo Cat Mouth (:3) -->
+                        <path id="catMouth" d="M 115,90 Q 117.5,93.5 120,91 Q 122.5,93.5 125,90" stroke="var(--cat-outline)" stroke-width="2" stroke-linecap="round" fill="none"/>
+
+                        <!-- OwO Surprised Mouth (w) -->
+                        <g id="mouthOwO" style="display: none;">
+                            <path d="M 113,89 Q 116.5,94 120,90 Q 123.5,94 127,89" stroke="var(--cat-outline)" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+                        </g>
+                    </g>
+                </g>
+
+                <!-- 4. Cardboard Box Front Face & Open Flaps (Conceals cat below y=126) -->
+                <g class="box-group" id="boxGroup">
+                    <!-- Left Closed / Open Flap -->
+                    <path class="box-flap-left" id="flapL" d="M60,126 L120,126 L120,104 L74,104 Z" fill="var(--box-top)" stroke="var(--box-stroke)" stroke-width="2"/>
+
+                    <!-- Right Closed / Open Flap -->
+                    <path class="box-flap-right" id="flapR" d="M120,126 L180,126 L166,104 L120,104 Z" fill="var(--box-top)" stroke="var(--box-stroke)" stroke-width="2"/>
+
+                    <!-- Top Sealing Tape across closed seam -->
+                    <path class="top-tape" d="M114,104 L126,104 L126,126 L114,126 Z" fill="var(--tape-color)"/>
+
+                    <!-- Box Front Face -->
+                    <path d="M60,126 L180,126 L174,188 L66,188 Z" fill="var(--box-base)" stroke="var(--box-stroke)" stroke-width="2.5" stroke-linejoin="round"/>
+
+                    <!-- Center Sealing Tape on Front -->
+                    <path d="M114,126 L126,126 L126,188 L114,188 Z" fill="var(--tape-color)"/>
+                    <line x1="120" y1="126" x2="120" y2="188" stroke="#3f3f46" stroke-width="1.2" stroke-dasharray="3 3"/>
+                </g>
+
+                <!-- 5. Bongo Cat Slapping Paws & Dynamic Arms (Resting cleanly on box rim) -->
+                <g class="cat-group" id="catLimbs">
+                    <!-- Left Arm & Paw -->
+                    <g id="armLGroup">
+                        <!-- Arm Outline Underneath -->
+                        <path class="cat-arm" id="armLStroke" d="M88,124 Q90,122 92,126" stroke="var(--cat-outline)" stroke-width="18" stroke-linecap="round" fill="none"/>
+                        <!-- White Arm Body -->
+                        <path class="cat-arm" id="armL" d="M88,124 Q90,122 92,126" stroke="#ffffff" stroke-width="13" stroke-linecap="round" fill="none"/>
+                        <!-- White Bongo Paw -->
+                        <g class="cat-paw" id="pawL" transform="translate(92, 126)">
+                            <ellipse cx="0" cy="0" rx="10" ry="7.5" fill="#ffffff" stroke="var(--cat-outline)" stroke-width="2.6"/>
+                            <!-- Toe Creases -->
+                            <line x1="-3" y1="-3" x2="-3" y2="1" stroke="#e4e4e7" stroke-width="1.2" stroke-linecap="round"/>
+                            <line x1="3" y1="-3" x2="3" y2="1" stroke="#e4e4e7" stroke-width="1.2" stroke-linecap="round"/>
+                        </g>
+                    </g>
+
+                    <!-- Right Arm & Paw -->
+                    <g id="armRGroup">
+                        <!-- Arm Outline Underneath -->
+                        <path class="cat-arm" id="armRStroke" d="M152,124 Q150,122 148,126" stroke="var(--cat-outline)" stroke-width="18" stroke-linecap="round" fill="none"/>
+                        <!-- White Arm Body -->
+                        <path class="cat-arm" id="armR" d="M152,124 Q150,122 148,126" stroke="#ffffff" stroke-width="13" stroke-linecap="round" fill="none"/>
+                        <!-- White Bongo Paw -->
+                        <g class="cat-paw" id="pawR" transform="translate(148, 126)">
+                            <ellipse cx="0" cy="0" rx="10" ry="7.5" fill="#ffffff" stroke="var(--cat-outline)" stroke-width="2.6"/>
+                            <!-- Toe Creases -->
+                            <line x1="-3" y1="-3" x2="-3" y2="1" stroke="#e4e4e7" stroke-width="1.2" stroke-linecap="round"/>
+                            <line x1="3" y1="-3" x2="3" y2="1" stroke="#e4e4e7" stroke-width="1.2" stroke-linecap="round"/>
+                        </g>
+                    </g>
+                </g>
+            </svg>
+        </div>
+
+        <!-- Content Info Side -->
+        <div class="offline-content">
+            <h1 class="title">Uh oh!</h1>
+            <p class="subtitle">Could not connect with host</p>
+
+            <div class="status-pill">
+                <span class="pulse-orb"></span>
+                <span>Auto retrying<span class="dots-wave"><span>.</span><span>.</span><span>.</span></span></span>
+            </div>
+
+            <div class="target-url" id="targetUrl">Target: --</div>
+
+            <button class="btn-retry" id="retryBtn" onclick="attemptReconnect()">
+                <span class="spinner" id="retrySpinner"></span>
+                <span id="retryBtnText">Retry Now</span>
+            </button>
+        </div>
+    </main>
+
+    <script>
+        const targetUrlEl = document.getElementById('targetUrl');
+        if (targetUrlEl) {
+            targetUrlEl.textContent = 'Target: ' + window.location.origin;
+        }
+
+        // ── Web Audio Synthesizer (Offline-Ready) ──
+        let audioCtx = null;
+        function getAudioContext() {
+            if (!audioCtx) {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (AudioCtx) audioCtx = new AudioCtx();
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            return audioCtx;
+        }
+
+        // Boof / Poof sound effect for box opening / closing
+        function playBoofSound() {
+            try {
+                const ctx = getAudioContext();
+                if (!ctx) return;
+                const now = ctx.currentTime;
+
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.exponentialRampToValueAtTime(50, now + 0.18);
+                gain.gain.setValueAtTime(0.35, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.2);
+
+                const bufferSize = ctx.sampleRate * 0.14;
+                const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                const noise = ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(800, now);
+                filter.frequency.exponentialRampToValueAtTime(100, now + 0.14);
+                const noiseGain = ctx.createGain();
+                noiseGain.gain.setValueAtTime(0.2, now);
+                noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+                noise.connect(filter);
+                filter.connect(noiseGain);
+                noiseGain.connect(ctx.destination);
+                noise.start(now);
+            } catch (e) {}
+        }
+
+        // Crisp Bongo paw slap / bap sound effect
+        function playSwatSound(pitchOffset = 0) {
+            try {
+                const ctx = getAudioContext();
+                if (!ctx) return;
+                const now = ctx.currentTime;
+
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'triangle';
+                const startFreq = 520 + pitchOffset;
+                osc.frequency.setValueAtTime(startFreq, now);
+                osc.frequency.exponentialRampToValueAtTime(95, now + 0.05);
+
+                gain.gain.setValueAtTime(0.34, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.055);
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.06);
+
+                const bufferSize = Math.floor(ctx.sampleRate * 0.025);
+                const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * 0.22;
+                const noise = ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(1400, now);
+                const noiseGain = ctx.createGain();
+                noiseGain.gain.setValueAtTime(0.25, now);
+                noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.025);
+                noise.connect(filter);
+                filter.connect(noiseGain);
+                noiseGain.connect(ctx.destination);
+                noise.start(now);
+            } catch (e) {}
+        }
+
+        // Massive Boom sound for 15th-click Reze homage!
+        function playBoomSound() {
+            try {
+                const ctx = getAudioContext();
+                if (!ctx) return;
+                const now = ctx.currentTime;
+
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(140, now);
+                osc.frequency.exponentialRampToValueAtTime(25, now + 0.55);
+
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(600, now);
+                filter.frequency.exponentialRampToValueAtTime(80, now + 0.55);
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.65);
+
+                const bufferSize = ctx.sampleRate * 0.5;
+                const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                const noise = ctx.createBufferSource();
+                noise.buffer = buffer;
+                const noiseGain = ctx.createGain();
+                noiseGain.gain.setValueAtTime(0.35, now);
+                noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                noise.connect(noiseGain);
+                noiseGain.connect(ctx.destination);
+                noise.start(now);
+            } catch (e) {}
+        }
+
+        // ── Boof Particles on Spawn (Pure Monochrome) ──
+        function spawnBoofParticles(x, y) {
+            const stage = document.getElementById('catStage');
+            const particleCount = 14;
+            for (let i = 0; i < particleCount; i++) {
+                const p = document.createElement('div');
+                p.className = 'poof-particle';
+                const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.4;
+                const dist = 45 + Math.random() * 55;
+                const dx = Math.cos(angle) * dist;
+                const dy = Math.sin(angle) * dist - 15;
+                const size = 10 + Math.random() * 18;
+
+                p.style.width = size + 'px';
+                p.style.height = size + 'px';
+                p.style.left = (x - size / 2) + 'px';
+                p.style.top = (y - size / 2) + 'px';
+                p.style.setProperty('--dx', dx + 'px');
+                p.style.setProperty('--dy', dy + 'px');
+                p.style.animation = `boofBurst ${0.5 + Math.random() * 0.25}s ease-out forwards`;
+
+                stage.appendChild(p);
+                setTimeout(() => p.remove(), 750);
+            }
+        }
+
+        // ── Hit Spark & Ring at Tap/Click Coordinate (Monochrome White) ──
+        function spawnHitImpact(clientX, clientY) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'hit-impact-wrapper';
+            wrapper.style.left = clientX + 'px';
+            wrapper.style.top = clientY + 'px';
+
+            const ring = document.createElement('div');
+            ring.className = 'hit-ring';
+            wrapper.appendChild(ring);
+
+            for (let i = 0; i < 5; i++) {
+                const spark = document.createElement('div');
+                spark.className = 'hit-spark';
+                const angle = (Math.PI * 2 * i) / 5 + (Math.random() - 0.5) * 0.5;
+                const dist = 16 + Math.random() * 20;
+                spark.style.setProperty('--sx', (Math.cos(angle) * dist) + 'px');
+                spark.style.setProperty('--sy', (Math.sin(angle) * dist) + 'px');
+                wrapper.appendChild(spark);
+            }
+
+            document.body.appendChild(wrapper);
+            setTimeout(() => wrapper.remove(), 320);
+        }
+
+        // ── Interactive State & Paw Mechanics ──
+        let isPopped = false;
+        let hitCount = 0;
+        let lastSwatPaw = 'R';
+        let isSwatting = false;
+        let isRetreating = false;
+
+        const stage = document.getElementById('catStage');
+        const catSvg = document.getElementById('catSvg');
+        const catHead = document.getElementById('catHead');
+        const catEyes = document.getElementById('catEyes');
+        const animeOwOEyes = document.getElementById('animeOwOEyes');
+        const mouthOwO = document.getElementById('mouthOwO');
+        const catMouth = document.getElementById('catMouth');
+        const animeHappyEyes = document.getElementById('animeHappyEyes');
+        const animeBlinkEyes = document.getElementById('animeBlinkEyes');
+        const pupilL = document.getElementById('pupilL');
+        const pupilR = document.getElementById('pupilR');
+        const armL = document.getElementById('armL');
+        const armLStroke = document.getElementById('armLStroke');
+        const armR = document.getElementById('armR');
+        const armRStroke = document.getElementById('armRStroke');
+        const pawL = document.getElementById('pawL');
+        const pawR = document.getElementById('pawR');
+
+        const REST_L = { x: 92, y: 126, rootX: 88, rootY: 124 };
+        const REST_R = { x: 148, y: 126, rootX: 152, rootY: 124 };
+
+        // Retract paw back to resting position on box rim
+        function resetPaw(side) {
+            if (side === 'L') {
+                const d = `M${REST_L.rootX},${REST_L.rootY} Q90,122 ${REST_L.x},${REST_L.y}`;
+                armL.setAttribute('d', d);
+                armLStroke.setAttribute('d', d);
+                pawL.style.transform = `translate(${REST_L.x}px, ${REST_L.y}px) rotate(0deg)`;
+            } else {
+                const d = `M${REST_R.rootX},${REST_R.rootY} Q150,122 ${REST_R.x},${REST_R.y}`;
+                armR.setAttribute('d', d);
+                armRStroke.setAttribute('d', d);
+                pawR.style.transform = `translate(${REST_R.x}px, ${REST_R.y}px) rotate(0deg)`;
+            }
+        }
+
+        // Universal Face State Manager
+        function setFaceState(mode) {
+            // mode: 'normal' | 'owo' | 'happy' | 'blink'
+            catEyes.style.display = mode === 'normal' ? 'inline' : 'none';
+            animeOwOEyes.style.display = mode === 'owo' ? 'inline' : 'none';
+            mouthOwO.style.display = mode === 'owo' ? 'inline' : 'none';
+            catMouth.style.display = mode === 'owo' ? 'none' : 'inline';
+            animeHappyEyes.style.display = mode === 'happy' ? 'inline' : 'none';
+            animeBlinkEyes.style.display = mode === 'blink' ? 'inline' : 'none';
+        }
+
+        // Perform iconic Bongo Cat paw slap towards target
+        function strikeWithPaw(side, svgX, svgY, clientX, clientY) {
+            const rest = side === 'L' ? REST_L : REST_R;
+            const armEl = side === 'L' ? armL : armR;
+            const armStrokeEl = side === 'L' ? armLStroke : armRStroke;
+            const pawEl = side === 'L' ? pawL : pawR;
+
+            const dx = svgX - rest.x;
+            const dy = svgY - rest.y;
+            const dist = Math.hypot(dx, dy);
+            const angle = Math.atan2(dy, dx);
+
+            const reach = Math.min(dist, 95);
+            const targetX = rest.x + Math.cos(angle) * reach;
+            const targetY = rest.y + Math.sin(angle) * reach;
+
+            const midX = (rest.rootX + targetX) / 2 + (side === 'L' ? -8 : 8);
+            const midY = (rest.rootY + targetY) / 2 - 8;
+            const d = `M${rest.rootX},${rest.rootY} Q${midX},${midY} ${targetX},${targetY}`;
+
+            armEl.setAttribute('d', d);
+            armStrokeEl.setAttribute('d', d);
+
+            const rotDeg = (angle * 180 / Math.PI) + (side === 'L' ? 85 : -85);
+            pawEl.style.transform = `translate(${targetX}px, ${targetY}px) rotate(${rotDeg}deg)`;
+
+            const lungeX = Math.cos(angle) * 6;
+            const lungeY = Math.sin(angle) * 6;
+            catHead.style.transform = `translate(${lungeX}px, ${lungeY}px) rotate(${Math.cos(angle) * 5}deg)`;
+
+            // Momentary happy eyes on regular slap if not in OwO mode
+            if (!isRetreating) setFaceState('happy');
+
+            spawnHitImpact(clientX, clientY);
+            playSwatSound((hitCount % 6) * 35);
+
+            setTimeout(() => {
+                resetPaw(side);
+                catHead.style.transform = 'translate(0, 0) rotate(0deg)';
+                if (!isRetreating) setFaceState('normal');
+            }, 100);
+        }
+
+        // 15-Clicks Bongo Climax -> OwO Surprised Anime Eyes -> Rapid Drumroll -> Auto Retreat inside Box
+        function trigger15Boom(clientX, clientY) {
+            isRetreating = true;
+            document.body.classList.remove('screen-shake');
+            void document.body.offsetWidth;
+            document.body.classList.add('screen-shake');
+            setTimeout(() => document.body.classList.remove('screen-shake'), 450);
+
+            playBoomSound();
+
+            // MAKE EYES GO COMPLETE OwO SURPRISED ANIME MODE!
+            setFaceState('owo');
+
+            // Furious rapid Bongo Cat drumroll slapping!
+            let flurries = 0;
+            const interval = setInterval(() => {
+                flurries++;
+                const side = flurries % 2 === 0 ? 'L' : 'R';
+                const offsetX = (Math.random() - 0.5) * 45;
+                const offsetY = (Math.random() - 0.5) * 30;
+                strikeWithPaw(side, 120 + offsetX, 70 + offsetY, clientX + offsetX, clientY + offsetY);
+                if (flurries >= 8) clearInterval(interval);
+            }, 55);
+
+            // Smoke particle burst
+            const rect = stage.getBoundingClientRect();
+            spawnBoofParticles(rect.width / 2, rect.height * 0.6);
+
+            // Automatically go inside box after the burst!
+            setTimeout(() => {
+                // Transition from OwO to satisfied happy anime eyes (^ ^)
+                setFaceState('happy');
+
+                setTimeout(() => {
+                    // Smoothly dive back down into the box
+                    stage.classList.remove('popped');
+                    stage.classList.add('in-box');
+                    playBoofSound();
+
+                    setTimeout(() => {
+                        setFaceState('normal');
+                        stage.classList.add('idle');
+                        hitCount = 0;
+                        isPopped = false;
+                        isRetreating = false;
+                    }, 450);
+                }, 380);
+            }, 600);
+        }
+
+        // Stage Pointer Handler (Mouse clicks and Touch taps)
+        stage.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (isRetreating) return;
+
+            if (!isPopped) {
+                // Step 1: Click the box -> BOOF and Bongo Cat Spawns!
+                isPopped = true;
+                stage.classList.remove('idle');
+                stage.classList.remove('in-box');
+                stage.classList.add('popped');
+
+                const rect = stage.getBoundingClientRect();
+                spawnBoofParticles(rect.width / 2, rect.height * 0.65);
+                playBoofSound();
+                return;
+            }
+
+            // Step 2: Cat is out -> HIT THE CURSOR!
+            hitCount++;
+
+            if (hitCount >= 15) {
+                trigger15Boom(e.clientX, e.clientY);
+                return;
+            }
+
+            const rect = catSvg.getBoundingClientRect();
+            const svgX = ((e.clientX - rect.left) / rect.width) * 240;
+            const svgY = ((e.clientY - rect.top) / rect.height) * 220;
+
+            let chosenSide = svgX < 120 ? 'L' : 'R';
+            if (isSwatting && chosenSide === lastSwatPaw) {
+                chosenSide = chosenSide === 'L' ? 'R' : 'L';
+            }
+            lastSwatPaw = chosenSide;
+            isSwatting = true;
+            setTimeout(() => { isSwatting = false; }, 120);
+
+            strikeWithPaw(chosenSide, svgX, svgY, e.clientX, e.clientY);
+        });
+
+        // ── Eye Tracking (Bongo Cat Pupils Follow Cursor) ──
+        function updateEyes(clientX, clientY) {
+            if (!isPopped || isRetreating) return;
+            const headRect = catHead.getBoundingClientRect();
+            const headCenterX = headRect.left + headRect.width / 2;
+            const headCenterY = headRect.top + headRect.height / 2;
+
+            const dx = clientX - headCenterX;
+            const dy = clientY - headCenterY;
+            const dist = Math.hypot(dx, dy);
+            const maxLook = 3.2;
+
+            const lookX = dist > 0 ? (dx / dist) * Math.min(dist * 0.05, maxLook) : 0;
+            const lookY = dist > 0 ? (dy / dist) * Math.min(dist * 0.05, maxLook) : 0;
+
+            pupilL.setAttribute('transform', `translate(${lookX}, ${lookY})`);
+            pupilR.setAttribute('transform', `translate(${lookX}, ${lookY})`);
+        }
+
+        window.addEventListener('pointermove', (e) => {
+            updateEyes(e.clientX, e.clientY);
+        });
+
+        // Natural Eye Blinking
+        setInterval(() => {
+            if (!isPopped || isRetreating) return;
+            setFaceState('blink');
+            setTimeout(() => {
+                if (!isRetreating) setFaceState('normal');
+            }, 120);
+        }, 4200);
+
+        // ── Auto Reconnection Logic ──
+        let isChecking = false;
+
+        async function checkServer() {
+            try {
+                const res = await fetch('/api/health?t=' + Date.now(), {
+                    method: 'GET',
+                    cache: 'no-store'
+                });
+                if (res.ok) {
+                    window.location.reload();
+                    return true;
+                }
+            } catch (e) {}
+            return false;
+        }
+
+        async function attemptReconnect() {
+            if (isChecking) return;
+            isChecking = true;
+            const btn = document.getElementById('retryBtn');
+            const text = document.getElementById('retryBtnText');
+            btn.classList.add('loading');
+            text.textContent = 'Checking...';
+
+            const online = await checkServer();
+            if (!online) {
+                setTimeout(() => {
+                    btn.classList.remove('loading');
+                    text.textContent = 'Retry Now';
+                    isChecking = false;
+                }, 700);
+            }
+        }
+
+        // Poll every 2.5s to restore when server wakes up
+        setInterval(() => {
+            if (!isChecking) {
+                checkServer();
+            }
+        }, 2500);
+
+        window.addEventListener('online', () => {
+            attemptReconnect();
+        });
+    </script>
+</body>
+</html>

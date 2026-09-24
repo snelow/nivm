@@ -1,6 +1,6 @@
 # nivm Frontend CSS Architecture
 
-This directory contains the stylesheets for the `nivm` sovereign AI interface.
+This directory contains the stylesheets for the `nivm` AI workbench interface.
 
 ## Entrypoints
 - `main.css`: The root stylesheet loaded in `index.html`. It imports all base, background, layout, chat, and modal stylesheets in order.

@@ -372,7 +372,7 @@ export async function renderToolsSettings() {
     });
 }
 
-// ── Image Studio Settings Wiring & Progress Polling ──
+// Image studio settings wiring and progress polling
 let _imageStudioPollInterval = null;
 let _imageStudioEventsBound = false;
 
@@ -783,4 +783,3 @@ export async function initImageStudioSettings() {
     }
 }
 
-// --- Dropdown Notification System ---

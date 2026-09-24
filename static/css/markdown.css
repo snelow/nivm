@@ -1,7 +1,4 @@
-/* -----------------------------------------
-   Reasoning Panel (Neural Shimmer Glass)
-   Theme-Adaptive with site customizable UI colors
------------------------------------------ */
+/* Reasoning panel with theme adaptive styles */
 .reasoning-panel,
 .thinking-block {
     margin: 4px 0 10px 0;
@@ -482,9 +479,7 @@
     font-style: italic;
 }
 
-/* -----------------------------------------
-   Clear Text Highlight Mode: Enhanced readability over bright or animated backgrounds (Fluid, Matrix, Orbs, etc.)
------------------------------------------ */
+/* Clear text highlight mode for animated backgrounds */
 body.clear-text-active .assistant-row .message-bubble .text-hl,
 body.clear-text-active .assistant-row .message-bubble > p:not(:has(.text-hl)) {
     display: inline-block;
@@ -685,9 +680,7 @@ body.clear-text-active .user-row .message-bubble {
     cursor: pointer;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
-/* -----------------------------------------
-   Tool Execution Card (Collapsible)
------------------------------------------ */
+/* Tool execution collapsible card */
 .tool-trace-block {
     margin: 3px 0 3px 0;
     width: fit-content;

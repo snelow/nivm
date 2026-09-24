@@ -1,7 +1,7 @@
 {
   "name": "nivm",
   "short_name": "nivm",
-  "description": "Private sovereign AI studio & intelligence engine",
+  "description": "Private local & hybrid AI studio and intelligence engine",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

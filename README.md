@@ -1,6 +1,6 @@
-# Project NIVM — Sovereign On-Premise Multimodal AI Workbench
+# Project NIVM — On-Premise & Hybrid Multimodal AI Workbench
 
-> 100% Offline • Zero Cloud Leakage • Native GGUF Acceleration • Bidirectional Neural Voice • Local Image Studio • Multimodal Vision • Air-Gapped Sentinel
+> Private Intelligence • Native GGUF Acceleration • Hybrid API Mode • Bidirectional Neural Voice • Local Image Studio • Multimodal Vision • Sentinel
 
 ```text
     ███╗   ██╗██╗██╗   ██╗███╗   ███╗
@@ -22,7 +22,7 @@
 [![Air--Gap Verified](https://img.shields.io/badge/Air--Gap-100%25%20Verified%20Local-success.svg)]()
 
 <p align="center">
-  <img src="assets/thumbnail.png" alt="Project NIVM — Sovereign On-Premise Multimodal AI Workbench" width="100%">
+  <img src="assets/thumbnail.png" alt="Project NIVM — On-Premise & Hybrid Multimodal AI Workbench" width="100%">
 </p>
 
 ---
@@ -31,15 +31,15 @@
 
 > **Note**: This is a personal hobby project built for myself to have a fast, private, all-in-one local AI environment on my own machine—not a commercial product, SaaS, or startup. Feel free to explore, fork, or adapt it for your own personal setups.
 
-**Project NIVM** (*Native Inference Virtual Machine*) is a fully air-gapped local AI workbench built for private technical work. It runs open-weight Large Language Models (LLMs), Vision-Language Models (VLMs), neural speech models, and diffusion image generation pipelines directly on your local hardware with verifiable zero-byte external network egress.
+**Project NIVM** (*Native Inference Virtual Machine*) is a private multimodal AI workbench built for technical work. It runs open-weight Large Language Models (LLMs), Vision-Language Models (VLMs), neural speech models, and diffusion image generation pipelines directly on your local hardware while also supporting external OpenAI-compatible API providers (Gemini, Claude, Groq, OpenAI).
 
-From parsing multi-page technical PDFs and natural bidirectional voice conversations to agentic host terminal execution and local image synthesis, **Project NIVM keeps 100% of your data, models, audio, and visual assets strictly on your physical machine.**
+From parsing multi-page technical PDFs and natural bidirectional voice conversations to agentic host terminal execution and local image synthesis, **Project NIVM puts you in complete control of your data, models, audio, and visual assets.**
 
 ---
 
 ## Core Capabilities & Architecture
 
-### 1. Bidirectional Sovereign Voice Engine
+### 1. Bidirectional Neural Voice Engine
 - **Neural Speech Synthesis (TTS)**: Built-in Kokoro v1.0 (ONNX Runtime) delivering natural voice synthesis on CPU/GPU with zero GPU VRAM footprint on inference.
 - **Vocal Profiles**: Selectable acoustic profiles (Heart, Bella, Sarah, Nicole, Emma/FRIDAY) with audio DSP post-processing (sibilance de-esser, presence EQ, soft fade-out).
 - **Offline Speech-to-Text (STT)**: Integrated Faster-Whisper (`/api/stt`) running on CPU with loudness normalization (`pydub`), conversational filler priming, and silence threshold guards.
@@ -53,7 +53,7 @@ From parsing multi-page technical PDFs and natural bidirectional voice conversat
 - **Unified Media Pipeline**: Ingest images, multi-page PDFs, audio waveforms, and video keyframes across both local GGUF models (`mmproj`) and external multimodal API endpoints.
 - **Universal Model Unload**: One-click VRAM flush button that completely unloads active models from GPU memory into 0MB standby mode.
 
-### 3. Sovereign Image Studio & VRAM Coordinator (ComfyUI Bridge)
+### 3. Integrated Image Studio & VRAM Coordinator (ComfyUI Bridge)
 - **Local Diffusion Engine**: Integrated local [ComfyUI](https://github.com/comfyanonymous/ComfyUI) bridge supporting Qwen-Rapid, Stable Diffusion, and Flux workflows without external cloud APIs.
 - **Dedicated Anime Pipeline (Illustrious SDXL)**: Optional character synthesis engine with LoRA management (characters, outfits, hairstyles, poses), Danbooru tag compiler, and 8-step LCM Turbo mode for rapid generation on consumer GPUs (4GB+ VRAM).
 - **In-Browser Image Studio**: Interactive prompt and character manager, live generation progress cards with action pills, host disk LoRA import, and conversational multi-turn follow-up editing.

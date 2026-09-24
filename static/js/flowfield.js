@@ -7,7 +7,7 @@
 import { themeState } from './state.js';
 import { dom } from './dom.js';
 
-// ── 2D/3D Simplex Noise Implementation ──
+// Simplex noise implementation
 const F3 = 1.0 / 3.0;
 const G3 = 1.0 / 6.0;
 
@@ -110,7 +110,7 @@ function simplex3(x, y, z) {
     return 32.0 * (n0 + n1 + n2 + n3);
 }
 
-// ── Particle System & Simulation ──
+// Particle system and simulation
 class FlowParticle {
     constructor(w, h) {
         this.reset(w, h);

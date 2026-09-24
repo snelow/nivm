@@ -20,7 +20,7 @@ logger = logging.getLogger("nivm.files")
 router = APIRouter(tags=["File Services & Tools"])
 
 
-# ── Request Models ────────────────────────────────────────────────
+# Request models
 
 class BrowseDialogRequest(BaseModel):
     initial_dir: Optional[str] = None
@@ -35,7 +35,7 @@ class ExecuteTerminalRequest(BaseModel):
     command: str
 
 
-# ── File Dialog & Discovery Endpoints ─────────────────────────────
+# File dialog and discovery endpoints
 
 @router.post("/api/files/browse-dialog")
 async def browse_file_dialog_endpoint(req: Optional[BrowseDialogRequest] = None):
@@ -312,7 +312,7 @@ async def locate_file_endpoint(filename: str, size: Optional[int] = None):
     return {"found": False}
 
 
-# ── Tool Execution Endpoint ───────────────────────────────────────
+# Tool execution endpoint
 
 @router.post("/api/tools/execute_terminal")
 async def execute_terminal(req: ExecuteTerminalRequest):

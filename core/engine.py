@@ -1,5 +1,5 @@
 """
-Multi-Model Engine Manager for Sovereign AI Workbench.
+Multi-Model Engine Manager for Project NIVM.
 
 Manages multiple GGUF models with hot-swap capability:
 - Router model (Qwen3-1.7B): always-ready intent classifier
@@ -135,7 +135,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# ── Model Registry ──────────────────────────────────────────────
+# Model registry
 # Each entry defines a model role and its loading configuration.
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

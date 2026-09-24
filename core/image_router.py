@@ -93,7 +93,7 @@ def _resolve_image_path(filename_or_path: str) -> str:
     raise FileNotFoundError(f"Image not found: '{filename_or_path}' (looked in uploads and generated images).")
 
 
-# ── Model Status & Download Endpoints ─────────────────────────────
+# Model status and download endpoints
 
 @router.get("/models/status")
 async def get_models_status():
@@ -123,7 +123,7 @@ async def get_models_download_progress():
     return get_download_status()
 
 
-# ── ComfyUI Engine Helper Endpoints ───────────────────────────────
+# ComfyUI engine helper endpoints
 
 @router.get("/comfy/status")
 async def get_comfy_engine_status():
@@ -153,7 +153,7 @@ async def set_comfy_engine_path(req: SetPathRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# ── Generation & Editing Endpoints ────────────────────────────────
+# Image generation and editing endpoints
 
 @router.post("/generate")
 async def generate_image_endpoint(req: GenerateRequest):
@@ -569,7 +569,7 @@ async def interrupt_task_image_generation(task_id: str):
     return await interrupt_image_generation(InterruptRequest(task_id=task_id))
 
 
-# ── Live Progress Stream (SSE) ────────────────────────────────────
+# Live progress stream (SSE)
 
 @router.get("/progress/{task_id}")
 async def stream_progress_events(task_id: str):
@@ -663,7 +663,7 @@ async def get_image_metadata(filename: str):
     return {"filename": base, "duration_seconds": None}
 
 
-# ── Illustrious Anime Pipeline Endpoints ─────────────────────────
+# Anime pipeline endpoints
 
 class AnimeGenerateRequest(BaseModel):
     character: str

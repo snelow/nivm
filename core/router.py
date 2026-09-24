@@ -1,5 +1,5 @@
 """
-Intent Router for Sovereign AI Workbench.
+Intent Router for Project NIVM.
 
 Uses the small router model to classify text requests and route them to the
 appropriate specialist model. Media-bearing prompts go directly to vision.

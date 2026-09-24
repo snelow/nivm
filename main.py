@@ -1,5 +1,5 @@
 """
-nivm — Native Inference Virtual Machine (Sovereign AI Workbench).
+nivm — Native Inference Virtual Machine (Local & Hybrid AI Workbench).
 Main FastAPI application entrypoint.
 
 Connects modular sub-routers:
@@ -24,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 import httpx
 
-# ── Core Engine & Config ──────────────────────────────────────────
+# Core engine and configuration
 from core import config
 from core.config import UPLOADS_DIR, IMAGES_DIR, BASE_DIR
 from core.engine import model_manager, HAS_LLAMA_CPP, MODEL_REGISTRY
@@ -33,23 +33,31 @@ from core.network_monitor import record_api_start, record_api_end, get_network_s
 from core.multimodal import process_media_in_messages
 from core.chat_manager import chat_manager
 
-# ── Sub-Routers & Storage ─────────────────────────────────────────
+# Sub-routers and storage
 from core.api_v1 import router as api_v1_router
 from core.storage import router as storage_router, get_user_settings, _apply_all_overrides
 from core.models_router import router as models_router
 from core.file_services import router as file_services_router
 from core.image_router import router as image_router
 from core.image_engine.daemon import stop_daemon
+import hmac
+from core.auth import (
+    router as auth_router,
+    is_auth_configured,
+    extract_token_from_request,
+    validate_session,
+    get_auth_data,
+)
 
-# ── Logging ───────────────────────────────────────────────────────
+# Logging
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger("nivm")
 
 
-# ── FastAPI App Setup ─────────────────────────────────────────────
+# FastAPI application
 app = FastAPI(
     title="nivm",
-    description="Native Inference Virtual Machine — Air-Gapped Sovereign AI Workbench",
+    description="Native Inference Virtual Machine — Local & Hybrid AI Workbench",
     version="2.0.0",
 )
 
@@ -63,8 +71,81 @@ app.add_middleware(
 
 
 @app.middleware("http")
-async def monitor_network_middleware(request: Request, call_next):
-    """Pass-through middleware tracking internal request activity for health metrics."""
+async def security_and_network_middleware(request: Request, call_next):
+    """
+    Enforce single-user owner authentication across all data, uploads, images,
+    and inference endpoints with strict zero-leakage Level 1 network gatekeeping.
+    """
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    path = request.url.path
+
+    # Public Whitelist: Landing, frontend static assets, PWA manifest, service worker, icons
+    if (
+        path == "/"
+        or path.startswith("/static")
+        or path in ("/manifest.json", "/favicon.ico", "/sw.js")
+    ):
+        return await call_next(request)
+
+    # Public Auth & Health endpoints
+    if path in (
+        "/api/auth/login",
+        "/api/auth/logout",
+        "/api/auth/session",
+        "/api/auth/status",
+        "/api/auth/reset-password",
+        "/api/health",
+    ):
+        return await call_next(request)
+
+    # Local CLI Authorization (from host run.sh console via loopback)
+    cli_key = request.headers.get("X-NIVM-Internal-Key")
+    client_host = request.client.host if request.client else ""
+    if cli_key and client_host in ("127.0.0.1", "localhost", "::1"):
+        auth_data = get_auth_data()
+        expected_secret = auth_data.get("signing_secret")
+        if expected_secret and hmac.compare_digest(cli_key, expected_secret):
+            return await call_next(request)
+
+    # If owner account is not yet configured, block protected data APIs
+    if not is_auth_configured():
+        if (
+            path.startswith("/api/")
+            or path.startswith("/v1/")
+            or path.startswith("/uploads/")
+            or path.startswith("/images/")
+        ):
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "error": "Unconfigured",
+                    "detail": "Owner account not configured. Please initialize your password in terminal or via setup.",
+                },
+            )
+        return await call_next(request)
+
+    # Verify session token from Bearer header or HTTP-only session cookie
+    token = extract_token_from_request(request)
+    username = validate_session(token) if token else None
+
+    # Protect all APIs, inference routes, uploaded files, and generated images
+    if (
+        path.startswith("/api/")
+        or path.startswith("/v1/")
+        or path.startswith("/uploads/")
+        or path.startswith("/images/")
+    ):
+        if not username:
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "error": "Unauthorized",
+                    "detail": "Session authentication required. Please unlock session.",
+                },
+            )
+
     return await call_next(request)
 
 
@@ -74,7 +155,8 @@ async def startup_event():
     _apply_all_overrides()
 
 
-# ── Mount Routers ─────────────────────────────────────────────────
+# Mount sub-routers
+app.include_router(auth_router)
 app.include_router(api_v1_router)
 app.include_router(storage_router)
 app.include_router(models_router)
@@ -88,7 +170,7 @@ async def shutdown_event():
     stop_daemon()
 
 
-# ── Diagnostics & Health Endpoints ────────────────────────────────
+# Diagnostics and health endpoints
 
 @app.get("/api/config")
 async def get_config():
@@ -120,7 +202,7 @@ async def health_check():
     }
 
 
-# ── Text-to-Speech (TTS) Endpoints ───────────────────────────────
+# Text-to-speech endpoints
 
 @app.get("/api/tts/status")
 async def tts_status():
@@ -225,7 +307,7 @@ async def set_stt_config(request: Request):
 
 @app.get("/api/tts/pronunciations")
 async def get_pronunciations():
-    """Returns the sovereign offline pronunciation dictionary with default and user custom rules."""
+    """Returns the offline pronunciation dictionary with default and user custom rules."""
     from core.tts import get_pronunciation_dict
     return get_pronunciation_dict()
 
@@ -243,7 +325,7 @@ async def add_pronunciation(request: Request):
     if not word or not pronunciation:
         raise HTTPException(status_code=400, detail="Both 'word' and 'pronunciation' are required.")
     if word.lower() == "nivm":
-        raise HTTPException(status_code=400, detail="'nivm' is a protected core sovereign pronunciation and cannot be modified.")
+        raise HTTPException(status_code=400, detail="'nivm' is a protected core pronunciation and cannot be modified.")
     custom = save_user_pronunciation(word, pronunciation)
     return {"status": "success", "custom": custom}
 
@@ -260,14 +342,12 @@ async def delete_pronunciation(request: Request):
     if not word:
         raise HTTPException(status_code=400, detail="Missing 'word' parameter.")
     if word.lower() == "nivm":
-        raise HTTPException(status_code=400, detail="'nivm' is a protected core sovereign pronunciation and cannot be deleted.")
+        raise HTTPException(status_code=400, detail="'nivm' is a protected core pronunciation and cannot be deleted.")
     custom = delete_user_pronunciation(word)
     return {"status": "success", "custom": custom}
 
 
-# ══════════════════════════════════════════════════════════════════
-# Chat Completion — Multi-Model with Auto-Routing & API Mode
-# ══════════════════════════════════════════════════════════════════
+# Chat completion endpoint
 
 @app.post("/api/chat")
 async def chat_completion(request: Request, background_tasks: BackgroundTasks):
@@ -544,9 +624,7 @@ async def stop_chat_generation(request: Request):
     return chat_manager.stop_chat(chat_id)
 
 
-# ══════════════════════════════════════════════════════════════════
-# Static Asset Serving, PWA Manifest, Service Worker & Root
-# ══════════════════════════════════════════════════════════════════
+# Static asset serving and frontend routes
 
 static_dir = os.path.join(BASE_DIR, "static")
 if not os.path.exists(static_dir):
@@ -583,6 +661,18 @@ async def service_worker():
             }
         )
     raise HTTPException(status_code=404, detail="Service worker not found")
+
+
+@app.get("/offline.html")
+async def offline_page():
+    offline_path = os.path.join(static_dir, "offline.html")
+    if os.path.exists(offline_path):
+        return FileResponse(
+            offline_path,
+            media_type="text/html",
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+        )
+    raise HTTPException(status_code=404, detail="Offline page not found")
 
 
 @app.get("/manifest.json")

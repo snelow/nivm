@@ -27,7 +27,7 @@ logger = logging.getLogger("nivm.storage")
 router = APIRouter(tags=["Settings & Storage"])
 
 
-# ── Settings Pydantic Model ───────────────────────────────────────
+# Settings schema
 
 class SettingsModel(BaseModel):
     model_config = {"extra": "allow"}
@@ -257,7 +257,7 @@ def _cleanup_orphaned_uploads(chats: list):
         logger.warning(f"Error during orphaned files cleanup: {e}")
 
 
-# ── Storage Endpoints ─────────────────────────────────────────────
+# Storage endpoints
 
 @router.get("/api/settings")
 async def get_settings_endpoint():

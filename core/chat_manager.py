@@ -38,7 +38,7 @@ def _normalize_think_tags(text: str) -> str:
     if not text:
         return text
 
-    # ── Open tags → <think> ──
+    # Open tags -> <think>
     # Standard variants
     text = re.sub(r'<thought>', '<think>', text, flags=re.IGNORECASE)
     text = re.sub(r'<reasoning>', '<think>', text, flags=re.IGNORECASE)
@@ -53,7 +53,7 @@ def _normalize_think_tags(text: str) -> str:
     text = re.sub(r'<\|thinking\|>', '<think>', text, flags=re.IGNORECASE)
     text = re.sub(r'<\|start_thinking\|>', '<think>', text, flags=re.IGNORECASE)
 
-    # ── Close tags → </think> ──
+    # Close tags -> </think>
     # Standard variants
     text = re.sub(r'</thought>', '</think>', text, flags=re.IGNORECASE)
     text = re.sub(r'</reasoning>', '</think>', text, flags=re.IGNORECASE)

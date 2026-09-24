@@ -35,7 +35,7 @@
     <script src="/static/vendor/marked.min.js"></script>
     <!-- WebGL Fluid Simulation -->
     <script src="/static/vendor/webgl-fluid.js?v=2.0" defer></script>
-    <link rel="stylesheet" href="/static/css/main.css?v=9.0">
+    <link rel="stylesheet" href="/static/css/main.css?v=12.0">
 </head>
 
 <body>
@@ -237,6 +237,9 @@
                 <button class="nav-icon-btn" id="themeBtn" title="Themes & Colors">
                     <i class="fa-solid fa-palette"></i>
                 </button>
+                <button class="nav-icon-btn" id="navLockBtn" title="Log Out / Lock Session">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                </button>
                 <button class="nav-icon-btn" id="settingsBtn" title="Settings">
                     <i class="fa-solid fa-gear"></i>
                 </button>
@@ -305,6 +308,11 @@
                     type="button">
                     <i class="fa-solid fa-broom"></i>
                     <span>Unload All</span>
+                </button>
+                <button class="drawer-tool-item tool-logout" id="drawerLockBtn" title="Log Out / Lock Session"
+                    type="button" style="color: #f87171;">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                    <span>Log Out</span>
                 </button>
             </div>
             <div class="resize-handle" id="historyResizeHandle"></div>
@@ -1781,6 +1789,20 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Session & Security -->
+                    <div class="settings-section">
+                        <div class="section-title">Session & Security</div>
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;">
+                            <div>
+                                <div style="font-size: 0.86rem; font-weight: 600; color: #f4f4f5;">Owner Gatekeeper</div>
+                                <div style="font-size: 0.74rem; color: #71717a;">Active authenticated session on this device</div>
+                            </div>
+                            <button type="button" class="btn-secondary" id="settingsLogoutBtn" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 0.82rem; color: #f87171; border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.08); cursor: pointer; border-radius: 8px;">
+                                <i class="fa-solid fa-arrow-right-from-bracket"></i> Log Out
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="window-footer">
@@ -3109,16 +3131,123 @@
         </div>
     </div>
 
+    <!-- Single-User Auth & Lock Screen Overlay -->
+    <div class="auth-lock-overlay hidden" id="authLockOverlay">
+        <canvas class="auth-flow-canvas" id="authFlowCanvas"></canvas>
+        <div class="auth-lock-card">
+            <div class="auth-header">
+                <p class="auth-subtitle" id="authSubtitle">Enter password to continue</p>
+            </div>
+
+            <div class="auth-error-badge" id="authErrorBadge">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span id="authErrorMsg">Invalid password</span>
+            </div>
+
+            <!-- Login Form (Single-User Password Only) -->
+            <form class="auth-form" id="authLoginForm" autocomplete="on">
+                <div class="auth-input-group">
+                    <div class="auth-input-wrapper">
+                        <i class="fa-solid fa-lock auth-leading-icon"></i>
+                        <input type="password" id="authPasswordInput" class="auth-input" placeholder="Enter password" autocomplete="current-password" required autofocus>
+                        <button type="button" class="auth-toggle-pwd-btn" id="authTogglePwdBtn" title="Toggle password visibility">
+                            <i class="fa-regular fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="auth-submit-btn" id="authSubmitBtn">
+                    <i class="fa-solid fa-lock-open"></i> Unlock
+                </button>
+
+                <div class="auth-forgot-toggle">
+                    <button type="button" class="auth-forgot-link" id="authForgotToggleBtn">
+                        Forgot Password?
+                    </button>
+                </div>
+            </form>
+
+            <!-- Emergency Recovery Reset Form -->
+            <div class="auth-recovery-section" id="authRecoverySection">
+                <p class="auth-recovery-tip">
+                    <i class="fa-solid fa-circle-info"></i> Enter the 24-character Emergency Recovery Key located in <code>User files/recovery_key.txt</code> to reset your password.
+                </p>
+
+                <div class="auth-input-group">
+                    <label class="auth-label" for="authRecoveryKeyInput">
+                        <i class="fa-solid fa-shield-halved"></i> Emergency Recovery Key
+                    </label>
+                    <input type="text" id="authRecoveryKeyInput" class="auth-input" placeholder="NIVM-XXXX-XXXX-XXXX-XXXX" style="letter-spacing: 0.08em; font-family: var(--font-code, monospace);">
+                </div>
+
+                <div class="auth-input-group">
+                    <label class="auth-label" for="authNewPasswordInput">
+                        <i class="fa-solid fa-lock"></i> New Password
+                    </label>
+                    <input type="password" id="authNewPasswordInput" class="auth-input" placeholder="Minimum 4 characters">
+                </div>
+
+                <button type="button" class="auth-submit-btn auth-recovery-submit-btn" id="authRecoverySubmitBtn">
+                    <i class="fa-solid fa-arrow-rotate-left"></i> Reset & Unlock
+                </button>
+
+                <button type="button" class="auth-forgot-link" id="authBackToLoginBtn" style="margin-top: 4px;">
+                    Back to Unlock
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Application Logic -->
-    <script type="module" src="/static/js/app.js?v=9.6"></script>
+    <script type="module" src="/static/js/app.js?v=14.0"></script>
     <script>
+        // Purge any legacy shell caches immediately from client storage
+        if ('caches' in window) {
+            caches.keys().then((keys) => {
+                keys.forEach((key) => {
+                    if (key.startsWith('nivm-shell') || key === 'nivm-pwa-v1' || key === 'nivm-pwa-v2' || key === 'nivm-pwa-v3' || key === 'nivm-pwa-v4' || key === 'nivm-pwa-v5' || key === 'nivm-pwa-v6' || key === 'nivm-pwa-v7') {
+                        console.log('[PWA] Purging outdated shell cache:', key);
+                        caches.delete(key);
+                    }
+                });
+            });
+        }
+
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').then((reg) => {
-                    console.log('PWA Service Worker registered:', reg.scope);
-                }).catch((err) => {
-                    console.log('PWA Service Worker registration error:', err);
-                });
+                navigator.serviceWorker.register('/sw.js?v=8', { updateViaCache: 'none' })
+                    .then((reg) => {
+                        console.log('[PWA] Service Worker registered:', reg.scope);
+                        // Force check for fresh worker immediately
+                        reg.update();
+
+                        if (reg.waiting) {
+                            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                        }
+
+                        reg.addEventListener('updatefound', () => {
+                            const newWorker = reg.installing;
+                            if (newWorker) {
+                                newWorker.addEventListener('statechange', () => {
+                                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                        newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                    }
+                                });
+                            }
+                        });
+                    })
+                    .catch((err) => {
+                        console.log('[PWA] Service Worker registration error:', err);
+                    });
+            });
+
+            // Reload page once new service worker takes over so latest UI is instantly visible
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (!refreshing) {
+                    refreshing = true;
+                    window.location.reload();
+                }
             });
         }
     </script>

@@ -279,7 +279,7 @@ export function buildToolTraceHtml(command, argsStr, resultStr = null) {
     </details>`.trim();
 }
 
-// ---------- Waveform Audio Player ----------
+// Waveform audio player
 function buildWaveformPlayer(audioUrl) {
     const container = document.createElement('div');
     container.className = 'waveform-player';

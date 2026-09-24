@@ -476,40 +476,18 @@ export async function fetchChats() {
         const res = await fetch('/api/chats', { cache: 'no-store' });
         if (res.ok) {
             const serverChats = await res.json();
-            if (Array.isArray(serverChats) && serverChats.length > 0) {
-                try {
-                    localStorage.setItem('nivm_saved_chats', JSON.stringify(serverChats));
-                } catch (e) {}
+            if (Array.isArray(serverChats)) {
                 return serverChats;
             }
         }
     } catch (err) {
         console.warn('Failed to fetch chats from server:', err);
     }
-    // Fallback: restore from localStorage if server has no chats or is unavailable
-    try {
-        const localChats = localStorage.getItem('nivm_saved_chats');
-        if (localChats) {
-            const parsed = JSON.parse(localChats);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-                // Sync back to server in background
-                fetch('/api/chats', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(parsed)
-                }).catch(() => {});
-                return parsed;
-            }
-        }
-    } catch (e) {}
     return [];
 }
 
 export async function saveChats(conversations) {
     if (!conversations || !Array.isArray(conversations)) return;
-    try {
-        localStorage.setItem('nivm_saved_chats', JSON.stringify(conversations));
-    } catch (e) {}
     try {
         const response = await fetch('/api/chats', {
             method: 'POST',

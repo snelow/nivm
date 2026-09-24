@@ -1,0 +1,302 @@
+/* Project NIVM — Single-User Owner Lock Screen Overlay & Flow Background */
+
+.auth-lock-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: #08080a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 1;
+    visibility: visible;
+    overflow: hidden;
+    transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.35s ease;
+}
+
+.auth-lock-overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+/* Futuristic Silk Flow Canvas Layer */
+.auth-flow-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: auto;
+    z-index: 1;
+}
+
+/* Glassmorphism Auth Card floating over Flow Canvas */
+.auth-lock-card {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    max-width: 390px;
+    background: rgba(16, 16, 20, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(28px) saturate(140%);
+    -webkit-backdrop-filter: blur(28px) saturate(140%);
+    box-shadow: 0 32px 80px -16px rgba(0, 0, 0, 0.95),
+                0 0 0 1px rgba(255, 255, 255, 0.05),
+                inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    border-radius: 20px;
+    padding: 38px 30px 32px 30px;
+    color: var(--text-main, #f4f4f5);
+    font-family: var(--font-main, 'Open Sans', sans-serif);
+    animation: authCardEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes authCardEnter {
+    from {
+        opacity: 0;
+        transform: scale(0.96) translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.auth-header {
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+.auth-title {
+    font-family: 'Monocraft', monospace, sans-serif;
+    font-size: 1.22rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: #ffffff;
+    margin: 0 0 8px 0;
+    text-transform: uppercase;
+}
+
+.auth-subtitle {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #e4e4e7;
+    margin: 0;
+    line-height: 1.4;
+    letter-spacing: 0.02em;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.auth-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.auth-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #a1a1aa;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.auth-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.auth-input-wrapper i.auth-leading-icon {
+    position: absolute;
+    left: 14px;
+    color: #71717a;
+    font-size: 0.9rem;
+    pointer-events: none;
+    transition: color 0.2s ease;
+}
+
+.auth-input {
+    width: 100%;
+    background: rgba(10, 10, 14, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 12px 42px 12px 38px;
+    font-size: 0.95rem;
+    color: #ffffff;
+    font-family: inherit;
+    outline: none;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.auth-input:focus {
+    border-color: rgba(255, 255, 255, 0.45);
+    background: rgba(14, 14, 18, 0.98);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+}
+
+.auth-input-wrapper:focus-within i.auth-leading-icon {
+    color: #ffffff;
+}
+
+.auth-toggle-pwd-btn {
+    position: absolute;
+    right: 12px;
+    background: none;
+    border: none;
+    color: #71717a;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease;
+}
+
+.auth-toggle-pwd-btn:hover {
+    color: #ffffff;
+}
+
+.auth-submit-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 6px;
+    padding: 12px 18px;
+    background: #ffffff;
+    color: #09090b;
+    border: none;
+    border-radius: 12px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.auth-submit-btn:hover {
+    background: #e4e4e7;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(255, 255, 255, 0.12);
+}
+
+.auth-submit-btn:active {
+    transform: translateY(0);
+    background: #d4d4d8;
+}
+
+.auth-recovery-submit-btn {
+    background: #ffffff;
+    color: #09090b;
+}
+
+.auth-error-badge {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 10px;
+    font-size: 0.8rem;
+    color: #f87171;
+    margin-bottom: 8px;
+}
+
+.auth-error-badge.visible {
+    display: flex;
+    animation: authShake 0.35s ease;
+}
+
+@keyframes authShake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-5px); }
+    40%, 80% { transform: translateX(5px); }
+}
+
+.auth-forgot-toggle {
+    text-align: center;
+    margin-top: 8px;
+}
+
+.auth-forgot-link {
+    background: none;
+    border: none;
+    color: #71717a;
+    font-size: 0.8rem;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    transition: color 0.2s ease;
+}
+
+.auth-forgot-link:hover {
+    color: #ffffff;
+}
+
+/* Forgot Password Recovery Section */
+.auth-recovery-section {
+    display: none;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 14px;
+    padding-top: 16px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.12);
+}
+
+.auth-recovery-section.visible {
+    display: flex;
+}
+
+.auth-recovery-tip {
+    font-size: 0.78rem;
+    color: #a1a1aa;
+    line-height: 1.45;
+    margin: 0;
+}
+
+.auth-recovery-tip code {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: var(--font-code, monospace);
+    color: #ffffff;
+    font-size: 0.75rem;
+}
+
+/* Top Nav / Drawer Lock Button */
+.nav-lock-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-muted, #71717a);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.nav-lock-btn:hover {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.drawer-tool-item.tool-logout:hover {
+    background: rgba(239, 68, 68, 0.12) !important;
+    border-color: rgba(239, 68, 68, 0.35) !important;
+}

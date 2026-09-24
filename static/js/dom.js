@@ -183,7 +183,7 @@ const rawDom = {
     closeApiSetupBtn: document.getElementById('closeApiSetupBtn'),
     apiModeToggle: document.getElementById('apiModeToggle'),
 
-    // ── Inference Mode Selector ──
+    // Inference mode selector
     routingModeBtn: document.getElementById('routingModeBtn'),
     singleModeBtn: document.getElementById('singleModeBtn'),
     apiModeBtn: document.getElementById('apiModeBtn'),
@@ -238,7 +238,7 @@ const rawDom = {
     visionMmprojCpu: document.getElementById('visionMmprojCpu'),
     pdfDpiSelect: document.getElementById('pdfDpiSelect'),
 
-    // ── File Explorer Modal ──
+    // File explorer modal
     fileBrowserModal: document.getElementById('fileBrowserModal'),
     fileBrowserWindow: document.getElementById('fileBrowserWindow'),
     fileBrowserHeader: document.getElementById('fileBrowserHeader'),
@@ -256,7 +256,7 @@ const rawDom = {
     fileBrowserCancelBtn: document.getElementById('fileBrowserCancelBtn'),
     fileBrowserSelectBtn: document.getElementById('fileBrowserSelectBtn'),
 
-    // ── Model Downloader (Accelerated) ──
+    // Model downloader
     downloadEngineBadge: document.getElementById('downloadEngineBadge'),
     modelDownloadUrlInput: document.getElementById('modelDownloadUrlInput'),
     startDownloadBtn: document.getElementById('startDownloadBtn'),
@@ -270,7 +270,7 @@ const rawDom = {
     downloadEngineLabel: document.getElementById('downloadEngineLabel'),
     downloadPercentLabel: document.getElementById('downloadPercentLabel'),
 
-    // ── Per-Role Config: Router ──
+    // Per-role config: router
     routerGpuSlider: document.getElementById('routerGpuSlider'),
     routerGpuVal: document.getElementById('routerGpuVal'),
     routerCtxSlider: document.getElementById('routerCtxSlider'),
@@ -284,7 +284,7 @@ const rawDom = {
     routerMmap: document.getElementById('routerMmap'),
     routerAvailBadge: document.getElementById('routerAvailBadge'),
 
-    // ── Per-Role Config: Coder ──
+    // Per-role config: coder
     coderGpuSlider: document.getElementById('coderGpuSlider'),
     coderGpuVal: document.getElementById('coderGpuVal'),
     coderCtxSlider: document.getElementById('coderCtxSlider'),
@@ -298,7 +298,7 @@ const rawDom = {
     coderMmap: document.getElementById('coderMmap'),
     coderAvailBadge: document.getElementById('coderAvailBadge'),
 
-    // ── Per-Role Config: Vision ──
+    // Per-role config: vision
     visionGpuSlider: document.getElementById('visionGpuSlider'),
     visionGpuVal: document.getElementById('visionGpuVal'),
     visionCtxSlider: document.getElementById('visionCtxSlider'),
@@ -312,7 +312,7 @@ const rawDom = {
     visionMmap: document.getElementById('visionMmap'),
     visionAvailBadge: document.getElementById('visionAvailBadge'),
 
-    // ── Single Mode Config ──
+    // Single mode config
     singleGpuSlider: document.getElementById('singleGpuSlider'),
     singleGpuVal: document.getElementById('singleGpuVal'),
     singleCtxSlider: document.getElementById('singleCtxSlider'),
@@ -325,7 +325,7 @@ const rawDom = {
     singleMlock: document.getElementById('singleMlock'),
     singleMmap: document.getElementById('singleMmap'),
 
-    // ── Smart Engine Toggle ──
+    // Smart engine toggle
     smartToggleBtn: document.getElementById('smartToggleBtn'),
     smartToggleLabel: document.getElementById('smartToggleLabel'),
     engineStatusText: document.getElementById('engineStatusText'),
@@ -334,7 +334,7 @@ const rawDom = {
     unloadAllModelsBtn: document.getElementById('unloadAllModelsBtn'),
     statsUnloadAllBtn: document.getElementById('statsUnloadAllBtn'),
 
-    // ── Settings Tabs & Memory Budget ──
+    // Settings tabs and memory budget
     settingsNavTabs: document.getElementById('settingsNavTabs'),
     settingsTabBtns: document.querySelectorAll('.settings-tab-btn'),
     settingsTabPanes: document.querySelectorAll('.settings-tab-pane'),

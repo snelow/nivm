@@ -478,7 +478,7 @@ export function clearAttachedImage() {
     }
 }
 
-// ---------- Audio Recording ----------
+// Audio recording
 let mediaRecorder = null;
 let recordedChunks = [];
 

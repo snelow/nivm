@@ -24,7 +24,7 @@ logger = logging.getLogger("nivm.models")
 router = APIRouter(tags=["Engine & Models"])
 
 
-# ── Request Models ────────────────────────────────────────────────
+# Request models
 
 class DownloadModelRequest(BaseModel):
     url: str
@@ -36,7 +36,7 @@ class FetchRemoteModelsRequest(BaseModel):
     api_key: Optional[str] = ""
 
 
-# ── Model Enumeration Endpoints ───────────────────────────────────
+# Model enumeration endpoints
 
 @router.get("/api/models")
 async def list_models():
@@ -141,7 +141,7 @@ def get_system_memory_info() -> dict:
     return info
 
 
-# ── Engine Management Endpoints ───────────────────────────────────
+# Engine management endpoints
 
 @router.get("/api/engine/status")
 async def engine_status():
@@ -239,7 +239,7 @@ async def engine_smart_toggle():
             raise HTTPException(status_code=500, detail=f"Failed to load: {e}")
 
 
-# ── Scanning & Downloader Endpoints ───────────────────────────────
+# Scanning and downloader endpoints
 
 @router.get("/api/models/scan")
 async def scan_models_endpoint():

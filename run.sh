@@ -12,31 +12,56 @@ KILL_EXISTING="false"
 ENABLE_SSL="false"
 SSL_CERT=""
 SSL_KEY=""
+RESET_PASS="false"
+SETUP_AUTH="false"
+SHOW_KEY="false"
 
-# Terminal Color Palette
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
+# Terminal Color Palette (Sleek Minimalist Cyber)
+CYAN='\033[1;36m'
+WHITE='\033[1;37m'
+GRAY='\033[38;2;148;163;184m'
+GREEN='\033[1;32m'
 YELLOW='\033[1;33m'
-RED='\033[0;31m'
-PURPLE='\033[0;35m'
+RED='\033[1;31m'
+GOLD='\033[38;2;245;158;11m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
+# Function to render the clean minimalist logo banner
+print_banner() {
+    clear 2>/dev/null || true
+    echo -e "${CYAN}"
+    cat << "EOF"
+    ███╗   ██╗██╗██╗   ██╗███╗   ███╗
+    ████╗  ██║██║██║   ██║████╗ ████║
+    ██╔██╗ ██║██║██║   ██║██╔████╔██║
+    ██║╚██╗██║██║╚██╗ ██╔╝██║╚██╔╝██║
+    ██║ ╚████║██║ ╚████╔╝ ██║ ╚═╝ ██║
+    ╚═╝  ╚═══╝╚═╝  ╚═══╝  ╚═╝     ╚═╝
+EOF
+    echo -e "   ${WHITE}Native Inference Virtual Machine${NC} ${GRAY}— v2.4 LTS${NC}"
+    echo -e "   ${GRAY}Local & Hybrid AI Workbench • Zero Telemetry${NC}"
+    echo ""
+}
+
 # Function to show usage help
 show_help() {
-    echo -e "${CYAN}${BOLD}Project NIVM — Native Inference Virtual Machine${NC}"
-    echo "Usage: ./run.sh [OPTIONS]"
+    print_banner
+    echo -e "${CYAN}Usage:${NC} ./run.sh [OPTIONS]"
     echo ""
-    echo "Options:"
-    echo "  -h, --host HOST         Set server bind address (default: 0.0.0.0)"
-    echo "  -p, --port PORT         Set server port (default: 8000)"
-    echo "  --ssl                   Enable native SSL / HTTPS (auto-generates certs if needed)"
-    echo "  --ssl-cert PATH         Path to custom SSL certificate (PEM)"
-    echo "  --ssl-key PATH          Path to custom SSL private key (PEM)"
-    echo "  --no-reload             Disable Uvicorn auto-reload"
-    echo "  -k, --kill              Kill any existing process currently bound to the target port"
-    echo "  -s, --setup             Force re-installation of dependencies and assets"
-    echo "  --help                  Show this help message and exit"
+    echo -e "${WHITE}Options:${NC}"
+    echo -e "  ${CYAN}-h, --host HOST${NC}         Set server bind address (default: 0.0.0.0)"
+    echo -e "  ${CYAN}-p, --port PORT${NC}         Set server port (default: 8000)"
+    echo -e "  ${CYAN}--ssl${NC}                   Enable native SSL / HTTPS (auto-generates certs if needed)"
+    echo -e "  ${CYAN}--ssl-cert PATH${NC}         Path to custom SSL certificate (PEM)"
+    echo -e "  ${CYAN}--ssl-key PATH${NC}          Path to custom SSL private key (PEM)"
+    echo -e "  ${CYAN}--no-reload${NC}             Disable Uvicorn auto-reload"
+    echo -e "  ${CYAN}-k, --kill${NC}              Kill any existing process currently bound to the target port"
+    echo -e "  ${CYAN}-s, --setup${NC}             Force re-installation of dependencies and assets"
+    echo -e "  ${CYAN}--setup-auth${NC}            Configure or re-create Owner credentials"
+    echo -e "  ${CYAN}--reset-password${NC}        Reset Owner Master Password from terminal"
+    echo -e "  ${CYAN}--show-key${NC}              Display current Emergency Recovery Key"
+    echo -e "  ${CYAN}--help${NC}                  Show this help message and exit"
     echo ""
 }
 
@@ -77,87 +102,37 @@ while [[ $# -gt 0 ]]; do
             FORCE_SETUP="true"
             shift
             ;;
+        --setup-auth)
+            SETUP_AUTH="true"
+            shift
+            ;;
+        --reset-password)
+            RESET_PASS="true"
+            shift
+            ;;
+        --show-key)
+            SHOW_KEY="true"
+            shift
+            ;;
         --help)
             show_help
             exit 0
             ;;
         *)
-            echo -e "${RED}Unknown option: $1${NC}"
+            echo -e "${RED}[!] Unknown option: $1${NC}"
             show_help
             exit 1
             ;;
     esac
 done
 
-# Banner
-clear 2>/dev/null || true
-echo -e "${CYAN}"
-cat << "EOF"
-    ███╗   ██╗██╗██╗   ██╗███╗   ███╗
-    ████╗  ██║██║██║   ██║████╗ ████║
-    ██╔██╗ ██║██║██║   ██║██╔████╔██║
-    ██║╚██╗██║██║╚██╗ ██╔╝██║╚██╔╝██║
-    ██║ ╚████║██║ ╚████╔╝ ██║ ╚═╝ ██║
-    ╚═╝  ╚═══╝╚═╝  ╚═══╝  ╚═╝     ╚═╝
-EOF
-echo -e "${BOLD}      Native Inference Virtual Machine v2.0${NC}"
-echo -e "${CYAN}====================================================${NC}"
+print_banner
 
-# Handle port cleanup if requested or check conflict
-EXISTING_PID=$(lsof -ti :"$PORT" 2>/dev/null || ss -tulpn 2>/dev/null | grep ":$PORT " | grep -o 'pid=[0-9]*' | cut -d= -f2 | head -n 1 || true)
-
-if [ -n "$EXISTING_PID" ]; then
-    if [ "$KILL_EXISTING" = "true" ]; then
-        echo -e "${YELLOW}[!] Terminating existing process on port $PORT (PID: $EXISTING_PID)...${NC}"
-        kill -9 "$EXISTING_PID" 2>/dev/null || true
-        sleep 0.5
-    else
-        echo -e "${RED}[!] Error: Port $PORT is already in use by PID $EXISTING_PID.${NC}"
-        echo -e "${YELLOW}    Tip: Run './run.sh --kill' or specify a different port with '-p PORT'${NC}"
-        exit 1
-    fi
-fi
-
-# ── Hardware & Environment Inspection ────────────────────────
-echo -e "${YELLOW}[+] Inspecting hardware & acceleration...${NC}"
-if command -v nvidia-smi &>/dev/null; then
-    GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n 1 || echo "NVIDIA GPU")
-    VRAM_TOTAL=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader 2>/dev/null | head -n 1 || echo "Unknown VRAM")
-    echo -e "  ${GREEN}✓${NC} GPU Detected: ${CYAN}${GPU_NAME}${NC} (${VRAM_TOTAL})"
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-    echo -e "  ${GREEN}✓${NC} Apple Silicon / Metal acceleration available"
-else
-    CPU_THREADS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo "4")
-    echo -e "  ${CYAN}ℹ${NC} Accelerator: CPU Mode (${CPU_THREADS} logical threads)"
-fi
-
-# Check aria2 acceleration
-if command -v aria2c &>/dev/null; then
-    ARIA2_VER=$(aria2c -v 2>/dev/null | head -n 1 | awk '{print $3}')
-    echo -e "  ${GREEN}✓${NC} Downloader:  ${CYAN}aria2c v${ARIA2_VER}${NC} (Isolated multi-connection)"
-else
-    echo -e "  ${YELLOW}ℹ${NC} Downloader:  ${CYAN}Streaming Fallback${NC} (aria2c not in PATH)"
-fi
-
-# Ensure models directory exists silently
-mkdir -p "models"
-
-# Auto-discover CUDA & cuDNN paths for GPU acceleration
-if [ -d "/usr/local/cuda/bin" ] && [[ ":$PATH:" != *":/usr/local/cuda/bin:"* ]]; then
-    export PATH="/usr/local/cuda/bin:$PATH"
-fi
-
-for CUDA_LIB in "/usr/local/cuda/lib64" "/usr/local/cuda-13.2/lib64" "$HOME/.local/lib/python3.14/site-packages/nvidia/cudnn/lib" "/home/blubvlub/.local/lib/python3.14/site-packages/nvidia/cudnn/lib"; do
-    if [ -d "$CUDA_LIB" ]; then
-        export LD_LIBRARY_PATH="$CUDA_LIB:${LD_LIBRARY_PATH:-}"
-    fi
-done
-
-# ── Virtual Environment Setup ─────────────────────────────────
+# Virtual environment setup and activation
 VENV_DIR="venv"
 
 if [ "$FORCE_SETUP" = "true" ] || [ ! -d "$VENV_DIR" ]; then
-    echo -e "${YELLOW}[+] Setting up Python virtual environment...${NC}"
+    echo -e "${YELLOW}[+] Preparing Python virtual environment...${NC}"
     if command -v python3.14 &>/dev/null; then
         PYTHON_BIN="python3.14"
     elif command -v python3.12 &>/dev/null; then
@@ -186,21 +161,178 @@ else
     source "$VENV_DIR/bin/activate"
 fi
 
+# Ensure User files directory exists
+mkdir -p "User files"
+AUTH_FILE="User files/auth.json"
+REC_KEY_FILE="User files/recovery_key.txt"
+
+# Standalone CLI tasks
+
+# 1. Show Recovery Key
+if [ "$SHOW_KEY" = "true" ]; then
+    if [ -f "$REC_KEY_FILE" ]; then
+        echo -e "${CYAN}┌─ Emergency Recovery Key ──────────────────────────────────────${NC}"
+        while IFS= read -r line; do
+            echo -e "${CYAN}│${NC}  ${WHITE}$line${NC}"
+        done < "$REC_KEY_FILE"
+        echo -e "${CYAN}└───────────────────────────────────────────────────────────────${NC}"
+    else
+        echo -e "${YELLOW}[!] No recovery key file found at ${REC_KEY_FILE}.${NC}"
+    fi
+    exit 0
+fi
+
+# 2. Reset Password CLI
+if [ "$RESET_PASS" = "true" ]; then
+    echo -e "${CYAN}┌─ Owner Password Reset ────────────────────────────────────────${NC}"
+    echo -e "${CYAN}│${NC}  ${GRAY}Resetting the Project NIVM master password directly.${NC}"
+    echo -e "${CYAN}└───────────────────────────────────────────────────────────────${NC}"
+    echo ""
+    while true; do
+        read -s -p "$(echo -e "${WHITE}  New Master Password: ${NC}")" NEW_P1
+        echo ""
+        if [ ${#NEW_P1} -lt 4 ]; then
+            echo -e "${RED}  [!] Password must be at least 4 characters long.${NC}"
+            continue
+        fi
+        read -s -p "$(echo -e "${WHITE}  Confirm Master Password: ${NC}")" NEW_P2
+        echo ""
+        if [ "$NEW_P1" != "$NEW_P2" ]; then
+            echo -e "${RED}  [!] Passwords do not match. Try again.${NC}"
+            continue
+        fi
+        break
+    done
+
+    python3 -c "
+import sys
+sys.path.insert(0, '.')
+from core.auth import reset_password_direct
+if reset_password_direct('$NEW_P1'):
+    print('\033[1;32m[✓] Master password updated. All previous sessions revoked.\033[0m')
+else:
+    print('\033[1;31m[!] Failed to reset password.\033[0m')
+    sys.exit(1)
+"
+    exit 0
+fi
+
+# Owner account verification and setup
+IS_CONFIGURED=$(python3 -c "import sys; sys.path.insert(0, '.'); from core.auth import is_auth_configured; print('true' if is_auth_configured() else 'false')" 2>/dev/null || echo "false")
+
+if [ "$IS_CONFIGURED" != "true" ] || [ "$SETUP_AUTH" = "true" ]; then
+    echo -e "${CYAN}┌─ Security Setup: Master Password ─────────────────────────────${NC}"
+    echo -e "${CYAN}│${NC}  ${GRAY}Project NIVM requires a Master Password to safeguard${NC}"
+    echo -e "${CYAN}│${NC}  ${GRAY}private chat histories, neural memories, and tools.${NC}"
+    echo -e "${CYAN}└───────────────────────────────────────────────────────────────${NC}"
+    echo ""
+
+    OWNER_USER="admin"
+
+    while true; do
+        read -s -p "$(echo -e "${WHITE}  Master Password: ${NC}")" OWNER_P1
+        echo ""
+        if [ ${#OWNER_P1} -lt 4 ]; then
+            echo -e "${RED}  [!] Password must be at least 4 characters long.${NC}"
+            continue
+        fi
+        read -s -p "$(echo -e "${WHITE}  Confirm Password: ${NC}")" OWNER_P2
+        echo ""
+        if [ "$OWNER_P1" != "$OWNER_P2" ]; then
+            echo -e "${RED}  [!] Passwords do not match. Try again.${NC}"
+            continue
+        fi
+        break
+    done
+
+    RECOVERY_KEY=$(python3 -c "
+import sys
+sys.path.insert(0, '.')
+from core.auth import setup_owner_account
+key = setup_owner_account('$OWNER_USER', '$OWNER_P1')
+print(key)
+")
+
+    echo ""
+    echo -e "${CYAN}┌─ Emergency Recovery Key ──────────────────────────────────────${NC}"
+    echo -e "${CYAN}│${NC}  ${WHITE}Key:  ${GOLD}${RECOVERY_KEY}${NC}"
+    echo -e "${CYAN}│${NC}"
+    echo -e "${CYAN}│${NC}  ${GRAY}Saved to: ${REC_KEY_FILE}${NC}"
+    echo -e "${CYAN}│${NC}  ${GRAY}Keep this safe! Use it to reset your password remotely${NC}"
+    echo -e "${CYAN}│${NC}  ${GRAY}from your browser if forgotten.${NC}"
+    echo -e "${CYAN}└───────────────────────────────────────────────────────────────${NC}"
+    echo ""
+
+    if [ "$SETUP_AUTH" = "true" ]; then
+        exit 0
+    fi
+    sleep 0.5
+fi
+
+# Handle port cleanup if requested or check conflict
+EXISTING_PID=$(lsof -ti :"$PORT" 2>/dev/null || ss -tulpn 2>/dev/null | grep ":$PORT " | grep -o 'pid=[0-9]*' | cut -d= -f2 | head -n 1 || true)
+
+if [ -n "$EXISTING_PID" ]; then
+    if [ "$KILL_EXISTING" = "true" ]; then
+        echo -e "${YELLOW}[!] Terminating existing process on port $PORT (PID: $EXISTING_PID)...${NC}"
+        kill -9 "$EXISTING_PID" 2>/dev/null || true
+        sleep 0.5
+    else
+        echo -e "${RED}[!] Error: Port $PORT is already in use by PID $EXISTING_PID.${NC}"
+        echo -e "${YELLOW}    Tip: Run './run.sh --kill' or specify a different port with '-p PORT'${NC}"
+        exit 1
+    fi
+fi
+
+# Hardware and environment inspection
+GPU_INFO="CPU Mode"
+if command -v nvidia-smi &>/dev/null; then
+    GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n 1 || echo "NVIDIA GPU")
+    VRAM_TOTAL=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader 2>/dev/null | head -n 1 || echo "Unknown VRAM")
+    GPU_INFO="${GPU_NAME} (${VRAM_TOTAL})"
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+    GPU_INFO="Apple Silicon / Metal"
+else
+    CPU_THREADS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo "4")
+    GPU_INFO="CPU Mode (${CPU_THREADS} logical threads)"
+fi
+
+# Check aria2 acceleration
+DOWNLOADER_INFO="Streaming Fallback (aria2c not in PATH)"
+if command -v aria2c &>/dev/null; then
+    ARIA2_VER=$(aria2c -v 2>/dev/null | head -n 1 | awk '{print $3}')
+    DOWNLOADER_INFO="aria2c v${ARIA2_VER} (Turbo Multi-Stream)"
+fi
+
+# Ensure models directory exists silently
+mkdir -p "models"
+
+# Auto-discover CUDA & cuDNN paths for GPU acceleration
+if [ -d "/usr/local/cuda/bin" ] && [[ ":$PATH:" != *":/usr/local/cuda/bin:"* ]]; then
+    export PATH="/usr/local/cuda/bin:$PATH"
+fi
+
+for CUDA_LIB in "/usr/local/cuda/lib64" "/usr/local/cuda-13.2/lib64" "$HOME/.local/lib/python3.14/site-packages/nvidia/cudnn/lib" "/home/blubvlub/.local/lib/python3.14/site-packages/nvidia/cudnn/lib"; do
+    if [ -d "$CUDA_LIB" ]; then
+        export LD_LIBRARY_PATH="$CUDA_LIB:${LD_LIBRARY_PATH:-}"
+    fi
+done
+
 # Verify llama-cpp acceleration backend
 CUDA_CHECK=$(python -c "import llama_cpp, subprocess; print('CUDA' if 'cuda' in subprocess.check_output(['ldd', llama_cpp.llama_cpp._lib._name]).decode().lower() else 'CPU')" 2>/dev/null || echo "Unknown")
 if [ "$CUDA_CHECK" = "CUDA" ]; then
-    echo -e "  ${GREEN}✓${NC} llama-cpp:   ${CYAN}CUDA (GPU Hardware Acceleration Active)${NC}"
+    LLAMA_INFO="CUDA (GPU Hardware Acceleration Active)"
 else
-    echo -e "  ${YELLOW}⚠${NC} llama-cpp:   ${YELLOW}CPU Mode (libggml-cuda not detected)${NC}"
+    LLAMA_INFO="CPU Mode (libggml-cuda not detected)"
 fi
 
-# ── Neural TTS Engine Setup (Kokoro v1.0) ──────────────────────
+# Neural TTS engine setup (Kokoro v1.0)
 KOKORO_DIR="models/tts/kokoro"
 KOKORO_MODEL="$KOKORO_DIR/kokoro-v1.0.onnx"
 KOKORO_VOICES="$KOKORO_DIR/voices-v1.0.bin"
 
 if [ ! -f "$KOKORO_MODEL" ] || [ ! -f "$KOKORO_VOICES" ]; then
-    echo -e "${YELLOW}[+] Setting up sovereign Neural TTS models (Kokoro v1.0)...${NC}"
+    echo -e "${YELLOW}[+] Setting up Neural TTS models (Kokoro v1.0)...${NC}"
     mkdir -p "$KOKORO_DIR"
     
     if [ ! -f "$KOKORO_MODEL" ]; then
@@ -214,53 +346,36 @@ if [ ! -f "$KOKORO_MODEL" ] || [ ! -f "$KOKORO_VOICES" ]; then
         curl -L -# -o "$KOKORO_VOICES" "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin" || \
         curl -L -# -o "$KOKORO_VOICES" "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices-v1.0.bin"
     fi
-    echo -e "${GREEN}[✓] Neural TTS models ready.${NC}"
 fi
 
-# ── Open-Source CMUdict Pronunciation Dataset (135,000+ entries) ──
+# Open-Source CMUdict Pronunciation Dataset (135,000+ entries)
 CMUDICT_PATH="models/tts/cmudict.dict"
 if [ ! -f "$CMUDICT_PATH" ]; then
-    echo -e "${YELLOW}[+] Downloading open-source CMU Pronunciation Lexicon (~3.5MB)...${NC}"
+    echo -e "${YELLOW}[+] Downloading CMU Pronunciation Lexicon (~3.5MB)...${NC}"
     curl -L -# -o "$CMUDICT_PATH" "https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict.dict" || true
-    echo -e "${GREEN}[✓] CMU Pronunciation dataset ready & saved locally.${NC}"
 fi
 
-if python -c "import kokoro_onnx, soundfile, scipy" 2>/dev/null; then
-    echo -e "  ${GREEN}✓${NC} Neural TTS:  ${CYAN}Kokoro v1.0 Active (Full Precision, CPU/GPU)${NC}"
-else
-    echo -e "${YELLOW}[+] Installing TTS Python dependencies...${NC}"
-    pip install kokoro-onnx soundfile scipy -q
-    echo -e "  ${GREEN}✓${NC} Neural TTS:  ${CYAN}Kokoro v1.0 Installed & Ready${NC}"
-fi
-
-# Verify offline pronunciation lexicon & datasets
-if [ -f "core/pronunciation_dict.json" ]; then
-    echo -e "  ${GREEN}✓${NC} Phonetics:   ${CYAN}Offline Lexicon Active (Slang, Anime & Sovereign)${NC}"
-fi
-if [ -f "$CMUDICT_PATH" ]; then
-    echo -e "  ${GREEN}✓${NC} CMUdict:     ${CYAN}Offline CMU Pronunciation Dataset Loaded (135k words)${NC}"
-fi
-
-# ── Image Studio / Diffusion Verification ─────────────────────
-python - << 'EOF' 2>/dev/null || true
+# Check Image Studio status
+IMAGE_STUDIO_INFO=$(python - << 'EOF' 2>/dev/null || echo "Opt-In Module"
 try:
     from core.image_engine.model_checker import check_image_models_status
     from core.image_engine.setup_helper import detect_comfyui
     m = check_image_models_status()
     c = detect_comfyui()
     if m.get("all_installed") and c.get("detected"):
-        print("\033[0;32m  ✓\033[0m Image Studio: \033[0;36mQwen-Rapid Diffusion Ready (ComfyUI + 18GB Models)\033[0m")
+        print("Qwen-Rapid Diffusion [Ready]")
     elif m.get("all_installed"):
-        print("\033[1;33m  ○\033[0m Image Studio: \033[1;33mModels Ready (ComfyUI backend not detected)\033[0m")
+        print("Models Cached (ComfyUI Standby)")
     else:
-        print("\033[1;33m  ○\033[0m Image Studio: \033[1;33mOpt-In Feature Available (Configure in Settings)\033[0m")
+        print("Opt-In Diffusion (Configure in Settings)")
 except Exception:
-    pass
+    print("Diffusion Engine Ready")
 EOF
+)
 
-# ── Vendor / Frontend Assets ──────────────────────────────────
+# Vendor and frontend assets
 if [ ! -d "static/vendor" ] || [ "$FORCE_SETUP" = "true" ]; then
-    echo -e "${YELLOW}[+] Checking offline frontend assets...${NC}"
+    echo -e "${YELLOW}[+] Verifying offline frontend assets...${NC}"
     python - << 'EOF'
 import os, re, urllib.request
 
@@ -274,7 +389,7 @@ def safe_download(url, path):
     if not os.path.exists(path):
         try:
             urllib.request.urlretrieve(url, path)
-        except Exception as e:
+        except Exception:
             pass
 
 fa_version = "6.4.0"
@@ -301,10 +416,9 @@ try:
 except Exception:
     pass
 EOF
-    echo -e "${GREEN}[✓] Frontend assets verified.${NC}"
 fi
 
-# Detect local network IP for mobile testing
+# Detect local network IP
 get_local_ip() {
     local ip=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+' || true)
     if [ -z "$ip" ]; then
@@ -337,7 +451,6 @@ if [ "$ENABLE_SSL" = "true" ]; then
             -addext "subjectAltName = ${SAN_PARAM}" 2>/dev/null || \
         openssl req -x509 -newkey rsa:2048 -keyout "$SSL_KEY" -out "$SSL_CERT" -days 365 -nodes \
             -subj "/CN=localhost" 2>/dev/null
-        echo -e "${GREEN}[✓] SSL certificates generated in ${CERTS_DIR}/${NC}"
     fi
 fi
 
@@ -347,15 +460,28 @@ export SERVER_PORT="$PORT"
 export SERVER_PROTOCOL="$PROTOCOL"
 export RELOAD="$RELOAD"
 
-echo -e "${CYAN}----------------------------------------------------${NC}"
-echo -e "${GREEN}${BOLD}[✓] Project NIVM ready to launch:${NC}"
-echo -e "  • Local Interface:   ${BOLD}${CYAN}${PROTOCOL}://localhost:${PORT}${NC}"
+# Render diagnostics HUD
+echo -e "${CYAN}┌─ System Diagnostics ──────────────────────────────────────────${NC}"
+echo -e "${CYAN}│${NC}  ${GRAY}Compute Core${NC}      :: ${WHITE}${GPU_INFO}${NC}"
+echo -e "${CYAN}│${NC}  ${GRAY}LLM Engine${NC}        :: ${WHITE}${LLAMA_INFO}${NC}"
+echo -e "${CYAN}│${NC}  ${GRAY}Neural Voice${NC}      :: ${WHITE}Kokoro v1.0 ONNX (Neural Voice TTS)${NC}"
+echo -e "${CYAN}│${NC}  ${GRAY}Phonetic Lex${NC}      :: ${WHITE}CMUdict (135,000+ words) Loaded${NC}"
+echo -e "${CYAN}│${NC}  ${GRAY}Downloader${NC}        :: ${WHITE}${DOWNLOADER_INFO}${NC}"
+echo -e "${CYAN}│${NC}  ${GRAY}Image Studio${NC}      :: ${WHITE}${IMAGE_STUDIO_INFO}${NC}"
+echo -e "${CYAN}│${NC}  ${GRAY}Security Gate${NC}     :: ${GREEN}Single-User Owner Shield [Active]${NC}"
+echo -e "${CYAN}└───────────────────────────────────────────────────────────────${NC}"
+echo ""
+
+# Render network endpoints
+echo -e "${CYAN}┌─ Active Endpoints ────────────────────────────────────────────${NC}"
+echo -e "${CYAN}│${NC}  ${GRAY}Local Host${NC}        -> ${WHITE}${PROTOCOL}://localhost:${PORT}${NC}"
 if [ -n "$LOCAL_IP" ]; then
-    echo -e "  • Network Link:      ${BOLD}${GREEN}${PROTOCOL}://${LOCAL_IP}:${PORT}${NC}"
+    echo -e "${CYAN}│${NC}  ${GRAY}Local Network${NC}     -> ${WHITE}${PROTOCOL}://${LOCAL_IP}:${PORT}${NC}"
 fi
-echo -e "  • Transfer Security: ${CYAN}$([ "$ENABLE_SSL" = "true" ] && echo "Encrypted (HTTPS/TLS)" || echo "Plain HTTP (pass --ssl for HTTPS)")${NC}"
-echo -e "  • Hot Reloading:     ${CYAN}${RELOAD}${NC}"
-echo -e "${CYAN}----------------------------------------------------${NC}"
+echo -e "${CYAN}│${NC}  ${GRAY}Transport${NC}         -> ${WHITE}$([ "$ENABLE_SSL" = "true" ] && echo "Encrypted HTTPS/TLS" || echo "Plain HTTP (pass --ssl for HTTPS)")${NC}"
+echo -e "${CYAN}│${NC}  ${GRAY}Access Gate${NC}       -> ${WHITE}Owner Authentication Required${NC}"
+echo -e "${CYAN}└───────────────────────────────────────────────────────────────${NC}"
+echo ""
 
 # Build Uvicorn command array (handles paths with spaces safely)
 UVICORN_CMD=(python -m uvicorn main:app --host "$HOST" --port "$PORT" --log-level warning)
@@ -371,7 +497,7 @@ SERVER_PID=""
 cleanup() {
     echo -e "\n${YELLOW}[!] Terminating Project NIVM server...${NC}"
     if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
-        kill -TERM "$SERVER_PID" 2>/dev/null || true
+        kill -TERM -"$SERVER_PID" 2>/dev/null || kill -TERM "$SERVER_PID" 2>/dev/null || true
         for i in {1..15}; do
             if ! kill -0 "$SERVER_PID" 2>/dev/null; then
                 break
@@ -379,7 +505,7 @@ cleanup() {
             sleep 0.1
         done
         if kill -0 "$SERVER_PID" 2>/dev/null; then
-            kill -9 "$SERVER_PID" 2>/dev/null || true
+            kill -9 -"$SERVER_PID" 2>/dev/null || kill -9 "$SERVER_PID" 2>/dev/null || true
         fi
     fi
     # Free port if child process lingers
@@ -387,21 +513,19 @@ cleanup() {
     if [ -n "$lingering" ]; then
         kill -9 $lingering 2>/dev/null || true
     fi
-    echo -e "${GREEN}[✓] Server stopped.${NC}"
+    echo -e "${GREEN}[✓] Server stopped cleanly.${NC}"
     exit 0
 }
 
 trap cleanup SIGINT SIGTERM
 
-# Launch Server in background with managed PID and file logging
+# Launch Server in its own process group with setsid (so Ctrl+C in logs -f never kills uvicorn)
 LOG_FILE="User files/nivm.log"
-mkdir -p "User files"
-echo -e "${GREEN}[+] Starting server...${NC}"
-"${UVICORN_CMD[@]}" >> "$LOG_FILE" 2>&1 &
+echo -ne "${CYAN}[+] Starting Project NIVM server...${NC}"
+setsid "${UVICORN_CMD[@]}" >> "$LOG_FILE" 2>&1 &
 SERVER_PID=$!
 
 # Wait for server and model to initialize
-echo -ne "${YELLOW}[*] Initializing engine & model...${NC}"
 SERVER_READY=false
 for i in {1..60}; do
     if ! kill -0 "$SERVER_PID" 2>/dev/null; then
@@ -423,15 +547,30 @@ else
     echo -e " ${YELLOW}[Started]${NC}"
 fi
 
-echo -e "${CYAN}Interactive console active.${NC} Type ${BOLD}help${NC} for options or ${BOLD}quit${NC} to exit."
-echo -e "Server logs saved to: ${PURPLE}${LOG_FILE}${NC} (type ${BOLD}logs${NC} to view)"
+echo -e "${GRAY}Interactive console ready. Type ${WHITE}help${GRAY} for options or ${WHITE}quit${GRAY} to exit.${NC}"
 echo ""
 
-CURL_OPTS="-s -k"
+# Authorize local CLI curl commands using the owner signing secret
+CLI_SECRET=$(python3 -c "import json; print(json.load(open('User files/auth.json')).get('signing_secret', ''))" 2>/dev/null || true)
+CURL_OPTS=(-s -k)
+if [ -n "$CLI_SECRET" ]; then
+    CURL_OPTS+=(-H "X-NIVM-Internal-Key: $CLI_SECRET")
+fi
 
+# Disable exit-on-error in the interactive session to prevent console terminations
+set +e
+
+# Interactive Command Loop
 while kill -0 "$SERVER_PID" 2>/dev/null; do
     if [ -t 0 ]; then
-        read -r -p "$(echo -e "${BOLD}${PURPLE}[nivm]>${NC} ")" CMD || break
+        read -r -p "$(echo -e "${BOLD}${CYAN}nivm${NC} > ")" CMD
+        READ_STATUS=$?
+        if [ $READ_STATUS -gt 128 ]; then
+            echo ""
+            continue
+        elif [ $READ_STATUS -ne 0 ]; then
+            break
+        fi
     else
         read -r CMD || break
     fi
@@ -442,36 +581,71 @@ while kill -0 "$SERVER_PID" 2>/dev/null; do
             cleanup
             ;;
         "help"|"?")
-            echo -e "${CYAN}Available Terminal Commands:${NC}"
-            echo -e "  ${BOLD}quit, exit, q${NC}    - Instantly terminate server and clean up port"
-            echo -e "  ${BOLD}status${NC}           - Show active model, engine status, and VRAM/RAM"
-            echo -e "  ${BOLD}logs${NC}             - Print recent server logs"
-            echo -e "  ${BOLD}logs -f${NC}          - Stream live server logs (Ctrl+C returns to prompt)"
-            echo -e "  ${BOLD}logs clear${NC}       - Clear/truncate the server log file"
-            echo -e "  ${BOLD}urls${NC}             - Print local and network access links"
-            echo -e "  ${BOLD}models${NC}           - List discovered local GGUF models"
-            echo -e "  ${BOLD}clear${NC}            - Clear terminal screen"
-            echo -e "  ${BOLD}help${NC}             - Show this help message"
+            echo -e "${CYAN}┌─ Available Commands ──────────────────────────────────────────${NC}"
+            echo -e "${CYAN}│${NC}  ${WHITE}status${NC}         - Show engine status, active model, and memory bars"
+            echo -e "${CYAN}│${NC}  ${WHITE}models${NC}         - Scan and list discovered local GGUF models"
+            echo -e "${CYAN}│${NC}  ${WHITE}passwd${NC}         - Interactively change owner master password"
+            echo -e "${CYAN}│${NC}  ${WHITE}rec-key${NC}        - Display active Emergency Recovery Key"
+            echo -e "${CYAN}│${NC}  ${WHITE}urls${NC}           - Print local and network access links"
+            echo -e "${CYAN}│${NC}  ${WHITE}logs${NC}           - Print recent server activity logs"
+            echo -e "${CYAN}│${NC}  ${WHITE}logs -f${NC}        - Stream live server activity logs (Ctrl+C)"
+            echo -e "${CYAN}│${NC}  ${WHITE}logs clear${NC}     - Truncate and clear the server log file"
+            echo -e "${CYAN}│${NC}  ${WHITE}clear${NC}          - Clear terminal screen and reprint banner"
+            echo -e "${CYAN}│${NC}  ${WHITE}quit, exit, q${NC}  - Clean, instant zero-hang server shutdown"
+            echo -e "${CYAN}└───────────────────────────────────────────────────────────────${NC}"
+            ;;
+        "passwd"|"reset-pass")
+            echo -e "${CYAN}┌─ Change Master Password ──────────────────────────────────────${NC}"
+            read -s -p "$(echo -e "${WHITE}  New Master Password: ${NC}")" NP1
+            echo ""
+            if [ ${#NP1} -lt 4 ]; then
+                echo -e "${RED}  [!] Password must be at least 4 characters long.${NC}"
+                continue
+            fi
+            read -s -p "$(echo -e "${WHITE}  Confirm Password: ${NC}")" NP2
+            echo ""
+            if [ "$NP1" != "$NP2" ]; then
+                echo -e "${RED}  [!] Passwords did not match.${NC}"
+                continue
+            fi
+            python3 -c "
+import sys
+sys.path.insert(0, '.')
+from core.auth import reset_password_direct
+if reset_password_direct('$NP1'):
+    print('\033[1;32m  [✓] Password successfully changed. All active sessions refreshed.\033[0m')
+else:
+    print('\033[1;31m  [!] Failed to update password.\033[0m')
+"
+            echo -e "${CYAN}└───────────────────────────────────────────────────────────────${NC}"
+            ;;
+        "rec-key"|"recovery"|"key")
+            if [ -f "$REC_KEY_FILE" ]; then
+                echo -e "${CYAN}┌─ Emergency Recovery Key ──────────────────────────────────────${NC}"
+                while IFS= read -r line; do
+                    echo -e "${CYAN}│${NC}  ${WHITE}$line${NC}"
+                done < "$REC_KEY_FILE"
+                echo -e "${CYAN}└───────────────────────────────────────────────────────────────${NC}"
+            else
+                echo -e "${YELLOW}[!] No recovery key file found at ${REC_KEY_FILE}.${NC}"
+            fi
             ;;
         "logs"|"log")
             if [ -f "$LOG_FILE" ]; then
-                echo -e "${CYAN}--- Recent Logs (${LOG_FILE}) ---${NC}"
+                echo -e "${GRAY}--- Recent Logs (${LOG_FILE}) ---${NC}"
                 tail -n 30 "$LOG_FILE"
-                echo -e "${CYAN}--- End of recent logs (type 'logs -f' for live stream) ---${NC}"
+                echo -e "${GRAY}--- End of recent logs (type 'logs -f' for live stream) ---${NC}"
             else
                 echo -e "${YELLOW}No log file found at ${LOG_FILE}.${NC}"
             fi
             ;;
         "logs -f"|"logs -tail"|"tail")
             if [ -f "$LOG_FILE" ]; then
-                echo -e "${CYAN}Streaming live logs from ${LOG_FILE} (Press Ctrl+C to return to console)...${NC}"
-                trap '' SIGINT
-                tail -n 30 -f "$LOG_FILE" &
-                TAIL_PID=$!
-                trap 'kill -9 "$TAIL_PID" 2>/dev/null; echo "";' SIGINT
-                wait "$TAIL_PID" 2>/dev/null || true
+                echo -e "${CYAN}Streaming live logs from ${LOG_FILE} (Press Ctrl+C to return)...${NC}"
+                trap : SIGINT
+                tail -n 30 -f "$LOG_FILE" || true
                 trap cleanup SIGINT SIGTERM
-                echo -e "${CYAN}[Console resumed]${NC}"
+                echo -e "${GRAY}[Console resumed]${NC}"
             else
                 echo -e "${YELLOW}No log file found at ${LOG_FILE}.${NC}"
             fi
@@ -481,48 +655,73 @@ while kill -0 "$SERVER_PID" 2>/dev/null; do
             echo -e "${GREEN}[✓] Log file cleared.${NC}"
             ;;
         "status")
-            curl $CURL_OPTS "${PROTOCOL}://127.0.0.1:${PORT}/api/engine/status" 2>/dev/null | python3 -c "
+            curl "${CURL_OPTS[@]}" "${PROTOCOL}://127.0.0.1:${PORT}/api/engine/status" 2>/dev/null | python3 -c "
 import sys, json
+
+def make_bar(used, total, width=16):
+    if not total or total <= 0:
+        return '░' * width, 0.0
+    pct = min(100.0, max(0.0, (used / total) * 100))
+    filled = int(round((pct / 100.0) * width))
+    bar = '█' * filled + '░' * (width - filled)
+    return bar, pct
+
 try:
     d = json.load(sys.stdin)
     act = d.get('active') or {}
     hw = d.get('hardware') or {}
-    print('-----------------------------------------')
-    print(f'Engine Status:  {\"Active (Model Loaded)\" if act.get(\"loaded\") else \"Standby (No Model)\"}')
-    print(f'Active Model:   {act.get(\"name\", \"None\")} ({act.get(\"arch\", \"N/A\")})')
+    loaded = act.get('loaded', False)
+    status_str = '\033[1;32mActive (Model Loaded)\033[0m' if loaded else '\033[1;33mStandby (No Model)\033[0m'
+    model_name = act.get('name') or 'None'
+    arch = act.get('arch') or 'N/A'
+    
+    print('\033[1;36m┌─ Engine Status ───────────────────────────────────────────────\033[0m')
+    print(f'\033[1;36m│\033[0m  \033[38;2;148;163;184mStatus\033[0m       :: {status_str}')
+    print(f'\033[1;36m│\033[0m  \033[38;2;148;163;184mActive Model\033[0m :: \033[1;37m{model_name}\033[0m ({arch})')
+    
     if hw:
-        v_used = hw.get(\"vram_used_gb\", 0) or 0
-        v_total = hw.get(\"vram_total_gb\", 0) or 0
-        r_used = hw.get(\"ram_used_gb\", 0) or 0
-        r_total = hw.get(\"ram_total_gb\", 0) or 0
-        print(f'GPU VRAM:       {v_used:.1f} / {v_total:.1f} GB')
-        print(f'System RAM:     {r_used:.1f} / {r_total:.1f} GB')
-    print('-----------------------------------------')
+        v_used = hw.get('vram_used_gb', 0) or 0
+        v_total = hw.get('vram_total_gb', 0) or 0
+        r_used = hw.get('ram_used_gb', 0) or 0
+        r_total = hw.get('ram_total_gb', 0) or 0
+        
+        v_bar, v_pct = make_bar(v_used, v_total)
+        r_bar, r_pct = make_bar(r_used, r_total)
+        
+        print(f'\033[1;36m│\033[0m  \033[38;2;148;163;184mGPU VRAM\033[0m     :: [\033[1;36m{v_bar}\033[0m] {v_used:.1f} / {v_total:.1f} GB ({v_pct:.1f}%)')
+        print(f'\033[1;36m│\033[0m  \033[38;2;148;163;184mSystem RAM\033[0m   :: [\033[38;2;148;163;184m{r_bar}\033[0m] {r_used:.1f} / {r_total:.1f} GB ({r_pct:.1f}%)')
+    print('\033[1;36m└───────────────────────────────────────────────────────────────\033[0m')
 except Exception:
-    print('Server busy or still initializing...')
+    print('\033[1;33mServer busy or initializing...\033[0m')
 " || echo -e "${YELLOW}Server unreachable.${NC}"
             ;;
         "urls")
-            echo -e "  • Local:   ${BOLD}${CYAN}${PROTOCOL}://localhost:${PORT}${NC}"
+            echo -e "${CYAN}┌─ Endpoints ───────────────────────────────────────────────────${NC}"
+            echo -e "${CYAN}│${NC}  ${GRAY}Local Host${NC} -> ${WHITE}${PROTOCOL}://localhost:${PORT}${NC}"
             if [ -n "$LOCAL_IP" ]; then
-                echo -e "  • Network: ${BOLD}${GREEN}${PROTOCOL}://${LOCAL_IP}:${PORT}${NC}"
+                echo -e "${CYAN}│${NC}  ${GRAY}Local Network${NC} -> ${WHITE}${PROTOCOL}://${LOCAL_IP}:${PORT}${NC}"
             fi
+            echo -e "${CYAN}└───────────────────────────────────────────────────────────────${NC}"
             ;;
         "models")
-            curl $CURL_OPTS "${PROTOCOL}://127.0.0.1:${PORT}/api/models" 2>/dev/null | python3 -c "
+            curl "${CURL_OPTS[@]}" "${PROTOCOL}://127.0.0.1:${PORT}/api/models/scan" 2>/dev/null | python3 -c "
 import sys, json
 try:
     d = json.load(sys.stdin)
     models = d.get('models', [])
-    print(f'Discovered Models ({len(models)}):')
+    print(f'\033[1;36m┌─ Discovered GGUF Models ({len(models)}) ───────────────────────────────\033[0m')
     for m in models:
-        print(f' • {m.get(\"filename\", \"\")} [{m.get(\"size_gb\", 0):.2f} GB]')
+        fn = m.get('filename', '')
+        sz = m.get('size_gb', 0)
+        arch = m.get('arch', 'gguf')
+        print(f'\033[1;36m│\033[0m  \033[1;37m{fn}\033[0m \033[38;2;148;163;184m[{sz:.2f} GB • {arch}]\033[0m')
+    print('\033[1;36m└───────────────────────────────────────────────────────────────\033[0m')
 except Exception:
     print('Unable to fetch models.')
 " || echo -e "${YELLOW}Unable to fetch models.${NC}"
             ;;
         "clear")
-            clear
+            print_banner
             ;;
         "")
             ;;

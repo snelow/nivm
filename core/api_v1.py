@@ -1,6 +1,6 @@
 """
 nivm OpenAI-Compatible Text API & Raw Token Endpoints (/v1)
-Air-gapped, sovereign text-only API implementation.
+Local & hybrid text-only API implementation.
 """
 
 import os
@@ -25,7 +25,7 @@ except ImportError:
 router = APIRouter(tags=["OpenAI Compatible API"])
 
 
-# ── Pydantic Request Models ───────────────────────────────────────
+# Request models
 
 class ChatMessage(BaseModel):
     role: str
@@ -67,7 +67,7 @@ class DetokenizeRequest(BaseModel):
     role: Optional[str] = None
 
 
-# ── Helper Functions ──────────────────────────────────────────────
+# Helper functions
 
 def _resolve_text_role(requested_model: Optional[str]) -> str:
     """
@@ -134,7 +134,7 @@ def _check_text_only(messages: List[ChatMessage]):
                     )
 
 
-# ── Endpoints ─────────────────────────────────────────────────────
+# Endpoints
 
 @router.get("/v1/models")
 @router.get("/api/v1/models")

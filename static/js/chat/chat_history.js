@@ -321,65 +321,28 @@ export function setupMobileNav() {
         };
     }
 
-    // Pinned top-right "+" button on mobile bar always creates new chat
-    if (mobileNewChatBtn) {
-        mobileNewChatBtn.onclick = () => {
-            closeAllDrawers();
-            if (window.createNewChat) {
-                window.createNewChat();
-            } else {
-                createNewChat();
-            }
-        };
-    }
+    ['closeHistoryBtn', 'closeMemoryBtn'].forEach(id => {
+        const el = dom[id] || document.getElementById(id);
+        if (el) el.onclick = (e) => { e.stopPropagation(); closeAllDrawers(); };
+    });
 
-    // New Chat button inside drawer
-    const drawerNewChatBtn = document.getElementById('drawerNewChatBtn');
-    if (drawerNewChatBtn) {
-        drawerNewChatBtn.onclick = () => {
-            closeAllDrawers();
-            if (window.createNewChat) {
-                window.createNewChat();
-            } else {
-                createNewChat();
-            }
-        };
-    }
+    if (mobileStatsBtn) mobileStatsBtn.onclick = () => statsBtn?.click();
 
-    // Close button inside history drawer
-    const closeHistoryBtn = dom.closeHistoryBtn || document.getElementById('closeHistoryBtn');
-    if (closeHistoryBtn) {
-        closeHistoryBtn.onclick = (e) => {
-            e.stopPropagation();
-            closeAllDrawers();
-        };
-    }
-
-    // Close button inside memory drawer
-    const closeMemoryBtn = dom.closeMemoryBtn || document.getElementById('closeMemoryBtn');
-    if (closeMemoryBtn) {
-        closeMemoryBtn.onclick = (e) => {
-            e.stopPropagation();
-            closeAllDrawers();
-        };
-    }
-
-    // Brand / Status click opens stats modal
-    if (mobileStatsBtn) {
-        mobileStatsBtn.onclick = () => {
-            if (statsBtn) statsBtn.click();
-        };
-    }
-
-    // Drawer footer tool buttons
-    const drawerSettingsBtn = document.getElementById('drawerSettingsBtn');
-    if (drawerSettingsBtn) {
-        drawerSettingsBtn.onclick = () => {
-            closeAllDrawers();
-            const sBtn = document.getElementById('settingsBtn');
-            if (sBtn) sBtn.click();
-        };
-    }
+    const drawerActions = [
+        ['mobileNewChatBtn', () => (window.createNewChat || createNewChat)()],
+        ['drawerNewChatBtn', () => (window.createNewChat || createNewChat)()],
+        ['drawerSettingsBtn', () => document.getElementById('settingsBtn')?.click()],
+        ['drawerPersonaBtn', () => document.getElementById('personalityBtn')?.click()],
+        ['drawerToolsBtn', () => document.getElementById('toolsBtn')?.click()],
+        ['drawerThemeBtn', () => document.getElementById('themeBtn')?.click()],
+        ['drawerVoiceBtn', () => document.getElementById('voiceBtn')?.click() || document.getElementById('voiceModal')?.classList.remove('hidden')],
+        ['drawerStatsBtn', () => (document.getElementById('statsBtn') || document.getElementById('mobileStatsBtn'))?.click() || document.getElementById('statsWindow')?.classList.remove('hidden')],
+        ['drawerUnloadBtn', async (btn) => window.handleUnloadAllModels ? await window.handleUnloadAllModels(btn) : document.getElementById('unloadAllModelsBtn')?.click()],
+    ];
+    drawerActions.forEach(([id, fn]) => {
+        const el = document.getElementById(id) || dom[id];
+        if (el) el.onclick = async () => { closeAllDrawers(); await fn(el); };
+    });
 
     const drawerMemoryBtn = document.getElementById('drawerMemoryBtn');
     if (drawerMemoryBtn) {
@@ -389,74 +352,6 @@ export function setupMobileNav() {
                 memoryDrawer.classList.remove('hidden');
                 if (typeof renderMemoryDrawer === 'function') renderMemoryDrawer();
                 if (backdrop) backdrop.classList.add('active');
-            }
-        };
-    }
-
-    const drawerPersonaBtn = document.getElementById('drawerPersonaBtn');
-    if (drawerPersonaBtn) {
-        drawerPersonaBtn.onclick = () => {
-            closeAllDrawers();
-            const pBtn = document.getElementById('personalityBtn');
-            if (pBtn) pBtn.click();
-        };
-    }
-
-    const drawerToolsBtn = document.getElementById('drawerToolsBtn');
-    if (drawerToolsBtn) {
-        drawerToolsBtn.onclick = () => {
-            closeAllDrawers();
-            const tBtn = document.getElementById('toolsBtn');
-            if (tBtn) tBtn.click();
-        };
-    }
-
-    const drawerVoiceBtn = document.getElementById('drawerVoiceBtn');
-    if (drawerVoiceBtn) {
-        drawerVoiceBtn.onclick = () => {
-            closeAllDrawers();
-            const vBtn = document.getElementById('voiceBtn');
-            if (vBtn) {
-                vBtn.click();
-            } else {
-                const voiceModal = document.getElementById('voiceModal');
-                if (voiceModal) voiceModal.classList.remove('hidden');
-            }
-        };
-    }
-
-    const drawerThemeBtn = document.getElementById('drawerThemeBtn');
-    if (drawerThemeBtn) {
-        drawerThemeBtn.onclick = () => {
-            closeAllDrawers();
-            const thBtn = document.getElementById('themeBtn');
-            if (thBtn) thBtn.click();
-        };
-    }
-
-    const drawerStatsBtn = document.getElementById('drawerStatsBtn');
-    if (drawerStatsBtn) {
-        drawerStatsBtn.onclick = () => {
-            closeAllDrawers();
-            const sBtn = document.getElementById('statsBtn') || document.getElementById('mobileStatsBtn');
-            if (sBtn) {
-                sBtn.click();
-            } else {
-                const statsWindow = document.getElementById('statsWindow');
-                if (statsWindow) statsWindow.classList.remove('hidden');
-            }
-        };
-    }
-
-    const drawerUnloadBtn = document.getElementById('drawerUnloadBtn');
-    if (drawerUnloadBtn) {
-        drawerUnloadBtn.onclick = async () => {
-            closeAllDrawers();
-            if (typeof window.handleUnloadAllModels === 'function') {
-                await window.handleUnloadAllModels(drawerUnloadBtn);
-            } else {
-                const uBtn = document.getElementById('unloadAllModelsBtn');
-                if (uBtn) uBtn.click();
             }
         };
     }

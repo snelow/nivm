@@ -102,28 +102,25 @@ function formatStatusWithDots(text) {
 
 export function resolveAspectConfig(aspectStr) {
     const s = String(aspectStr || '').toLowerCase().trim();
-    if (s === 'portrait' || s === '9:16' || s === 'tall') {
-        return { cssAspect: '832 / 1216', isPortrait: true, height: '380px', maxHeight: '420px' };
-    }
-    if (s === 'landscape' || s === '16:9' || s === 'wide') {
-        return { cssAspect: '1216 / 832', isPortrait: false, height: 'auto', maxHeight: '360px' };
-    }
-    if (s === '3:4') {
-        return { cssAspect: '864 / 1152', isPortrait: true, height: '380px', maxHeight: '420px' };
-    }
-    if (s === '4:3') {
-        return { cssAspect: '1152 / 864', isPortrait: false, height: 'auto', maxHeight: '360px' };
-    }
-    if (s === 'square' || s === '1:1') {
-        return { cssAspect: '1 / 1', isPortrait: false, height: '320px', maxHeight: '340px' };
-    }
+    const map = {
+        portrait: { cssAspect: '832 / 1216', isPortrait: true, height: '380px', maxHeight: '420px' },
+        '9:16': { cssAspect: '832 / 1216', isPortrait: true, height: '380px', maxHeight: '420px' },
+        tall: { cssAspect: '832 / 1216', isPortrait: true, height: '380px', maxHeight: '420px' },
+        landscape: { cssAspect: '1216 / 832', isPortrait: false, height: 'auto', maxHeight: '360px' },
+        '16:9': { cssAspect: '1216 / 832', isPortrait: false, height: 'auto', maxHeight: '360px' },
+        wide: { cssAspect: '1216 / 832', isPortrait: false, height: 'auto', maxHeight: '360px' },
+        '3:4': { cssAspect: '864 / 1152', isPortrait: true, height: '380px', maxHeight: '420px' },
+        '4:3': { cssAspect: '1152 / 864', isPortrait: false, height: 'auto', maxHeight: '360px' },
+        square: { cssAspect: '1 / 1', isPortrait: false, height: '320px', maxHeight: '340px' },
+        '1:1': { cssAspect: '1 / 1', isPortrait: false, height: '320px', maxHeight: '340px' }
+    };
+    if (map[s]) return map[s];
     const m = s.match(/^(\d+)[x:](\d+)$/);
     if (m) {
-        const w = parseInt(m[1]), h = parseInt(m[2]);
-        const isPort = h > w;
+        const w = parseInt(m[1]), h = parseInt(m[2]), isPort = h > w;
         return { cssAspect: `${w} / ${h}`, isPortrait: isPort, height: isPort ? '380px' : 'auto', maxHeight: '420px' };
     }
-    return { cssAspect: '832 / 1216', isPortrait: true, height: '380px', maxHeight: '420px' };
+    return map.portrait;
 }
 
 export function createImageProgressCard(promptText, isEdit = false, requestedAspect = null) {
@@ -572,6 +569,27 @@ async function attachImageForChatEdit(imageUrl) {
 }
 
 
+function _attachDurationBadge(container, filename, imageUrl, durationSec) {
+    if (durationSec || !filename) return;
+    fetch(`/api/image/meta/${encodeURIComponent(filename)}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(meta => {
+            if (meta?.duration_seconds) {
+                const dur = Number(meta.duration_seconds).toFixed(1);
+                saveImageDuration(imageUrl, dur);
+                const overlay = container.querySelector('.image-overlay-actions');
+                if (overlay && !overlay.querySelector('.img-pill-static')) {
+                    const badge = document.createElement('span');
+                    badge.className = 'img-pill-btn img-pill-static';
+                    badge.style.cssText = 'padding: 3px 8px; font-variant-numeric: tabular-nums;';
+                    badge.innerHTML = `<i class="fa-regular fa-clock" style="font-size: 0.65rem;"></i>${dur}s`;
+                    overlay.appendChild(badge);
+                }
+            }
+        })
+        .catch(() => {});
+}
+
 /**
  * Creates an interactive Before/After comparison slider card for edited images.
  */
@@ -644,26 +662,7 @@ export function createBeforeAfterSlider(beforeUrl, afterUrl, promptText = '', du
         </div>
     `;
 
-    // Asynchronously fetch server metadata if duration was not cached or provided
-    if (!durationSec && filename) {
-        fetch(`/api/image/meta/${encodeURIComponent(filename)}`)
-            .then(res => res.ok ? res.json() : null)
-            .then(meta => {
-                if (meta && meta.duration_seconds) {
-                    const dur = Number(meta.duration_seconds).toFixed(1);
-                    saveImageDuration(afterUrl, dur);
-                    const overlay = container.querySelector('.image-overlay-actions');
-                    if (overlay && !overlay.querySelector('.img-pill-static')) {
-                        const badge = document.createElement('span');
-                        badge.className = 'img-pill-btn img-pill-static';
-                        badge.style.cssText = 'padding: 3px 8px; font-variant-numeric: tabular-nums;';
-                        badge.innerHTML = `<i class="fa-regular fa-clock" style="font-size: 0.65rem;"></i>${dur}s`;
-                        overlay.appendChild(badge);
-                    }
-                }
-            })
-            .catch(() => {});
-    }
+    _attachDurationBadge(container, filename, afterUrl, durationSec);
 
     const sliderInput = container.querySelector('.slider-input');
     const beforeImg = container.querySelector('.before-img');
@@ -745,26 +744,7 @@ export function createSingleImageCard(imageUrl, promptText, durationSec = null) 
         </div>
     `;
 
-    // Asynchronously fetch server metadata if duration was not cached or provided
-    if (!durationSec && filename) {
-        fetch(`/api/image/meta/${encodeURIComponent(filename)}`)
-            .then(res => res.ok ? res.json() : null)
-            .then(meta => {
-                if (meta && meta.duration_seconds) {
-                    const dur = Number(meta.duration_seconds).toFixed(1);
-                    saveImageDuration(imageUrl, dur);
-                    const overlay = container.querySelector('.image-overlay-actions');
-                    if (overlay && !overlay.querySelector('.img-pill-static')) {
-                        const badge = document.createElement('span');
-                        badge.className = 'img-pill-btn img-pill-static';
-                        badge.style.cssText = 'padding: 3px 8px; font-variant-numeric: tabular-nums;';
-                        badge.innerHTML = `<i class="fa-regular fa-clock" style="font-size: 0.65rem;"></i>${dur}s`;
-                        overlay.appendChild(badge);
-                    }
-                }
-            })
-            .catch(() => {});
-    }
+    _attachDurationBadge(container, filename, imageUrl, durationSec);
 
     const clickWrap = container.querySelector('.image-click-wrap');
     const editBtn = container.querySelector('.edit-again-btn');

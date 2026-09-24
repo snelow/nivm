@@ -11,71 +11,29 @@ import { switchChat, createNewChat, extractMediaUrlsFromChat, extractMediaUrlsFr
 
 export function setupDynamicGreeting() {
     const hour = new Date().getHours();
-    let timeGreetings = [];
-
-    if (hour >= 5 && hour < 12) {
-        timeGreetings = [
-            'Good morning',
-            'Start fresh',
-            'Ready when you are',
-            'Bright and early',
-            'What’s on your mind?',
-            'A brand new day'
-        ];
-    } else if (hour >= 12 && hour < 17) {
-        timeGreetings = [
-            'Good afternoon',
-            'How can I help?',
-            'Here to help',
-            'Ready when you are',
-            'Let’s get things done',
-            'Take a breath'
-        ];
-    } else if (hour >= 17 && hour < 22) {
-        timeGreetings = [
-            'Good evening',
-            'Evening thoughts',
-            'Here with you',
-            'Still curious?',
-            'What are we working on?',
-            'Unwinding'
-        ];
-    } else {
-        timeGreetings = [
-            'Late night inspiration',
-            'Quiet hours',
-            'Midnight thoughts',
-            'Still awake?',
-            'Here when you need me',
-            'Into the night'
-        ];
-    }
+    const timeGreetings = hour < 12 && hour >= 5
+        ? ['Good morning', 'Start fresh', 'Ready when you are', 'Bright and early', 'What’s on your mind?', 'A brand new day']
+        : hour < 17
+        ? ['Good afternoon', 'How can I help?', 'Here to help', 'Ready when you are', 'Let’s get things done', 'Take a breath']
+        : hour < 22
+        ? ['Good evening', 'Evening thoughts', 'Here with you', 'Still curious?', 'What are we working on?', 'Unwinding']
+        : ['Late night inspiration', 'Quiet hours', 'Midnight thoughts', 'Still awake?', 'Here when you need me', 'Into the night'];
 
     const subtitles = [
-        'How can I help you today?',
-        'Ask anything, brainstorm an idea, or draft something new.',
-        'Explore a topic, polish your writing, or solve a problem.',
-        'Ready to help you write, learn, think, and create.',
-        'Got a question, an idea, or just curious? Let’s chat.',
-        'What would you like to explore today?',
-        'From quick answers to deep conversations, I’m here.',
-        'Share a thought, plan your day, or learn something new.'
+        'How can I help you today?', 'Ask anything, brainstorm an idea, or draft something new.',
+        'Explore a topic, polish your writing, or solve a problem.', 'Ready to help you write, learn, think, and create.',
+        'Got a question, an idea, or just curious? Let’s chat.', 'What would you like to explore today?',
+        'From quick answers to deep conversations, I’m here.', 'Share a thought, plan your day, or learn something new.'
     ];
 
-    const chosenGreeting = timeGreetings[Math.floor(Math.random() * timeGreetings.length)];
-    const chosenSub = subtitles[Math.floor(Math.random() * subtitles.length)];
-
+    const pick = arr => arr[Math.floor(Math.random() * arr.length)];
     if (dom.heroGreeting) {
         const name = state.userName ? state.userName.trim() : '';
-        if (name) {
-            dom.heroGreeting.innerHTML = `${chosenGreeting}, <span class="gradient-text">${escapeHtml(name)}</span>`;
-        } else {
-            dom.heroGreeting.innerHTML = `<span class="gradient-text">${chosenGreeting}</span>`;
-        }
+        dom.heroGreeting.innerHTML = name
+            ? `${pick(timeGreetings)}, <span class="gradient-text">${escapeHtml(name)}</span>`
+            : `<span class="gradient-text">${pick(timeGreetings)}</span>`;
     }
-    if (dom.heroSubtitle) {
-        dom.heroSubtitle.textContent = chosenSub;
-    }
+    if (dom.heroSubtitle) dom.heroSubtitle.textContent = pick(subtitles);
 }
 
 export function scrollToBottom() {
@@ -98,45 +56,29 @@ export function updateChatInputState(activeChat) {
         resumeBtnEl.disabled = false;
     }
 
-    if (isEnded) {
-        if (endOverlay) {
-            endOverlay.classList.remove('hidden');
-            if (endReasonEl) {
-                const reason = activeChat.endReason || 'Conversation concluded.';
-                endReasonEl.textContent = reason;
-                endReasonEl.title = reason;
-            }
+    if (endOverlay) {
+        endOverlay.classList.toggle('hidden', !isEnded);
+        if (isEnded && endReasonEl) {
+            const reason = activeChat.endReason || 'Conversation concluded.';
+            endReasonEl.textContent = reason;
+            endReasonEl.title = reason;
         }
-        if (dom.userPrompt) {
-            dom.userPrompt.disabled = true;
+    }
+    const aiName = (state.aiName || 'nivm').trim();
+    if (dom.userPrompt) {
+        dom.userPrompt.disabled = isEnded;
+        if (isEnded) {
             if (!dom.userPrompt.dataset.originalPlaceholder) {
-                const aiName = (state.aiName || 'nivm').trim();
                 dom.userPrompt.dataset.originalPlaceholder = dom.userPrompt.placeholder || `Message ${aiName}...`;
             }
             dom.userPrompt.placeholder = 'This conversation has ended.';
+        } else {
+            dom.userPrompt.placeholder = dom.userPrompt.dataset.originalPlaceholder || `Message ${aiName}...`;
         }
-        if (dom.sendBtn) dom.sendBtn.disabled = true;
-        if (dom.micRecordBtn) dom.micRecordBtn.disabled = true;
-        if (dom.attachImgBtn) dom.attachImgBtn.disabled = true;
-        if (dom.visionToggleBtn) dom.visionToggleBtn.disabled = true;
-    } else {
-        if (endOverlay) {
-            endOverlay.classList.add('hidden');
-        }
-        if (dom.userPrompt) {
-            dom.userPrompt.disabled = false;
-            if (dom.userPrompt.dataset.originalPlaceholder) {
-                dom.userPrompt.placeholder = dom.userPrompt.dataset.originalPlaceholder;
-            } else {
-                const aiName = (state.aiName || 'nivm').trim();
-                dom.userPrompt.placeholder = `Message ${aiName}...`;
-            }
-        }
-        if (dom.sendBtn) dom.sendBtn.disabled = false;
-        if (dom.micRecordBtn) dom.micRecordBtn.disabled = false;
-        if (dom.attachImgBtn) dom.attachImgBtn.disabled = false;
-        if (dom.visionToggleBtn) dom.visionToggleBtn.disabled = false;
     }
+    ['sendBtn', 'micRecordBtn', 'attachImgBtn', 'visionToggleBtn'].forEach(k => {
+        if (dom[k]) dom[k].disabled = isEnded;
+    });
 }
 
 export function updateAssistantNameUI() {
@@ -196,85 +138,52 @@ export function toggleSendStopButtons(isGenerating) {
 }
 
 export function buildToolTraceHtml(command, argsStr, resultStr = null) {
-    const cmdLower = (command || '').toLowerCase();
-    const isTerminal = cmdLower.includes('terminal');
-    const isMemory = cmdLower.includes('memory');
-    const isEndConvo = cmdLower.includes('end_conversation') || cmdLower.includes('end_convo');
-    
-    let badgeClass = 'generic';
-    let toolIcon = 'fa-cube';
-    let toolLabel = command || 'tool';
-    
-    if (isTerminal) {
-        badgeClass = 'terminal';
-        toolIcon = 'fa-terminal';
-        toolLabel = 'terminal';
-    } else if (isMemory) {
-        badgeClass = 'memory';
-        toolIcon = cmdLower.includes('read') ? 'fa-book-bookmark' : 'fa-floppy-disk';
-        toolLabel = command;
-    } else if (isEndConvo) {
-        badgeClass = 'terminal';
-        toolIcon = 'fa-door-closed';
-        toolLabel = 'end_conversation';
-    }
+    const cmd = (command || '').toLowerCase();
+    const isTerminal = cmd.includes('terminal'), isEndConvo = cmd.includes('end_conversation') || cmd.includes('end_convo'), isMem = cmd.includes('memory');
+    const badgeClass = isTerminal || isEndConvo ? 'terminal' : isMem ? 'memory' : 'generic';
+    const toolIcon = isTerminal ? 'fa-terminal' : isEndConvo ? 'fa-door-closed' : isMem ? (cmd.includes('read') ? 'fa-book-bookmark' : 'fa-floppy-disk') : 'fa-cube';
+    const toolLabel = isTerminal ? 'terminal' : isEndConvo ? 'end_conversation' : (command || 'tool');
 
-    let cleanArgs = (argsStr || '').trim();
-    if ((cleanArgs.startsWith('"') && cleanArgs.endsWith('"')) || (cleanArgs.startsWith("'") && cleanArgs.endsWith("'"))) {
-        cleanArgs = cleanArgs.substring(1, cleanArgs.length - 1);
-    }
-    const previewArgs = cleanArgs.length > 55 ? cleanArgs.substring(0, 52) + '…' : cleanArgs;
+    let clean = (argsStr || '').trim().replace(/^["']|["']$/g, '');
+    const preview = clean.length > 55 ? clean.slice(0, 52) + '…' : clean;
 
-    const isConcluded = isEndConvo;
-    const isDenied = !isConcluded && resultStr && resultStr.toLowerCase().includes('denied');
-    const isInterrupted = !isDenied && !isConcluded && resultStr && (resultStr.includes('INTERRUPTED') || resultStr.toLowerCase().includes('stopped by user'));
-    const isError = !isInterrupted && !isDenied && !isConcluded && resultStr && (resultStr.toLowerCase().includes('error') || resultStr.toLowerCase().includes('failed'));
-    const statusClass = isConcluded ? 'warning' : (isDenied ? 'warning' : (isInterrupted ? 'warning' : (isError ? 'error' : 'success')));
-    const statusText = isConcluded ? 'Concluded' : (isDenied ? 'Denied' : (isInterrupted ? 'Stopped' : (isError ? 'Failed' : 'Executed')));
-    const statusIcon = isConcluded ? 'fa-lock' : (isDenied ? 'fa-ban' : (isInterrupted ? 'fa-circle-stop' : (isError ? 'fa-triangle-exclamation' : 'fa-check')));
+    const resLower = (resultStr || '').toLowerCase();
+    const isDenied = !isEndConvo && resLower.includes('denied');
+    const isInterrupted = !isDenied && !isEndConvo && (resultStr && (resultStr.includes('INTERRUPTED') || resLower.includes('stopped by user')));
+    const isError = !isInterrupted && !isDenied && !isEndConvo && (resLower.includes('error') || resLower.includes('failed'));
+    const [statusClass, statusText, statusIcon] = isEndConvo ? ['warning', 'Concluded', 'fa-lock']
+        : isDenied ? ['warning', 'Denied', 'fa-ban']
+        : isInterrupted ? ['warning', 'Stopped', 'fa-circle-stop']
+        : isError ? ['error', 'Failed', 'fa-triangle-exclamation']
+        : ['success', 'Executed', 'fa-check'];
 
-    const fullInvocation = `${command}(${cleanArgs})`;
-    const escapedInvocation = escapeHtml(fullInvocation).replace(/'/g, "\\'");
-    const escapedResult = resultStr !== null && resultStr !== undefined ? escapeHtml(resultStr).replace(/'/g, "\\'") : '';
+    const fullInv = `${command}(${clean})`;
+    const escInv = escapeHtml(fullInv).replace(/'/g, "\\'");
+    const escRes = resultStr != null ? escapeHtml(resultStr).replace(/'/g, "\\'") : '';
+    const copyBtn = (str, label) => `<button class="tool-copy-btn" onclick="navigator.clipboard.writeText('${str}'); this.innerHTML='<i class=\\'fa-solid fa-check\\'></i> Copied'; setTimeout(() => this.innerHTML='<i class=\\'fa-regular fa-copy\\'></i> Copy', 1500);" title="Copy ${label}"><i class="fa-regular fa-copy"></i> Copy</button>`;
 
     return `
     <details class="tool-trace-block">
         <summary class="tool-trace-summary">
             <div class="tool-trace-summary-left">
-                <span class="tool-badge ${badgeClass}">
-                    <i class="fa-solid ${toolIcon}"></i>
-                    <span>${escapeHtml(toolLabel)}</span>
-                </span>
-                <span class="tool-cmd-preview" title="${escapeHtml(cleanArgs)}">${escapeHtml(previewArgs)}</span>
+                <span class="tool-badge ${badgeClass}"><i class="fa-solid ${toolIcon}"></i><span>${escapeHtml(toolLabel)}</span></span>
+                <span class="tool-cmd-preview" title="${escapeHtml(clean)}">${escapeHtml(preview)}</span>
             </div>
             <div class="tool-trace-summary-right">
-                <span class="tool-status-pill ${statusClass}">
-                    <i class="fa-solid ${statusIcon}"></i> ${statusText}
-                </span>
+                <span class="tool-status-pill ${statusClass}"><i class="fa-solid ${statusIcon}"></i> ${statusText}</span>
                 <i class="fa-solid fa-chevron-right tool-toggle-icon"></i>
             </div>
         </summary>
         <div class="tool-trace-body">
             <div class="tool-section">
-                <div class="tool-section-head">
-                    <span><i class="fa-solid fa-code"></i> Tool Call</span>
-                    <button class="tool-copy-btn" onclick="navigator.clipboard.writeText('${escapedInvocation}'); this.innerHTML='<i class=\\'fa-solid fa-check\\'></i> Copied'; setTimeout(() => this.innerHTML='<i class=\\'fa-regular fa-copy\\'></i> Copy', 1500);" title="Copy invocation">
-                        <i class="fa-regular fa-copy"></i> Copy
-                    </button>
-                </div>
-                <pre class="tool-code-display"><code>${escapeHtml(fullInvocation)}</code></pre>
+                <div class="tool-section-head"><span><i class="fa-solid fa-code"></i> Tool Call</span>${copyBtn(escInv, 'invocation')}</div>
+                <pre class="tool-code-display"><code>${escapeHtml(fullInv)}</code></pre>
             </div>
-            ${resultStr !== null && resultStr !== undefined ? `
+            ${resultStr != null ? `
             <div class="tool-section">
-                <div class="tool-section-head">
-                    <span><i class="fa-solid fa-square-poll-horizontal"></i> Output</span>
-                    <button class="tool-copy-btn" onclick="navigator.clipboard.writeText('${escapedResult}'); this.innerHTML='<i class=\\'fa-solid fa-check\\'></i> Copied'; setTimeout(() => this.innerHTML='<i class=\\'fa-regular fa-copy\\'></i> Copy', 1500);" title="Copy output">
-                        <i class="fa-regular fa-copy"></i> Copy
-                    </button>
-                </div>
+                <div class="tool-section-head"><span><i class="fa-solid fa-square-poll-horizontal"></i> Output</span>${copyBtn(escRes, 'output')}</div>
                 <pre class="tool-output-display ${isError ? 'error' : ''}"><code>${escapeHtml(resultStr)}</code></pre>
-            </div>
-            ` : ''}
+            </div>` : ''}
         </div>
     </details>`.trim();
 }
@@ -788,11 +697,16 @@ export function updateMessageActionIcons(actionsContainer, msg, row) {
     const { role, content, meta } = msg;
     const copyText = getMessageText(content);
 
-    const copyBtn = document.createElement('button');
-    copyBtn.className = 'action-icon-btn';
-    copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i>';
-    copyBtn.setAttribute('title', 'Copy response');
-    copyBtn.onclick = () => {
+    const makeBtn = (icon, title, cls = '', clickFn) => {
+        const btn = document.createElement('button');
+        btn.className = `action-icon-btn ${cls}`.trim();
+        btn.innerHTML = `<i class="${icon}"></i>`;
+        btn.setAttribute('title', title);
+        if (clickFn) btn.onclick = clickFn;
+        return btn;
+    };
+
+    const copyBtn = makeBtn('fa-regular fa-copy', 'Copy response', '', () => {
         navigator.clipboard.writeText(copyText);
         copyBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
         copyBtn.setAttribute('title', 'Copied!');
@@ -800,28 +714,18 @@ export function updateMessageActionIcons(actionsContainer, msg, row) {
             copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i>';
             copyBtn.setAttribute('title', 'Copy response');
         }, 2000);
-    };
+    });
     actionsContainer.appendChild(copyBtn);
 
-    // Speak / Read Aloud Button
     if (role === 'assistant' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        const speakBtn = document.createElement('button');
-        speakBtn.className = 'action-icon-btn speak-msg-btn';
-        speakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
-        speakBtn.setAttribute('title', 'Read aloud');
-        speakBtn.onclick = async () => {
+        actionsContainer.appendChild(makeBtn('fa-solid fa-volume-high', 'Read aloud', 'speak-msg-btn', async (e) => {
             const { speakText } = await import('../voice.js');
-            speakText(copyText, speakBtn);
-        };
-        actionsContainer.appendChild(speakBtn);
+            speakText(copyText, e.currentTarget);
+        }));
     }
 
     if (meta) {
-        const infoBtn = document.createElement('button');
-        infoBtn.className = 'action-icon-btn';
-        infoBtn.innerHTML = '<i class="fa-solid fa-circle-info"></i>';
-        infoBtn.setAttribute('title', 'Generation Info');
-
+        const infoBtn = makeBtn('fa-solid fa-circle-info', 'Generation Info');
         const popover = document.createElement('div');
         popover.className = 'floating-stats-popover hidden';
         const modelName = meta.modelInfo?.name || state.selectedModel || 'nivm';
@@ -831,46 +735,29 @@ export function updateMessageActionIcons(actionsContainer, msg, row) {
 
         if (meta.rawTokens && meta.rawTokens.length > 0) {
             const rawSpan = document.createElement('span');
-            rawSpan.style.marginLeft = '8px';
-            rawSpan.style.cursor = 'pointer';
-            rawSpan.style.opacity = '0.9';
-            rawSpan.style.color = 'var(--accent-cyan)';
+            rawSpan.style.cssText = 'margin-left: 8px; cursor: pointer; opacity: 0.9; color: var(--accent-cyan);';
             rawSpan.title = 'Click to copy raw token IDs';
             rawSpan.innerHTML = `&bull; <i class="fa-solid fa-microchip"></i> [${meta.rawTokens.length} raw IDs]`;
             rawSpan.onclick = (e) => {
                 e.stopPropagation();
                 navigator.clipboard.writeText(JSON.stringify(meta.rawTokens));
                 rawSpan.innerHTML = `&bull; <i class="fa-solid fa-check"></i> Copied IDs!`;
-                setTimeout(() => {
-                    rawSpan.innerHTML = `&bull; <i class="fa-solid fa-microchip"></i> [${meta.rawTokens.length} raw IDs]`;
-                }, 2000);
+                setTimeout(() => { rawSpan.innerHTML = `&bull; <i class="fa-solid fa-microchip"></i> [${meta.rawTokens.length} raw IDs]`; }, 2000);
             };
             popover.appendChild(rawSpan);
         }
 
         infoBtn.onmouseenter = () => popover.classList.remove('hidden');
         infoBtn.onmouseleave = () => popover.classList.add('hidden');
-
         actionsContainer.appendChild(infoBtn);
         actionsContainer.appendChild(popover);
         let hideTimer;
-        actionsContainer.addEventListener('mouseleave', () => {
-            hideTimer = setTimeout(() => {
-                popover.classList.add('hidden');
-            }, 300);
-        });
-        actionsContainer.addEventListener('mouseenter', () => {
-            if (hideTimer) clearTimeout(hideTimer);
-        });
+        actionsContainer.addEventListener('mouseleave', () => { hideTimer = setTimeout(() => popover.classList.add('hidden'), 300); });
+        actionsContainer.addEventListener('mouseenter', () => { if (hideTimer) clearTimeout(hideTimer); });
     }
 
-    // Delete Button (disabled for system messages)
     if (role !== 'system') {
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'action-icon-btn';
-        deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
-        deleteBtn.setAttribute('title', 'Delete message');
-        deleteBtn.onclick = async () => {
+        actionsContainer.appendChild(makeBtn('fa-solid fa-trash', 'Delete message', '', async () => {
             const activeChat = state.conversations.find(c => c.id === state.activeChatId);
             if (activeChat) {
                 const msgUrls = extractMediaUrlsFromMessage(msg);
@@ -878,9 +765,7 @@ export function updateMessageActionIcons(actionsContainer, msg, row) {
                 row.remove();
                 if (msgUrls.length > 0) {
                     const remainingUrls = new Set();
-                    state.conversations.forEach(c => {
-                        extractMediaUrlsFromChat(c).forEach(u => remainingUrls.add(u));
-                    });
+                    state.conversations.forEach(c => extractMediaUrlsFromChat(c).forEach(u => remainingUrls.add(u)));
                     const urlsToDelete = msgUrls.filter(u => !remainingUrls.has(u));
                     if (urlsToDelete.length > 0 && window.deleteUploadedFilesAPI) {
                         window.deleteUploadedFilesAPI(urlsToDelete);
@@ -888,8 +773,7 @@ export function updateMessageActionIcons(actionsContainer, msg, row) {
                 }
                 saveConversations();
             }
-        };
-        actionsContainer.appendChild(deleteBtn);
+        }));
     }
 }
 

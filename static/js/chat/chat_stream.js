@@ -110,20 +110,13 @@ export async function sendMessage(text, triggerAssistantOnly = false, isHiddenUs
                     finalContent.push({ type: "text", text: promptText });
                 }
                 uploadedUrls.forEach((url, index) => {
-                    if (url) {
-                        const isVideo = state.attachedImages[index].type && state.attachedImages[index].type.startsWith('video/');
-                        const isAudio = state.attachedImages[index].type && state.attachedImages[index].type.startsWith('audio/');
-                        const isPdf = state.attachedImages[index].type === 'application/pdf' || state.attachedImages[index].file.name.toLowerCase().endsWith('.pdf');
-                        if (isPdf) {
-                            finalContent.push({ type: "document_url", document_url: { url: url } });
-                        } else if (isVideo) {
-                            finalContent.push({ type: "video_url", video_url: { url: url } });
-                        } else if (isAudio) {
-                            finalContent.push({ type: "audio_url", audio_url: { url: url } });
-                        } else {
-                            finalContent.push({ type: "image_url", image_url: { url: url } });
-                        }
-                    }
+                    if (!url) return;
+                    const att = state.attachedImages[index];
+                    const isPdf = att.type === 'application/pdf' || att.file.name.toLowerCase().endsWith('.pdf');
+                    const isVideo = att.type?.startsWith('video/');
+                    const isAudio = att.type?.startsWith('audio/');
+                    const key = isPdf ? 'document_url' : isVideo ? 'video_url' : isAudio ? 'audio_url' : 'image_url';
+                    finalContent.push({ type: key, [key]: { url } });
                 });
 
                 if (finalContent.length === 0) {
@@ -334,17 +327,8 @@ CRITICAL SPOKEN CONVERSATION RULES:
                         const delta = json.choices && json.choices[0] ? json.choices[0].delta : null;
                         if (json.error) {
                             const errLower = json.error.toLowerCase();
-                            const isContextExceeded = errLower.includes('context window') ||
-                                errLower.includes('maximum context length') ||
-                                errLower.includes('exceeds context') ||
-                                errLower.includes('context limit') ||
-                                errLower.includes('n_ctx exceeded') ||
-                                errLower.includes('too many tokens') ||
-                                errLower.includes('prompt is too long') ||
-                                errLower.includes('context length exceeded');
-                            const isVramLimit = errLower.includes('vram') ||
-                                errLower.includes('failed to create llama_context') ||
-                                errLower.includes('out of memory');
+                            const isContextExceeded = /context window|maximum context length|exceeds context|context limit|n_ctx exceeded|too many tokens|prompt is too long|context length exceeded/.test(errLower);
+                            const isVramLimit = /vram|failed to create llama_context|out of memory/.test(errLower);
                             if (isContextExceeded) {
                                 responseBuffer += `\n\n<div class="context-limit-block">
                                     <div style="color: var(--accent-rose); font-weight: 600; margin-bottom: 8px;"><i class="fa-solid fa-triangle-exclamation"></i> Context Limit Reached</div>
@@ -634,20 +618,10 @@ CRITICAL SPOKEN CONVERSATION RULES:
 
             const isWriteMem = interceptedToolCall.command === 'write_memory';
             const isEndConvo = interceptedToolCall.command === 'end_conversation';
-            const isImageTool = interceptedToolCall.command === 'generate_image' || interceptedToolCall.command === 'edit_image' || interceptedToolCall.command === 'generate_anime_image';
+            const isImageTool = ['generate_image', 'edit_image', 'generate_anime_image'].includes(interceptedToolCall.command);
             const isDenied = typeof resultStr === 'string' && resultStr.toLowerCase().includes('denied by user');
-            const isInterrupted = typeof resultStr === 'string' && (
-                resultStr.includes('[GENERATION INTERRUPTED]') ||
-                resultStr.toLowerCase().includes('stopped by user') ||
-                resultStr.toLowerCase().includes('generation was stopped') ||
-                resultStr.toLowerCase().includes('editing was stopped')
-            );
-            const isImageFailed = isImageTool && typeof resultStr === 'string' && (
-                resultStr.includes('[GENERATION FAILED]') ||
-                resultStr.toLowerCase().startsWith('error') ||
-                resultStr.toLowerCase().includes('generation failed:') ||
-                resultStr.toLowerCase().includes('editing failed:')
-            );
+            const isInterrupted = typeof resultStr === 'string' && (/\[GENERATION INTERRUPTED\]|stopped by user|generation was stopped|editing was stopped/i.test(resultStr));
+            const isImageFailed = isImageTool && typeof resultStr === 'string' && (/\[GENERATION FAILED\]|^error|generation failed:|editing failed:/i.test(resultStr));
 
             let toolAdvice = "";
             let sysNotificationHeader = "[SYSTEM NOTIFICATION] Tool executed successfully.";
@@ -736,28 +710,9 @@ CRITICAL SPOKEN CONVERSATION RULES:
                     } else if (hasRejectTag && !hasAcceptTag) {
                         isAccepted = false;
                     } else {
-                        const lower = dialogueOutside.toLowerCase();
-                        const acceptPhrases = [
-                            'let you back', 'let you in', 'fine!', 'fine,', 'fine.', 'fine...', 'start fresh',
-                            'welcome back', 'i\'ll allow', 'i will allow', 'i accept', 'accept your appeal',
-                            'forgive', 'bored and', 'talk again', 'let\'s talk', 'continue'
-                        ];
-                        const rejectPhrases = [
-                            'refuse to resume', 'remain closed', 'stay closed', 'stay locked', 'not letting you back',
-                            'won\'t unlock', 'will not unlock', 'get lost', 'goodbye forever', 'leave me alone',
-                            'declined', 'denied', 'stay out', 'get out'
-                        ];
-
-                        const hasAcceptPhrase = acceptPhrases.some(p => lower.includes(p));
-                        const hasRejectPhrase = rejectPhrases.some(p => lower.includes(p));
-
-                        if (hasAcceptPhrase && !hasRejectPhrase) {
-                            isAccepted = true;
-                        } else if (hasRejectPhrase && !hasAcceptPhrase) {
-                            isAccepted = false;
-                        } else {
-                            isAccepted = !hasRejectPhrase && dialogueOutside.length > 0;
-                        }
+                        const hasAcceptPhrase = /let you back|let you in|fine[!.,]|start fresh|welcome back|i('ll| will)? allow|i accept|accept your appeal|forgive|bored and|talk again|let's talk|continue/i.test(dialogueOutside);
+                        const hasRejectPhrase = /refuse to resume|remain closed|stay closed|stay locked|not letting you back|wo(n't|uld not) unlock|will not unlock|get lost|goodbye forever|leave me alone|declined|denied|stay out|get out/i.test(dialogueOutside);
+                        isAccepted = hasAcceptPhrase && !hasRejectPhrase ? true : (hasRejectPhrase && !hasAcceptPhrase ? false : (!hasRejectPhrase && dialogueOutside.length > 0));
                     }
 
                     if (!dialogueOutside) {

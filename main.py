@@ -16,7 +16,7 @@ import time
 import json
 import asyncio
 import logging
-from typing import Optional, Any
+from typing import Optional
 
 from fastapi import FastAPI, Request, Response, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -649,7 +649,7 @@ app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 app.mount("/images", StaticFiles(directory=IMAGES_DIR), name="images")
 
 
-def _serve_static_file(rel_path: str, media_type: Optional[str] = None, extra_headers: Optional[dict] = None, fallback: Any = None):
+def _serve_static_file(rel_path: str, media_type: Optional[str] = None, extra_headers: Optional[dict] = None, fallback = None):
     full_path = os.path.join(static_dir, rel_path)
     if os.path.exists(full_path):
         headers = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}

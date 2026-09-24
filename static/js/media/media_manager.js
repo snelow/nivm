@@ -5,13 +5,9 @@ import { dom } from '../dom.js';
 import { showNotification, showAlert } from '../modals/dialogs.js';
 
 export function isMultimodalModel(model = '', endpoint = '') {
-    const m = (model || '').toLowerCase();
-    const ep = (endpoint || '').toLowerCase();
-    if (ep.includes('googleapis.com') || ep.includes('generativelanguage')) return true;
-    if (m.includes('gemini')) return true;
-    if (m.includes('gpt-4o') || m.includes('gpt-4-turbo') || m.includes('gpt-4-vision') || m.includes('chatgpt-4o')) return true;
-    if (m.includes('claude-3') || m.includes('pixtral') || m.includes('llava') || m.includes('vision') || m.includes('-vl') || m.includes('_vl') || m.includes('minicpm-v') || m.includes('internvl') || m.includes('ovis') || m.includes('qwen-vl')) return true;
-    return false;
+    const m = (model || '').toLowerCase(), ep = (endpoint || '').toLowerCase();
+    return /googleapis\.com|generativelanguage/.test(ep) ||
+           /gemini|gpt-4o|gpt-4-turbo|gpt-4-vision|chatgpt-4o|claude-3|pixtral|llava|vision|[-_]vl|minicpm-v|internvl|ovis|qwen-vl/.test(m);
 }
 window.isMultimodalModel = isMultimodalModel;
 
@@ -785,24 +781,15 @@ export function openVideoPreview(src) {
             };
         }
         
-        // Keyboard shortcuts
         const keydownHandler = (e) => {
             if (dom.videoPreviewModal.classList.contains('hidden')) return;
-            
-            if (e.code === 'Space') {
-                e.preventDefault();
-                togglePlay();
-            } else if (e.code === 'ArrowRight') {
-                dom.videoPreviewPlayer.currentTime = Math.min(dom.videoPreviewPlayer.duration, dom.videoPreviewPlayer.currentTime + 5);
-            } else if (e.code === 'ArrowLeft') {
-                dom.videoPreviewPlayer.currentTime = Math.max(0, dom.videoPreviewPlayer.currentTime - 5);
-            } else if (e.code === 'KeyM') {
-                if (dom.videoMuteBtn) dom.videoMuteBtn.click();
-            } else if (e.code === 'KeyF') {
-                if (dom.videoFullscreenBtn) dom.videoFullscreenBtn.click();
-            } else if (e.code === 'Escape') {
-                closeVideoPreview();
-            }
+            const p = dom.videoPreviewPlayer;
+            if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+            else if (e.code === 'ArrowRight') p.currentTime = Math.min(p.duration, p.currentTime + 5);
+            else if (e.code === 'ArrowLeft') p.currentTime = Math.max(0, p.currentTime - 5);
+            else if (e.code === 'KeyM') dom.videoMuteBtn?.click();
+            else if (e.code === 'KeyF') dom.videoFullscreenBtn?.click();
+            else if (e.code === 'Escape') closeVideoPreview();
         };
         
         // Remove existing listener if any before adding a new one

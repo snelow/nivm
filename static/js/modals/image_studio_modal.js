@@ -36,70 +36,34 @@ export function setupImageStudioUI() {
     makeDraggable(windowEl, headerEl);
 
     // Open/Close triggers
-    const toggleStudio = () => {
-        const isHidden = modal.classList.contains('hidden');
-        if (isHidden) {
-            openImageStudio();
-        } else {
-            closeImageStudio();
-        }
-    };
+    const toggleStudio = () => modal.classList.contains('hidden') ? openImageStudio() : closeImageStudio();
+    [openBtn, drawerBtn].forEach(b => b?.addEventListener('click', toggleStudio));
+    closeBtn?.addEventListener('click', closeImageStudio);
 
-    if (openBtn) openBtn.addEventListener('click', toggleStudio);
-    if (drawerBtn) drawerBtn.addEventListener('click', toggleStudio);
-    if (closeBtn) closeBtn.addEventListener('click', closeImageStudio);
+    document.getElementById('openImageStudioFromSettingsBtn')?.addEventListener('click', () => {
+        if (dom.settingsModal) dom.settingsModal.classList.add('hidden');
+        openImageStudio();
+    });
 
-    // Quick open button from settings if present
-    const openFromSettingsBtn = document.getElementById('openImageStudioFromSettingsBtn');
-    if (openFromSettingsBtn) {
-        openFromSettingsBtn.addEventListener('click', () => {
-            if (dom.settingsModal) dom.settingsModal.classList.add('hidden');
-            openImageStudio();
-        });
-    }
+    document.getElementById('actionToggleImporterBtn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleLoraImporter();
+    });
 
-    // Prominent "Import LoRA" Action Bar Button: Toggle Importer Card
-    const actionToggleBtn = document.getElementById('actionToggleImporterBtn');
-    if (actionToggleBtn) {
-        actionToggleBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleLoraImporter();
-        });
-    }
+    ['closeLoraImporterBtn', 'cancelLoraImporterBtn'].forEach(id => document.getElementById(id)?.addEventListener('click', closeLoraImporter));
 
-    // Close and Cancel buttons on Smart Importer Card
-    const closeImporterBtn = document.getElementById('closeLoraImporterBtn');
-    if (closeImporterBtn) {
-        closeImporterBtn.addEventListener('click', closeLoraImporter);
-    }
-    const cancelImporterBtn = document.getElementById('cancelLoraImporterBtn');
-    if (cancelImporterBtn) {
-        cancelImporterBtn.addEventListener('click', closeLoraImporter);
-    }
-
-    // Helper for picking a host LoRA and routing to the smart importer
     const triggerHostLoraImporter = (useNative = true) => {
         window._onLoraFileSelectedCallback = (file) => {
             openLoraImporter();
             handleLoraHostFileSelected(file);
         };
-        if (useNative) {
-            handleBrowseFile('lora');
-        } else {
-            openFileBrowserModal('lora');
-        }
+        useNative ? handleBrowseFile('lora') : openFileBrowserModal('lora');
     };
 
-    // Category Tabs Switching
-    const tabChars = document.getElementById('studioTabCharacters');
-    const tabConcepts = document.getElementById('studioTabConcepts');
-    const tabPoses = document.getElementById('studioTabPoses');
+    [['studioTabCharacters', 'characters'], ['studioTabConcepts', 'concepts'], ['studioTabPoses', 'poses']].forEach(([id, t]) => {
+        document.getElementById(id)?.addEventListener('click', () => switchCategoryTab(t));
+    });
 
-    if (tabChars) tabChars.addEventListener('click', () => switchCategoryTab('characters'));
-    if (tabConcepts) tabConcepts.addEventListener('click', () => switchCategoryTab('concepts'));
-    if (tabPoses) tabPoses.addEventListener('click', () => switchCategoryTab('poses'));
-
-    // Category select in importer: adapt fields dynamically
     const catSelect = document.getElementById('loraImportCategorySelect');
     if (catSelect) {
         catSelect.addEventListener('change', () => {
@@ -111,83 +75,33 @@ export function setupImageStudioUI() {
             if (outfitSec) outfitSec.style.display = isChar ? 'flex' : 'none';
             if (fieldsRow) fieldsRow.style.gridTemplateColumns = isChar ? '1fr 1fr 0.5fr' : '1.5fr 0.5fr';
 
-            const trigInput = document.getElementById('loraImportTriggerInput');
-            const keyInput = document.getElementById('loraImportKeyInput');
-            const nameInput = document.getElementById('loraImportNameInput');
-            if (catSelect.value === 'character') {
-                if (trigInput) trigInput.placeholder = 'e.g. megumin, red eyes';
-                if (keyInput) keyInput.placeholder = 'e.g. megumin';
-                if (nameInput) nameInput.placeholder = 'e.g. Megumin';
-            } else if (catSelect.value === 'concept') {
-                if (trigInput) trigInput.placeholder = 'e.g. breasts on tray, carried breast rest';
-                if (keyInput) keyInput.placeholder = 'e.g. breasts_on_tray';
-                if (nameInput) nameInput.placeholder = 'e.g. Breasts on Tray';
-            } else if (catSelect.value === 'pose') {
-                if (trigInput) trigInput.placeholder = 'e.g. slav squatting, full body, squatting';
-                if (keyInput) keyInput.placeholder = 'e.g. slav_squat';
-                if (nameInput) nameInput.placeholder = 'e.g. Slav Squat';
+            const ph = {
+                character: ['e.g. megumin, red eyes', 'e.g. megumin', 'e.g. Megumin'],
+                concept: ['e.g. breasts on tray, carried breast rest', 'e.g. breasts_on_tray', 'e.g. Breasts on Tray'],
+                pose: ['e.g. slav squatting, full body, squatting', 'e.g. slav_squat', 'e.g. Slav Squat']
+            }[catSelect.value];
+            if (ph) {
+                const trigInput = document.getElementById('loraImportTriggerInput');
+                const keyInput = document.getElementById('loraImportKeyInput');
+                const nameInput = document.getElementById('loraImportNameInput');
+                if (trigInput) trigInput.placeholder = ph[0];
+                if (keyInput) keyInput.placeholder = ph[1];
+                if (nameInput) nameInput.placeholder = ph[2];
             }
         });
     }
 
-    // Search / Filter Input
-    const searchInput = document.getElementById('characterSearchInput');
-    if (searchInput) {
-        searchInput.addEventListener('input', () => {
-            renderActiveTab(searchInput.value.trim());
-        });
-    }
+    document.getElementById('characterSearchInput')?.addEventListener('input', (e) => renderActiveTab(e.target.value.trim()));
+    document.getElementById('newCharacterBtn')?.addEventListener('click', () => _activeTab === 'characters' ? openCharacterEditor(null) : openOptionEditor(_activeTab, null));
+    document.getElementById('saveCharacterBtn')?.addEventListener('click', handleSaveCharacter);
+    ['cancelCharacterEditBtn', 'cancelCharEditActionBtn'].forEach(id => document.getElementById(id)?.addEventListener('click', closeCharacterEditor));
+    document.getElementById('saveOptionBtn')?.addEventListener('click', handleSaveOption);
+    ['cancelOptionEditBtn', 'cancelOptionEditActionBtn'].forEach(id => document.getElementById(id)?.addEventListener('click', closeOptionEditor));
 
-    // New Profile / Concept / Pose Button (Adapts to Active Tab)
-    const newCharBtn = document.getElementById('newCharacterBtn');
-    if (newCharBtn) {
-        newCharBtn.addEventListener('click', () => {
-            if (_activeTab === 'characters') {
-                openCharacterEditor(null);
-            } else {
-                openOptionEditor(_activeTab, null);
-            }
-        });
-    }
-
-    // Character Manager: Save Character Button
-    const saveCharBtn = document.getElementById('saveCharacterBtn');
-    if (saveCharBtn) {
-        saveCharBtn.addEventListener('click', handleSaveCharacter);
-    }
-
-    // Character Manager: Cancel Edit Buttons
-    const cancelCharBtn = document.getElementById('cancelCharacterEditBtn');
-    if (cancelCharBtn) {
-        cancelCharBtn.addEventListener('click', closeCharacterEditor);
-    }
-    const cancelActionBtn = document.getElementById('cancelCharEditActionBtn');
-    if (cancelActionBtn) {
-        cancelActionBtn.addEventListener('click', closeCharacterEditor);
-    }
-
-    // Option Manager: Save Option Button
-    const saveOptionBtn = document.getElementById('saveOptionBtn');
-    if (saveOptionBtn) {
-        saveOptionBtn.addEventListener('click', handleSaveOption);
-    }
-
-    // Option Manager: Cancel Edit Buttons
-    const cancelOptionBtn = document.getElementById('cancelOptionEditBtn');
-    if (cancelOptionBtn) {
-        cancelOptionBtn.addEventListener('click', closeOptionEditor);
-    }
-    const cancelOptionActionBtn = document.getElementById('cancelOptionEditActionBtn');
-    if (cancelOptionActionBtn) {
-        cancelOptionActionBtn.addEventListener('click', closeOptionEditor);
-    }
-
-    // Helper to ensure picked LoRA file is inside models/image/loras and assign to input
     const handleHostLoraPickedForField = async (file, inputId) => {
         if (!file) return;
         const input = document.getElementById(inputId);
         if (!input) return;
-
         if (file.path) {
             try {
                 const resp = await fetch('/api/image/anime/loras/ensure-file', {
@@ -208,70 +122,19 @@ export function setupImageStudioUI() {
         input.value = file.name;
     };
 
-    // LoRA File Explorer Pickers (In-browser modal / native dialog)
-    const loraHostBrowseBtn = document.getElementById('loraHostBrowseBtn');
-    if (loraHostBrowseBtn) {
-        loraHostBrowseBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            triggerHostLoraImporter(true);
-        });
-    }
+    [
+        ['loraHostBrowseBtn', () => triggerHostLoraImporter(true)],
+        ['loraHostExploreBtn', () => triggerHostLoraImporter(false)],
+        ['charEditBrowseLoraBtn', () => { window._onLoraFileSelectedCallback = (f) => handleHostLoraPickedForField(f, 'charEditLoraFileInput'); handleBrowseFile('lora'); }],
+        ['charEditExploreLoraBtn', () => { window._onLoraFileSelectedCallback = (f) => handleHostLoraPickedForField(f, 'charEditLoraFileInput'); openFileBrowserModal('lora'); }],
+        ['optionEditBrowseLoraBtn', () => { window._onLoraFileSelectedCallback = (f) => handleHostLoraPickedForField(f, 'optionEditLoraInput'); handleBrowseFile('lora'); }],
+        ['optionEditExploreLoraBtn', () => { window._onLoraFileSelectedCallback = (f) => handleHostLoraPickedForField(f, 'optionEditLoraInput'); openFileBrowserModal('lora'); }]
+    ].forEach(([id, fn]) => {
+        document.getElementById(id)?.addEventListener('click', (e) => { e.stopPropagation(); fn(); });
+    });
 
-    const loraHostExploreBtn = document.getElementById('loraHostExploreBtn');
-    if (loraHostExploreBtn) {
-        loraHostExploreBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            triggerHostLoraImporter(false);
-        });
-    }
-
-    const charEditBrowseLoraBtn = document.getElementById('charEditBrowseLoraBtn');
-    if (charEditBrowseLoraBtn) {
-        charEditBrowseLoraBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            window._onLoraFileSelectedCallback = (file) => handleHostLoraPickedForField(file, 'charEditLoraFileInput');
-            handleBrowseFile('lora');
-        });
-    }
-
-    const charEditExploreLoraBtn = document.getElementById('charEditExploreLoraBtn');
-    if (charEditExploreLoraBtn) {
-        charEditExploreLoraBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            window._onLoraFileSelectedCallback = (file) => handleHostLoraPickedForField(file, 'charEditLoraFileInput');
-            openFileBrowserModal('lora');
-        });
-    }
-
-    const optionEditBrowseLoraBtn = document.getElementById('optionEditBrowseLoraBtn');
-    if (optionEditBrowseLoraBtn) {
-        optionEditBrowseLoraBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            window._onLoraFileSelectedCallback = (file) => handleHostLoraPickedForField(file, 'optionEditLoraInput');
-            handleBrowseFile('lora');
-        });
-    }
-
-    const optionEditExploreLoraBtn = document.getElementById('optionEditExploreLoraBtn');
-    if (optionEditExploreLoraBtn) {
-        optionEditExploreLoraBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            window._onLoraFileSelectedCallback = (file) => handleHostLoraPickedForField(file, 'optionEditLoraInput');
-            openFileBrowserModal('lora');
-        });
-    }
-
-    // Character Manager: Add Outfit / Hairstyle dynamic rows
-    const addOutfitRowBtn = document.getElementById('addOutfitRowBtn');
-    if (addOutfitRowBtn) {
-        addOutfitRowBtn.addEventListener('click', () => addOutfitInputRow('', '', false));
-    }
-    const addHairstyleRowBtn = document.getElementById('addHairstyleRowBtn');
-    if (addHairstyleRowBtn) {
-        addHairstyleRowBtn.addEventListener('click', () => addHairstyleInputRow('', ''));
-    }
-
-    // Smart LoRA file drop / upload
+    document.getElementById('addOutfitRowBtn')?.addEventListener('click', () => addOutfitInputRow('', '', false));
+    document.getElementById('addHairstyleRowBtn')?.addEventListener('click', () => addHairstyleInputRow('', ''));
     setupLoraDropZone();
 }
 

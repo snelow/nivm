@@ -80,6 +80,68 @@ function normalizeAspectRatio(val, fallback = 'square') {
     if (s.includes('3:4')) return '3:4';
     if (s.includes('original')) return 'original';
     return fallback;
+function _trackImageTask(taskId, progressCard, defaultFilename, successDesc, originalUrl = null) {
+    return new Promise((resolve) => {
+        let completed = false, pollTimer = null;
+        const evtSource = window.EventSource ? new EventSource(`/api/image/progress/${taskId}`) : null;
+
+        const cleanup = () => {
+            if (pollTimer) clearInterval(pollTimer);
+            if (evtSource) try { evtSource.close(); } catch (_) {}
+        };
+
+        const finishSuccess = (imgData, finalOrigUrl) => {
+            if (completed) return;
+            completed = true;
+            cleanup();
+            const srcUrl = finalOrigUrl || originalUrl;
+            const durationSec = progressCard.finish(imgData.url, srcUrl) || null;
+            const filename = imgData.filename || (imgData.url ? imgData.url.split('/').pop() : defaultFilename);
+            state.lastGeneratedImage = filename;
+            const durStr = durationSec ? ` (Duration: ${durationSec}s)` : '';
+            const srcStr = srcUrl ? ` (original: ${srcUrl})` : '';
+            resolve(`[GENERATION SUCCESSFUL: ${filename}]${durStr} ${successDesc}: ${imgData.url}${srcStr} - Display this image to the user, note filename "${filename}", and describe the scene.`);
+        };
+
+        const finishInterrupted = (reason) => {
+            if (completed) return;
+            completed = true;
+            cleanup();
+            progressCard.stop(reason || 'Generation stopped by user');
+            resolve(`[GENERATION INTERRUPTED] Image processing was explicitly stopped/cancelled by the user. No image was generated.`);
+        };
+
+        const finishFail = (errMsg) => {
+            if (completed) return;
+            completed = true;
+            cleanup();
+            progressCard.fail(errMsg || 'Generation failed');
+            resolve(`[GENERATION FAILED] Image processing failed: ${errMsg || 'Unknown error'}. No image was produced.`);
+        };
+
+        progressCard.onStop(() => finishInterrupted());
+
+        const handleData = (evData) => {
+            progressCard.update(evData);
+            if (evData.status === 'complete' && (evData.image || evData.url || evData.result)) {
+                finishSuccess(evData.image || evData.result || { url: evData.url, filename: evData.filename || defaultFilename }, evData.original_url || originalUrl);
+            } else if (evData.status === 'interrupted') {
+                finishInterrupted(evData.stage_text || evData.error);
+            } else if (evData.status === 'error') {
+                finishFail(evData.error);
+            }
+        };
+
+        if (evtSource) evtSource.onmessage = (e) => { try { handleData(JSON.parse(e.data)); } catch (_) {} };
+
+        pollTimer = setInterval(async () => {
+            if (completed) return;
+            try {
+                const pRes = await fetch(`/api/image/task/${taskId}`);
+                if (pRes.ok) handleData(await pRes.json());
+            } catch (_) {}
+        }, 1500);
+    });
 }
 
 export const tools = [
@@ -267,79 +329,7 @@ export const tools = [
                     progressCard.update({ max_steps: data.max_steps || data.steps });
                 }
 
-                return await new Promise((resolve) => {
-                    let completed = false;
-                    let pollTimer = null;
-                    const evtSource = window.EventSource ? new EventSource(`/api/image/progress/${taskId}`) : null;
-
-                    const finishSuccess = (imgData) => {
-                        if (completed) return;
-                        completed = true;
-                        if (pollTimer) clearInterval(pollTimer);
-                        if (evtSource) try { evtSource.close(); } catch (_) {}
-                        const durationSec = progressCard.finish(imgData.url) || null;
-                        const filename = imgData.filename || (imgData.url ? imgData.url.split('/').pop() : 'anime_generated.png');
-                        state.lastGeneratedImage = filename;
-                        const durStr = durationSec ? ` (Duration: ${durationSec}s)` : '';
-                        resolve(`[GENERATION SUCCESSFUL: ${filename}]${durStr} Anime illustration synthesized successfully: ${imgData.url} - Display this image to the user, note filename "${filename}", and describe the character depiction.`);
-                    };
-
-                    const finishInterrupted = (reason) => {
-                        if (completed) return;
-                        completed = true;
-                        if (pollTimer) clearInterval(pollTimer);
-                        if (evtSource) try { evtSource.close(); } catch (_) {}
-                        progressCard.stop(reason || 'Generation stopped by user');
-                        resolve(`[GENERATION INTERRUPTED] Anime image generation was explicitly stopped/cancelled by the user. No image was generated.`);
-                    };
-
-                    const finishFail = (errMsg) => {
-                        if (completed) return;
-                        completed = true;
-                        if (pollTimer) clearInterval(pollTimer);
-                        if (evtSource) try { evtSource.close(); } catch (_) {}
-                        progressCard.fail(errMsg || 'Generation failed');
-                        resolve(`[GENERATION FAILED] Anime generation failed: ${errMsg || 'Unknown error'}. No image was produced.`);
-                    };
-
-                    progressCard.onStop(() => {
-                        finishInterrupted();
-                    });
-
-                    if (evtSource) {
-                        evtSource.onmessage = (e) => {
-                            try {
-                                const evData = JSON.parse(e.data);
-                                progressCard.update(evData);
-                                if (evData.status === 'complete' && (evData.image || evData.url)) {
-                                    finishSuccess(evData.image || { url: evData.url, filename: evData.filename || 'anime_generated.png' });
-                                } else if (evData.status === 'interrupted') {
-                                    finishInterrupted(evData.stage_text || evData.error);
-                                } else if (evData.status === 'error') {
-                                    finishFail(evData.error);
-                                }
-                            } catch (_) {}
-                        };
-                    }
-
-                    pollTimer = setInterval(async () => {
-                        if (completed) return;
-                        try {
-                            const pRes = await fetch(`/api/image/task/${taskId}`);
-                            if (pRes.ok) {
-                                const pData = await pRes.json();
-                                progressCard.update(pData);
-                                if (pData.status === 'complete' && (pData.image || pData.result)) {
-                                    finishSuccess(pData.image || pData.result);
-                                } else if (pData.status === 'interrupted') {
-                                    finishInterrupted(pData.stage_text || pData.error);
-                                } else if (pData.status === 'error') {
-                                    finishFail(pData.error);
-                                }
-                            }
-                        } catch (_) {}
-                    }, 1500);
-                });
+                return await _trackImageTask(taskId, progressCard, 'anime_generated.png', 'Anime illustration synthesized successfully');
             } catch (err) {
                 progressCard.fail(err.message);
                 return `[GENERATION FAILED] Anime generation failed: ${err.message}. No image was produced.`;
@@ -396,82 +386,7 @@ export const tools = [
                     progressCard.update({ max_steps: data.max_steps || data.steps });
                 }
 
-                return await new Promise((resolve) => {
-                    let completed = false;
-                    let pollTimer = null;
-                    const evtSource = window.EventSource ? new EventSource(`/api/image/progress/${taskId}`) : null;
-
-                    const finishSuccess = (imgData) => {
-                        if (completed) return;
-                        completed = true;
-                        if (pollTimer) clearInterval(pollTimer);
-                        if (evtSource) try { evtSource.close(); } catch (_) {}
-                        const durationSec = progressCard.finish(imgData.url) || null;
-                        const filename = imgData.filename || (imgData.url ? imgData.url.split('/').pop() : 'generated.png');
-                        state.lastGeneratedImage = filename;
-                        const durStr = durationSec ? ` (Duration: ${durationSec}s)` : '';
-                        resolve(`[GENERATION SUCCESSFUL: ${filename}]${durStr} Image synthesized successfully: ${imgData.url} - Display this image to the user, note filename "${filename}", and describe the visual scene.`);
-                    };
-
-                    const finishInterrupted = (reason) => {
-                        if (completed) return;
-                        completed = true;
-                        if (pollTimer) clearInterval(pollTimer);
-                        if (evtSource) try { evtSource.close(); } catch (_) {}
-                        progressCard.stop(reason || 'Generation stopped by user');
-                        resolve(`[GENERATION INTERRUPTED] Image generation was explicitly stopped/cancelled by the user. No image was generated.`);
-                    };
-
-                    const finishFail = (errMsg) => {
-                        if (completed) return;
-                        completed = true;
-                        if (pollTimer) clearInterval(pollTimer);
-                        if (evtSource) try { evtSource.close(); } catch (_) {}
-                        progressCard.fail(errMsg || 'Generation failed');
-                        resolve(`[GENERATION FAILED] Image generation failed: ${errMsg || 'Unknown error'}. No image was produced.`);
-                    };
-
-                    progressCard.onStop(() => {
-                        finishInterrupted();
-                    });
-
-                    if (evtSource) {
-                        evtSource.onmessage = (e) => {
-                            try {
-                                const evData = JSON.parse(e.data);
-                                progressCard.update(evData);
-                                if (evData.status === 'complete' && (evData.image || evData.url)) {
-                                    finishSuccess(evData.image || { url: evData.url, filename: evData.filename || 'generated.png' });
-                                } else if (evData.status === 'interrupted') {
-                                    finishInterrupted(evData.stage_text || evData.error);
-                                } else if (evData.status === 'error') {
-                                    finishFail(evData.error);
-                                }
-                            } catch (_) {}
-                        };
-                        evtSource.onerror = () => {
-                            // Fallback polling will handle updates
-                        };
-                    }
-
-                    pollTimer = setInterval(async () => {
-                        if (completed) return;
-                        try {
-                            const pRes = await fetch(`/api/image/task/${taskId}`);
-                            if (pRes.ok) {
-                                const pData = await pRes.json();
-                                progressCard.update(pData);
-                                if (pData.status === 'complete' && (pData.image || pData.result)) {
-                                    finishSuccess(pData.image || pData.result);
-                                } else if (pData.status === 'interrupted') {
-                                    finishInterrupted(pData.stage_text || pData.error);
-                                } else if (pData.status === 'error') {
-                                    finishFail(pData.error);
-                                }
-                            }
-                        } catch (_) {}
-                    }, 1500);
-                });
+                return await _trackImageTask(taskId, progressCard, 'generated.png', 'Image synthesized successfully');
             } catch (err) {
                 progressCard.fail(err.message);
                 return `[GENERATION FAILED] Image generation failed: ${err.message}. No image was produced.`;
@@ -581,82 +496,7 @@ export const tools = [
                     progressCard.update({ max_steps: data.max_steps || data.steps });
                 }
 
-                return await new Promise((resolve) => {
-                    let completed = false;
-                    let pollTimer = null;
-                    const evtSource = window.EventSource ? new EventSource(`/api/image/progress/${taskId}`) : null;
-
-                    const finishSuccess = (imgData, finalOrigUrl) => {
-                        if (completed) return;
-                        completed = true;
-                        if (pollTimer) clearInterval(pollTimer);
-                        if (evtSource) try { evtSource.close(); } catch (_) {}
-                        const durationSec = progressCard.finish(imgData.url, finalOrigUrl || origUrl) || null;
-                        const filename = imgData.filename || (imgData.url ? imgData.url.split('/').pop() : 'edited.png');
-                        state.lastGeneratedImage = filename;
-                        const durStr = durationSec ? ` (Duration: ${durationSec}s)` : '';
-                        resolve(`[GENERATION SUCCESSFUL: ${filename}]${durStr} Image edited successfully: ${imgData.url} (original: ${finalOrigUrl || origUrl}). Note filename "${filename}". Show the updated image and explain the changes applied.`);
-                    };
-
-                    const finishInterrupted = (reason) => {
-                        if (completed) return;
-                        completed = true;
-                        if (pollTimer) clearInterval(pollTimer);
-                        if (evtSource) try { evtSource.close(); } catch (_) {}
-                        progressCard.stop(reason || 'Generation stopped by user');
-                        resolve(`[GENERATION INTERRUPTED] Image editing was explicitly stopped/cancelled by the user. No edited image was generated.`);
-                    };
-
-                    const finishFail = (errMsg) => {
-                        if (completed) return;
-                        completed = true;
-                        if (pollTimer) clearInterval(pollTimer);
-                        if (evtSource) try { evtSource.close(); } catch (_) {}
-                        progressCard.fail(errMsg || 'Edit failed');
-                        resolve(`[GENERATION FAILED] Image editing failed: ${errMsg || 'Unknown error'}. No edited image was produced.`);
-                    };
-
-                    progressCard.onStop(() => {
-                        finishInterrupted();
-                    });
-
-                    if (evtSource) {
-                        evtSource.onmessage = (e) => {
-                            try {
-                                const evData = JSON.parse(e.data);
-                                progressCard.update(evData);
-                                if (evData.status === 'complete' && (evData.image || evData.url)) {
-                                    finishSuccess(evData.image || { url: evData.url, filename: evData.filename || 'edited.png' }, evData.original_url || origUrl);
-                                } else if (evData.status === 'interrupted') {
-                                    finishInterrupted(evData.stage_text || evData.error);
-                                } else if (evData.status === 'error') {
-                                    finishFail(evData.error);
-                                }
-                            } catch (_) {}
-                        };
-                        evtSource.onerror = () => {
-                            // Fallback polling will handle updates
-                        };
-                    }
-
-                    pollTimer = setInterval(async () => {
-                        if (completed) return;
-                        try {
-                            const pRes = await fetch(`/api/image/task/${taskId}`);
-                            if (pRes.ok) {
-                                const pData = await pRes.json();
-                                progressCard.update(pData);
-                                if (pData.status === 'complete' && (pData.image || pData.result)) {
-                                    finishSuccess(pData.image || pData.result, pData.original_url || origUrl);
-                                } else if (pData.status === 'interrupted') {
-                                    finishInterrupted(pData.stage_text || pData.error);
-                                } else if (pData.status === 'error') {
-                                    finishFail(pData.error);
-                                }
-                            }
-                        } catch (_) {}
-                    }, 1500);
-                });
+                return await _trackImageTask(taskId, progressCard, 'edited.png', 'Image edited successfully', origUrl);
             } catch (err) {
                 progressCard.fail(err.message);
                 return `[GENERATION FAILED] Image editing failed: ${err.message}. No edited image was produced.`;

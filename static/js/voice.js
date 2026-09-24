@@ -1060,54 +1060,25 @@ export async function setupVoiceUI() {
         const isWeb = sttEngine === 'web';
 
         if (toggleIcon && toggleLabel) {
-            if (isWeb) {
-                toggleIcon.className = 'fa-solid fa-bolt';
-                toggleIcon.style.color = '#38bdf8';
-                toggleLabel.textContent = 'Web Speech';
-            } else {
-                toggleIcon.className = 'fa-solid fa-shield-halved';
-                toggleIcon.style.color = '#a855f7';
-                toggleLabel.textContent = `Whisper (${whisperModel})`;
-            }
+            toggleIcon.className = isWeb ? 'fa-solid fa-bolt' : 'fa-solid fa-shield-halved';
+            toggleIcon.style.color = isWeb ? '#38bdf8' : '#a855f7';
+            toggleLabel.textContent = isWeb ? 'Web Speech' : `Whisper (${whisperModel})`;
         }
-
         if (badge) {
-            if (isWeb) {
-                badge.textContent = 'Web Speech (Real-time)';
-                badge.style.background = 'rgba(56, 189, 248, 0.15)';
-                badge.style.color = '#38bdf8';
-            } else {
-                badge.textContent = `Whisper (${whisperModel})`;
-                badge.style.background = 'rgba(168, 85, 247, 0.15)';
-                badge.style.color = '#c084fc';
-            }
+            badge.textContent = isWeb ? 'Web Speech (Real-time)' : `Whisper (${whisperModel})`;
+            badge.style.background = isWeb ? 'rgba(56, 189, 248, 0.15)' : 'rgba(168, 85, 247, 0.15)';
+            badge.style.color = isWeb ? '#38bdf8' : '#c084fc';
         }
-
         if (webBtn && whisperBtn) {
-            if (isWeb) {
-                webBtn.classList.add('active');
-                webBtn.style.background = 'rgba(255,255,255,0.12)';
-                webBtn.style.color = '#fff';
-                whisperBtn.classList.remove('active');
-                whisperBtn.style.background = 'transparent';
-                whisperBtn.style.color = '#94a3b8';
-            } else {
-                whisperBtn.classList.add('active');
-                whisperBtn.style.background = 'rgba(255,255,255,0.12)';
-                whisperBtn.style.color = '#fff';
-                webBtn.classList.remove('active');
-                webBtn.style.background = 'transparent';
-                webBtn.style.color = '#94a3b8';
-            }
+            webBtn.classList.toggle('active', isWeb);
+            webBtn.style.background = isWeb ? 'rgba(255,255,255,0.12)' : 'transparent';
+            webBtn.style.color = isWeb ? '#fff' : '#94a3b8';
+            whisperBtn.classList.toggle('active', !isWeb);
+            whisperBtn.style.background = !isWeb ? 'rgba(255,255,255,0.12)' : 'transparent';
+            whisperBtn.style.color = !isWeb ? '#fff' : '#94a3b8';
         }
-
-        if (whisperConfig) {
-            whisperConfig.classList.toggle('hidden', isWeb);
-        }
-
-        if (modelSelect) {
-            modelSelect.value = whisperModel;
-        }
+        if (whisperConfig) whisperConfig.classList.toggle('hidden', isWeb);
+        if (modelSelect) modelSelect.value = whisperModel;
     }
 
     function setupSttUI() {

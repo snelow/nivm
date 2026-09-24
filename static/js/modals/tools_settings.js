@@ -26,83 +26,49 @@ export async function populateStatsModal() {
         const lowerBase = baseUrl.toLowerCase();
         const lowerModel = apiModel.toLowerCase();
 
-        let providerName = 'Cloud API';
-        let isLocalApi = false;
-
-        if (lowerBase.includes('generativelanguage.googleapis.com') || lowerModel.startsWith('gemini')) {
-            providerName = 'Google Gemini';
-        } else if (lowerBase.includes('api.groq.com') || lowerModel.includes('groq')) {
-            providerName = 'Groq Cloud';
-        } else if (lowerBase.includes('api.openai.com')) {
-            providerName = 'OpenAI';
-        } else if (lowerBase.includes('openrouter.ai')) {
-            providerName = 'OpenRouter';
-        } else if (lowerBase.includes('11434') || lowerBase.includes('ollama')) {
-            providerName = 'Ollama API';
-            isLocalApi = true;
-        } else if (lowerBase.includes('together')) {
-            providerName = 'Together AI';
-        } else if (lowerBase.includes('mistral')) {
-            providerName = 'Mistral AI';
-        } else if (lowerBase.includes('anthropic')) {
-            providerName = 'Anthropic';
-        } else if (baseUrl) {
-            try {
-                const u = new URL(baseUrl);
-                providerName = u.hostname || 'OpenAI-Compatible';
-            } catch (_) {
-                providerName = 'Custom API';
-            }
+        const providers = [
+            [/generativelanguage\.googleapis\.com|^gemini/, 'Google Gemini', false],
+            [/api\.groq\.com|groq/, 'Groq Cloud', false],
+            [/api\.openai\.com/, 'OpenAI', false],
+            [/openrouter\.ai/, 'OpenRouter', false],
+            [/11434|ollama/, 'Ollama API', true],
+            [/together/, 'Together AI', false],
+            [/mistral/, 'Mistral AI', false],
+            [/anthropic/, 'Anthropic', false]
+        ];
+        const match = providers.find(([p]) => p.test(lowerBase) || p.test(lowerModel));
+        let [providerName, isLocalApi] = match ? [match[1], match[2]] : ['Cloud API', false];
+        if (!match && baseUrl) {
+            try { providerName = new URL(baseUrl).hostname || 'OpenAI-Compatible'; } catch (_) { providerName = 'Custom API'; }
         }
 
         if (modeBadge) modeBadge.className = `stats-mode-badge ${isLocalApi ? 'mode-local-api' : 'mode-api'}`;
         if (modeBadgeText) modeBadgeText.textContent = isLocalApi ? 'Local API' : 'API Cloud';
-
-        if (statsModelIcon) {
-            statsModelIcon.className = isLocalApi ? 'fa-solid fa-network-wired' : (providerName.includes('Groq') ? 'fa-solid fa-bolt' : 'fa-solid fa-cloud');
-        }
+        if (statsModelIcon) statsModelIcon.className = isLocalApi ? 'fa-solid fa-network-wired' : (providerName.includes('Groq') ? 'fa-solid fa-bolt' : 'fa-solid fa-cloud');
 
         const cleanModelName = apiModel.replace(/^models\//i, '');
-        if (dom.statsModelName) {
-            dom.statsModelName.textContent = cleanModelName;
-            dom.statsModelName.title = apiModel;
-        }
+        if (dom.statsModelName) { dom.statsModelName.textContent = cleanModelName; dom.statsModelName.title = apiModel; }
 
         const visionSupported = window.isVisionSupported ? window.isVisionSupported() : Boolean(state.apiMultimodal);
-        if (statsProviderTag) {
-            statsProviderTag.textContent = `${providerName} • ${visionSupported ? 'Multimodal Vision' : 'Text Generation'}`;
-        }
-
-        if (dom.statsArchitecture) {
-            dom.statsArchitecture.textContent = `${providerName} (Stream)`;
-        }
-
-        if (dom.statsModelType) {
-            dom.statsModelType.textContent = isLocalApi ? 'LOCAL_API (Ollama)' : 'EXTERNAL_API';
-        }
-
-        if (dom.statsQuantization) {
-            dom.statsQuantization.textContent = isLocalApi ? 'Local Daemon (Q4/Q8)' : 'Server Managed (FP16/BF16)';
-        }
+        if (statsProviderTag) statsProviderTag.textContent = `${providerName} • ${visionSupported ? 'Multimodal Vision' : 'Text Generation'}`;
+        if (dom.statsArchitecture) dom.statsArchitecture.textContent = `${providerName} (Stream)`;
+        if (dom.statsModelType) dom.statsModelType.textContent = isLocalApi ? 'LOCAL_API (Ollama)' : 'EXTERNAL_API';
+        if (dom.statsQuantization) dom.statsQuantization.textContent = isLocalApi ? 'Local Daemon (Q4/Q8)' : 'Server Managed (FP16/BF16)';
 
         if (dom.statsContextLimit) {
-            let ctx = '128,000 tokens (128k)';
-            if (lowerModel.includes('gemini-1.5') || lowerModel.includes('gemini-2') || lowerModel.includes('gemini-3') || lowerModel.includes('gemini-flash') || lowerModel.includes('gemini-pro')) {
-                ctx = '1,048,576 tokens (1M)';
-            } else if (lowerModel.includes('claude')) {
-                ctx = '200,000 tokens (200k)';
-            } else if (lowerModel.includes('llama-3.3') || lowerModel.includes('llama-3.1') || lowerModel.includes('gpt-4o') || lowerModel.includes('o1') || lowerModel.includes('o3')) {
-                ctx = '128,000 tokens (128k)';
-            } else if (lowerModel.includes('deepseek')) {
-                ctx = '64,000 tokens (64k)';
-            }
-            dom.statsContextLimit.textContent = ctx;
+            const ctxRules = [
+                [/gemini-(1\.5|[23]|flash|pro)/, '1,048,576 tokens (1M)'],
+                [/claude/, '200,000 tokens (200k)'],
+                [/llama-3\.[13]|gpt-4o|o[13]/, '128,000 tokens (128k)'],
+                [/deepseek/, '64,000 tokens (64k)']
+            ];
+            const cm = ctxRules.find(([r]) => r.test(lowerModel));
+            dom.statsContextLimit.textContent = cm ? cm[1] : '128,000 tokens (128k)';
         }
     } else if (isRouting) {
         if (modeBadge) modeBadge.className = 'stats-mode-badge mode-routing';
         if (modeBadgeText) modeBadgeText.textContent = 'Smart Router';
         if (statsModelIcon) statsModelIcon.className = 'fa-solid fa-shuffle';
-
         if (dom.statsModelName) dom.statsModelName.textContent = 'Multi-Model Intent Router';
         if (statsProviderTag) statsProviderTag.textContent = 'Auto Hot-Swap: Coder, Creative, General & Vision';
         if (dom.statsArchitecture) dom.statsArchitecture.textContent = 'Dynamic GGUF (Flash Attn)';
@@ -114,23 +80,15 @@ export async function populateStatsModal() {
         if (modeBadgeText) modeBadgeText.textContent = 'Local Engine';
         if (statsModelIcon) statsModelIcon.className = 'fa-solid fa-microchip';
 
-        const activeRole = dom.singleModelRoleSelect?.value || 'coder';
-        if (activeRole === 'custom') {
-            const fileName = state.customModelPath ? state.customModelPath.split(/[/\\]/).pop() : 'Custom GGUF Model';
-            if (dom.statsModelName) dom.statsModelName.textContent = fileName;
-            if (statsProviderTag) statsProviderTag.textContent = 'Local Native • Custom GGUF File';
-            if (dom.statsArchitecture) dom.statsArchitecture.textContent = dom.singleFlashAttn?.checked ? 'GGUF (Flash Attn)' : 'GGUF';
-            if (dom.statsModelType) dom.statsModelType.textContent = 'LOCAL_NATIVE';
-            if (dom.statsQuantization) dom.statsQuantization.textContent = dom.singleKvSelect ? `${dom.singleKvSelect.value.toUpperCase()} (KV Cache)` : 'Custom Quant';
-            if (dom.statsContextLimit) dom.statsContextLimit.textContent = `${dom.singleCtxSlider ? dom.singleCtxSlider.value : '8192'} tokens`;
-        } else {
-            if (dom.statsModelName) dom.statsModelName.textContent = `Local Engine (${activeRole.toUpperCase()})`;
-            if (statsProviderTag) statsProviderTag.textContent = `Local Native • Dedicated ${activeRole} slot`;
-            if (dom.statsArchitecture) dom.statsArchitecture.textContent = dom[activeRole + 'FlashAttn']?.checked ? 'GGUF (Flash Attn)' : 'GGUF';
-            if (dom.statsModelType) dom.statsModelType.textContent = 'LOCAL_NATIVE';
-            if (dom.statsQuantization) dom.statsQuantization.textContent = dom[activeRole + 'KvSelect'] ? `${dom[activeRole + 'KvSelect'].value.toUpperCase()} (KV Cache)` : 'Q4_K_M / Q8_0';
-            if (dom.statsContextLimit) dom.statsContextLimit.textContent = `${dom[activeRole + 'CtxSlider'] ? dom[activeRole + 'CtxSlider'].value : '8192'} tokens`;
-        }
+        const role = dom.singleModelRoleSelect?.value || 'coder';
+        const isCustom = role === 'custom';
+        const prefix = isCustom ? 'single' : role;
+        if (dom.statsModelName) dom.statsModelName.textContent = isCustom ? (state.customModelPath ? state.customModelPath.split(/[/\\]/).pop() : 'Custom GGUF Model') : `Local Engine (${role.toUpperCase()})`;
+        if (statsProviderTag) statsProviderTag.textContent = isCustom ? 'Local Native • Custom GGUF File' : `Local Native • Dedicated ${role} slot`;
+        if (dom.statsArchitecture) dom.statsArchitecture.textContent = dom[`${prefix}FlashAttn`]?.checked ? 'GGUF (Flash Attn)' : 'GGUF';
+        if (dom.statsModelType) dom.statsModelType.textContent = 'LOCAL_NATIVE';
+        if (dom.statsQuantization) dom.statsQuantization.textContent = dom[`${prefix}KvSelect`]?.value?.toUpperCase() ? `${dom[`${prefix}KvSelect`].value.toUpperCase()} (KV Cache)` : (isCustom ? 'Custom Quant' : 'Q4_K_M / Q8_0');
+        if (dom.statsContextLimit) dom.statsContextLimit.textContent = `${dom[`${prefix}CtxSlider`]?.value || '8192'} tokens`;
     }
 
     // Populate Global Usage Statistics

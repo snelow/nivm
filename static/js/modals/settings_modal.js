@@ -16,13 +16,10 @@ let fetchModelsDebounce = null;
 
 export function setInferenceMode(mode) {
     state.inferenceMode = mode;
-    if (dom.routingModeBtn) dom.routingModeBtn.classList.toggle('active', mode === 'routing');
-    if (dom.singleModeBtn) dom.singleModeBtn.classList.toggle('active', mode === 'single');
-    if (dom.apiModeBtn) dom.apiModeBtn.classList.toggle('active', mode === 'api');
-
-    if (dom.routingModePanel) dom.routingModePanel.classList.toggle('hidden', mode !== 'routing');
-    if (dom.singleModePanel) dom.singleModePanel.classList.toggle('hidden', mode !== 'single');
-    if (dom.apiModePanel) dom.apiModePanel.classList.toggle('hidden', mode !== 'api');
+    ['routing', 'single', 'api'].forEach(m => {
+        dom[`${m}ModeBtn`]?.classList.toggle('active', mode === m);
+        dom[`${m}ModePanel`]?.classList.toggle('hidden', mode !== m);
+    });
 
     const isApi = mode === 'api';
     if (dom.memoryEstimatorCard) {
@@ -1412,15 +1409,7 @@ export function setupSettingsUI() {
         elem.addEventListener('change', updateMemoryEstimator);
     });
 
-    if (dom.unloadAllModelsBtn) {
-        dom.unloadAllModelsBtn.addEventListener('click', () => handleUnloadAllModels(dom.unloadAllModelsBtn));
-    }
-    if (dom.statsUnloadAllBtn) {
-        dom.statsUnloadAllBtn.addEventListener('click', () => handleUnloadAllModels(dom.statsUnloadAllBtn));
-    }
-    if (dom.drawerUnloadBtn) {
-        dom.drawerUnloadBtn.addEventListener('click', () => handleUnloadAllModels(dom.drawerUnloadBtn));
-    }
+    ['unloadAllModelsBtn', 'statsUnloadAllBtn', 'drawerUnloadBtn'].forEach(k => dom[k]?.addEventListener('click', () => handleUnloadAllModels(dom[k])));
 
     if (dom.chatBoxLoadModelBtn) {
         dom.chatBoxLoadModelBtn.addEventListener('click', () => openSettingsForModelLoad('inference'));

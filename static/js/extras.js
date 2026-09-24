@@ -364,24 +364,15 @@ export function triggerSiteGlitch() {
     }, 750);
 }
 
-/**
- * Triggers the pixel art "Bleh~!" visual and sound effect.
- */
-export function triggerBlehEasterEgg() {
-    playBlehSound();
-
+function _showRezeBubble(text, isBoom, onShow) {
     const container = document.getElementById('blehEasterEgg');
     if (!container) return;
-
-    // Reset any previous boom state to clean Bleh mode
-    container.classList.remove('reze-boom-active');
+    container.classList.toggle('reze-boom-active', isBoom);
     const bubbleText = container.querySelector('.bleh-bubble-text');
-    if (bubbleText) bubbleText.textContent = 'Bleh~!';
-
+    if (bubbleText) bubbleText.textContent = text;
+    if (onShow) onShow(container);
     if (blehHideTimer) clearTimeout(blehHideTimer);
-
-    container.classList.remove('hidden');
-    container.classList.remove('bleh-animate-out');
+    container.classList.remove('hidden', 'bleh-animate-out');
     container.classList.add('bleh-animate-in');
 
     blehHideTimer = setTimeout(() => {
@@ -389,9 +380,18 @@ export function triggerBlehEasterEgg() {
         container.classList.add('bleh-animate-out');
         setTimeout(() => {
             container.classList.add('hidden');
-            container.classList.remove('bleh-animate-out');
+            container.classList.remove('bleh-animate-out', 'reze-boom-active');
+            if (bubbleText) bubbleText.textContent = 'Bleh~!';
         }, 350);
-    }, 3800);
+    }, isBoom ? 4000 : 3800);
+}
+
+/**
+ * Triggers the pixel art "Bleh~!" visual and sound effect.
+ */
+export function triggerBlehEasterEgg() {
+    playBlehSound();
+    _showRezeBubble('Bleh~!', false);
 }
 
 /**
@@ -399,46 +399,18 @@ export function triggerBlehEasterEgg() {
  */
 export function triggerRezeExplosion() {
     playExplosionSound();
-
-    const container = document.getElementById('blehEasterEgg');
-    if (!container) return;
-
-    // Activate fiery boom styling & text
-    container.classList.add('reze-boom-active');
-    const bubbleText = container.querySelector('.bleh-bubble-text');
-    if (bubbleText) bubbleText.textContent = 'Boom!';
-
-    // Screen shake
-    document.body.classList.remove('reze-screen-shake');
-    void document.body.offsetWidth;
-    document.body.classList.add('reze-screen-shake');
-    setTimeout(() => {
+    _showRezeBubble('Boom!', true, (container) => {
         document.body.classList.remove('reze-screen-shake');
-    }, 450);
+        void document.body.offsetWidth;
+        document.body.classList.add('reze-screen-shake');
+        setTimeout(() => document.body.classList.remove('reze-screen-shake'), 450);
 
-    // Particle blast from avatar
-    const avatar = container.querySelector('.bleh-pixel-avatar');
-    if (avatar) {
-        const rect = avatar.getBoundingClientRect();
-        spawnExplosionParticles(rect.left + rect.width / 2, rect.top + rect.height / 2);
-    }
-
-    if (blehHideTimer) clearTimeout(blehHideTimer);
-
-    container.classList.remove('hidden');
-    container.classList.remove('bleh-animate-out');
-    container.classList.add('bleh-animate-in');
-
-    blehHideTimer = setTimeout(() => {
-        container.classList.remove('bleh-animate-in');
-        container.classList.add('bleh-animate-out');
-        setTimeout(() => {
-            container.classList.add('hidden');
-            container.classList.remove('bleh-animate-out');
-            container.classList.remove('reze-boom-active');
-            if (bubbleText) bubbleText.textContent = 'Bleh~!';
-        }, 350);
-    }, 4000);
+        const avatar = container.querySelector('.bleh-pixel-avatar');
+        if (avatar) {
+            const r = avatar.getBoundingClientRect();
+            spawnExplosionParticles(r.left + r.width / 2, r.top + r.height / 2);
+        }
+    });
 }
 
 /**
@@ -447,9 +419,7 @@ export function triggerRezeExplosion() {
 export function openCreatorModal(withGlitch = true) {
     const modal = document.getElementById('creatorModal');
     if (!modal) return;
-
     modal.classList.remove('hidden');
-
     if (withGlitch) {
         triggerSiteGlitch();
         setTimeout(() => playFanfareSound(), 200);
@@ -460,8 +430,7 @@ export function openCreatorModal(withGlitch = true) {
  * Closes the Creator Card modal.
  */
 export function closeCreatorModal() {
-    const modal = document.getElementById('creatorModal');
-    if (modal) modal.classList.add('hidden');
+    document.getElementById('creatorModal')?.classList.add('hidden');
 }
 
 /**
@@ -472,29 +441,14 @@ export function initExtras() {
     const handleNewChatClick = () => {
         clickCount++;
         if (clickResetTimer) clearTimeout(clickResetTimer);
-        clickResetTimer = setTimeout(() => {
-            clickCount = 0;
-        }, 16000);
-
+        clickResetTimer = setTimeout(() => { clickCount = 0; }, 16000);
         if (clickCount > 0 && clickCount % 15 === 0) {
-            const step = Math.floor(clickCount / 15);
-            if (step % 2 === 0) {
-                // 30, 60, 90... Explode with Boom!
-                triggerRezeExplosion();
-            } else {
-                // 15, 45, 75... Bleh~!
-                triggerBlehEasterEgg();
-            }
+            Math.floor(clickCount / 15) % 2 === 0 ? triggerRezeExplosion() : triggerBlehEasterEgg();
         }
     };
-
-    const newChatBtn = document.getElementById('newChatBtn');
-    const convoEndedNewChatBtn = document.getElementById('convoEndedNewChatBtn');
-    const mobileNewChatBtn = document.getElementById('mobileNewChatBtn');
-
-    if (newChatBtn) newChatBtn.addEventListener('click', handleNewChatClick);
-    if (convoEndedNewChatBtn) convoEndedNewChatBtn.addEventListener('click', handleNewChatClick);
-    if (mobileNewChatBtn) mobileNewChatBtn.addEventListener('click', handleNewChatClick);
+    ['newChatBtn', 'convoEndedNewChatBtn', 'mobileNewChatBtn'].forEach(id => {
+        document.getElementById(id)?.addEventListener('click', handleNewChatClick);
+    });
 
     // 2. Pixel art container click handlers
     const blehContainer = document.getElementById('blehEasterEgg');

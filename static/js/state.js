@@ -1,18 +1,23 @@
+const _json = (k, def) => {
+    try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch (_) { return def; }
+};
+const _str = (k, def = '') => localStorage.getItem(k) ?? def;
+const _num = (k, def) => { const v = parseFloat(localStorage.getItem(k)); return isNaN(v) ? def : v; };
+
 export let state = {
     conversations: [],
     activeChatId: null,
-    selectedModel: localStorage.getItem('nivm_lastModel') || 'coder',
-    userName: localStorage.getItem('nivm_userName') || '',
-    aiName: localStorage.getItem('nivm_ai_name') || 'nivm',
-    // System prompt is dynamically loaded from backend /api/config (core/config.py is the single source of truth)
+    selectedModel: _str('nivm_lastModel', 'coder'),
+    userName: _str('nivm_userName'),
+    aiName: _str('nivm_ai_name', 'nivm') || 'nivm',
     systemPrompt: '',
-    personalityPrompt: localStorage.getItem('nivm_personality_prompt') || '',
-    personalityPreset: localStorage.getItem('nivm_personality_preset') || 'balanced',
-    savedPersonas: JSON.parse(localStorage.getItem('nivm_saved_personas') || '[]'),
+    personalityPrompt: _str('nivm_personality_prompt'),
+    personalityPreset: _str('nivm_personality_preset', 'balanced'),
+    savedPersonas: _json('nivm_saved_personas', []),
     nsfwMode: localStorage.getItem('nivm_nsfw_mode') === 'true',
-    temperature: parseFloat(localStorage.getItem('nivm_temperature') || '0.6'),
-    repeatPenalty: parseFloat(localStorage.getItem('nivm_repeat_penalty') || '1.1'),
-    topP: parseFloat(localStorage.getItem('nivm_top_p') || '0.9'),
+    temperature: _num('nivm_temperature', 0.6),
+    repeatPenalty: _num('nivm_repeat_penalty', 1.1),
+    topP: _num('nivm_top_p', 0.9),
     maxTokens: 1024,
     lmStudioUrl: '',
     apiKey: '',
@@ -28,23 +33,20 @@ export let state = {
     abortController: null,
     lmStudioConnected: false,
     models: [],
-    usageStats: JSON.parse(localStorage.getItem('nivm_usageStats') || '{"totalTokens": 0, "totalCost": 0, "totalDurationSec": 0}'),
+    usageStats: _json('nivm_usageStats', { totalTokens: 0, totalCost: 0, totalDurationSec: 0 }),
     memory: {},
-    enabledTools: (() => {
-        const stored = JSON.parse(localStorage.getItem('nivm_enabledTools') || '{"read_memory": true, "write_memory": true, "execute_terminal": false, "end_conversation": true, "generate_image": true, "edit_image": true, "generate_anime_image": true}');
-        if (stored.end_conversation === undefined) stored.end_conversation = true;
-        if (stored.generate_image === undefined) stored.generate_image = true;
-        if (stored.edit_image === undefined) stored.edit_image = true;
-        if (stored.generate_anime_image === undefined) stored.generate_anime_image = true;
-        return stored;
-    })(),
-    terminalSecurityMode: localStorage.getItem('nivm_terminalSecurityMode') || 'dangerous',
+    enabledTools: {
+        read_memory: true, write_memory: true, execute_terminal: false,
+        end_conversation: true, generate_image: true, edit_image: true, generate_anime_image: true,
+        ..._json('nivm_enabledTools', {})
+    },
+    terminalSecurityMode: _str('nivm_terminalSecurityMode', 'dangerous'),
     visionEnabled: false,
     attachedImages: [],
     lastGeneratedImage: ''
 };
 
-export let themeState = JSON.parse(localStorage.getItem('nivm_theme_config') || JSON.stringify({
+export let themeState = {
     fontFamily: 'monocraft',
     bgMotion: 'none',
     bgTone: '#09090b',
@@ -59,43 +61,24 @@ export let themeState = JSON.parse(localStorage.getItem('nivm_theme_config') || 
     fontSize: 15,
     circuitSpeed: 1.2,
     hexSpeed: 1.0,
-    auroraSpeed: 1.0
-}));
-if (!themeState.fontFamily) {
-    themeState.fontFamily = 'monocraft';
-}
-if (themeState.mutedColor === undefined) {
-    themeState.mutedColor = null;
-}
-if (themeState.bgMotion === 'embers') {
-    themeState.bgMotion = 'hexgrid';
-}
-if (themeState.circuitSpeed === undefined) themeState.circuitSpeed = 1.2;
-if (themeState.hexSpeed === undefined) themeState.hexSpeed = 1.0;
-if (themeState.auroraSpeed === undefined) themeState.auroraSpeed = 1.0;
+    auroraSpeed: 1.0,
+    ..._json('nivm_theme_config', {})
+};
+if (themeState.bgMotion === 'embers') themeState.bgMotion = 'hexgrid';
 
 export function saveThemeConfig() {
     localStorage.setItem('nivm_theme_config', JSON.stringify(themeState));
 }
 
-// Purge legacy plaintext chats from client localStorage for security
-try {
-    localStorage.removeItem('nivm_saved_chats');
-} catch (e) {}
+try { localStorage.removeItem('nivm_saved_chats'); } catch (_) {}
 
 export function saveConversations() {
-    try {
-        if (Array.isArray(state.conversations)) {
-            fetch('/api/chats', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(state.conversations)
-            }).catch(err => {
-                console.error("Failed to save chats to server:", err);
-            });
-        }
-    } catch (err) {
-        console.error("Failed to initiate chats save:", err);
+    if (Array.isArray(state.conversations)) {
+        fetch('/api/chats', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(state.conversations)
+        }).catch(err => console.error("Failed to save chats to server:", err));
     }
 }
 

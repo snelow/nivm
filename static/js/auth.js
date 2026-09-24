@@ -417,88 +417,44 @@ export async function checkAuthSession() {
 /**
  * Perform login against /api/auth/login with password.
  */
-export async function loginOwner(password) {
-    const res = await fetch('/api/auth/login', {
+async function _authPost(endpoint, body) {
+    const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-            password: password
-        })
+        body: JSON.stringify(body)
     });
-
-    const data = await res.json();
-    if (!res.ok) {
-        throw new Error(data.detail || 'Incorrect password');
-    }
-
-    if (data.token) {
-        setAuthToken(data.token);
-    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || 'Authentication failed');
+    if (data.token) setAuthToken(data.token);
     isUserAuthenticated = true;
     return data;
 }
 
-/**
- * Perform remote password reset via emergency recovery key.
- */
-export async function resetPasswordWithKey(recoveryKey, newPassword) {
-    const res = await fetch('/api/auth/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-            recovery_key: recoveryKey,
-            new_password: newPassword
-        })
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-        throw new Error(data.detail || 'Password reset failed');
-    }
-
-    if (data.token) {
-        setAuthToken(data.token);
-    }
-    isUserAuthenticated = true;
-    return data;
+export function loginOwner(password) {
+    return _authPost('/api/auth/login', { password });
 }
 
-/**
- * Explicit logout - revokes token and wipes client memory/DOM.
- */
+export function resetPasswordWithKey(recoveryKey, newPassword) {
+    return _authPost('/api/auth/reset-password', { recovery_key: recoveryKey, new_password: newPassword });
+}
+
 export async function logoutOwner() {
     try {
-        const headers = {};
-        if (currentAuthToken) {
-            headers['Authorization'] = `Bearer ${currentAuthToken}`;
-        }
-        await fetch('/api/auth/logout', {
-            method: 'POST',
-            headers,
-            credentials: 'include'
-        });
-    } catch (e) {
-        console.warn('Logout request failed:', e);
-    }
+        const headers = currentAuthToken ? { 'Authorization': `Bearer ${currentAuthToken}` } : {};
+        await fetch('/api/auth/logout', { method: 'POST', headers, credentials: 'include' });
+    } catch (_) {}
     clearAuthToken();
     isUserAuthenticated = false;
 
-    // Wipe memory & DOM chats completely
     if (window.__nivm_state) {
-        window.__nivm_state.conversations = [];
-        window.__nivm_state.activeChatId = null;
-        window.__nivm_state.memory = {};
+        Object.assign(window.__nivm_state, { conversations: [], activeChatId: null, memory: {} });
     }
-    const chatContainer = document.getElementById('chatContainer');
-    if (chatContainer) chatContainer.innerHTML = '';
-    const historyList = document.getElementById('historyList');
-    if (historyList) historyList.innerHTML = '';
-    try {
-        localStorage.removeItem('nivm_saved_chats');
-    } catch (e) {}
-
+    ['chatContainer', 'historyList'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '';
+    });
+    try { localStorage.removeItem('nivm_saved_chats'); } catch (_) {}
     showAuthLock();
 }
 

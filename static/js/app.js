@@ -83,33 +83,24 @@ const startApp = async () => {
                 dom.aiNameInput.value = (state.aiName && state.aiName !== 'nivm') ? state.aiName : '';
             }
             updateAssistantNameUI();
-            try { setupNodesCanvas(); } catch (e) { console.warn('Nodes canvas setup:', e); }
-            try { setupMatrixCanvas(); } catch (e) { console.warn('Matrix canvas setup:', e); }
-            try { setupFluidCanvas(); } catch (e) { console.warn('Fluid canvas setup:', e); }
-            try { setupFlowFieldCanvas(); } catch (e) { console.warn('FlowField canvas setup:', e); }
-            try { setupCircuitsCanvas(); } catch (e) { console.warn('Circuits canvas setup:', e); }
-            try { setupHexCanvas(); } catch (e) { console.warn('Hex canvas setup:', e); }
-            try { setupAuroraCanvas(); } catch (e) { console.warn('Aurora canvas setup:', e); }
+            [setupNodesCanvas, setupMatrixCanvas, setupFluidCanvas, setupFlowFieldCanvas, setupCircuitsCanvas, setupHexCanvas, setupAuroraCanvas].forEach(fn => {
+                try { fn(); } catch (_) {}
+            });
             applyThemeState();
 
-            makeDraggable(dom.settingsWindow, dom.settingsWindowHeader);
-            makeDraggable(dom.toolsWindow, dom.toolsWindowHeader);
-            makeDraggable(dom.themeWindow, dom.themeWindowHeader);
-            makeDraggable(dom.statsWindow, dom.statsWindowHeader);
-            makeDraggable(dom.networkMonitorWindow, dom.networkMonitorHeader);
-
-            if (dom.fileBrowserWindow && dom.fileBrowserHeader) {
-                makeDraggable(dom.fileBrowserWindow, dom.fileBrowserHeader);
-            }
-            if (dom.personalityWindow && dom.personalityWindowHeader) {
-                makeDraggable(dom.personalityWindow, dom.personalityWindowHeader);
-            }
-            if (dom.voiceWindow && dom.voiceWindowHeader) {
-                makeDraggable(dom.voiceWindow, dom.voiceWindowHeader);
-            }
-            if (dom.resumeAppealWindow && dom.resumeAppealWindowHeader) {
-                makeDraggable(dom.resumeAppealWindow, dom.resumeAppealWindowHeader);
-            }
+            [
+                ['settingsWindow', 'settingsWindowHeader'],
+                ['toolsWindow', 'toolsWindowHeader'],
+                ['themeWindow', 'themeWindowHeader'],
+                ['statsWindow', 'statsWindowHeader'],
+                ['networkMonitorWindow', 'networkMonitorHeader'],
+                ['fileBrowserWindow', 'fileBrowserHeader'],
+                ['personalityWindow', 'personalityWindowHeader'],
+                ['voiceWindow', 'voiceWindowHeader'],
+                ['resumeAppealWindow', 'resumeAppealWindowHeader'],
+            ].forEach(([win, hdr]) => {
+                if (dom[win] && dom[hdr]) makeDraggable(dom[win], dom[hdr]);
+            });
 
             setupVoiceUI();
             setupDynamicGreeting();
@@ -371,26 +362,28 @@ const startApp = async () => {
             dom.settingsBtn.addEventListener('click', () => {
                 if (dom.settingsModal) {
                     dom.settingsModal.classList.toggle('hidden');
-                    if (!dom.settingsModal.classList.contains('hidden')) {
-                        initImageStudioSettings();
-                    }
+                    if (!dom.settingsModal.classList.contains('hidden')) initImageStudioSettings();
                 }
             });
         }
-        if (dom.closeSettingsBtn) dom.closeSettingsBtn.addEventListener('click', () => dom.settingsModal && dom.settingsModal.classList.add('hidden'));
-
         if (dom.toolsBtn) {
             dom.toolsBtn.addEventListener('click', () => {
                 if (dom.toolsModal) {
                     dom.toolsModal.classList.toggle('hidden');
-                    if (!dom.toolsModal.classList.contains('hidden')) {
-                        renderToolsSettings();
-                    }
+                    if (!dom.toolsModal.classList.contains('hidden')) renderToolsSettings();
                 }
             });
         }
-        if (dom.closeToolsBtn) dom.closeToolsBtn.addEventListener('click', () => dom.toolsModal && dom.toolsModal.classList.add('hidden'));
-        if (dom.saveToolsBtn) dom.saveToolsBtn.addEventListener('click', () => dom.toolsModal && dom.toolsModal.classList.add('hidden'));
+        [
+            ['closeSettingsBtn', 'settingsModal'],
+            ['closeToolsBtn', 'toolsModal'],
+            ['saveToolsBtn', 'toolsModal'],
+            ['closeThemeBtn', 'themeModal'],
+            ['saveThemeBtn', 'themeModal'],
+            ['closeStatsBtn', 'statsWindow'],
+        ].forEach(([btn, modal]) => {
+            if (dom[btn]) dom[btn].addEventListener('click', () => dom[modal]?.classList.add('hidden'));
+        });
 
         if (dom.saveSettingsBtn) {
             dom.saveSettingsBtn.addEventListener('click', async () => {
@@ -407,7 +400,6 @@ const startApp = async () => {
                 dom.statsWindow.classList.toggle('hidden');
             });
         }
-        if (dom.closeStatsBtn) dom.closeStatsBtn.addEventListener('click', () => dom.statsWindow.classList.add('hidden'));
         if (dom.resetStatsBtn) {
             dom.resetStatsBtn.addEventListener('click', async () => {
                 if (await showConfirm('Reset Statistics', 'Are you sure you want to reset all usage statistics?')) {
@@ -425,166 +417,74 @@ const startApp = async () => {
         }
 
         if (dom.themeBtn) dom.themeBtn.addEventListener('click', () => dom.themeModal && dom.themeModal.classList.toggle('hidden'));
-        if (dom.closeThemeBtn) dom.closeThemeBtn.addEventListener('click', () => dom.themeModal && dom.themeModal.classList.add('hidden'));
-        if (dom.saveThemeBtn) dom.saveThemeBtn.addEventListener('click', () => dom.themeModal && dom.themeModal.classList.add('hidden'));
 
         // Appearance & Background Motion
         document.querySelectorAll('.bg-motion-card').forEach(card => {
             card.addEventListener('click', () => {
-                const motion = card.getAttribute('data-motion');
-                themeState.bgMotion = motion;
+                themeState.bgMotion = card.getAttribute('data-motion');
                 saveThemeConfig();
             });
         });
 
-        if (dom.bgTonePicker) {
-            dom.bgTonePicker.addEventListener('input', (e) => {
-                themeState.bgTone = e.target.value;
-                if (themeState.cycleBg) { themeState.cycleBg = false; if (dom.cycleBgToggle) dom.cycleBgToggle.checked = false; }
-                applyThemeState();
-                saveThemeConfig();
-            });
-        }
+        // Theme Pickers
+        [
+            ['bgTonePicker', 'bgTone', () => { if (themeState.cycleBg) { themeState.cycleBg = false; if (dom.cycleBgToggle) dom.cycleBgToggle.checked = false; } }],
+            ['sidebarTonePicker', 'sidebarTone'],
+            ['accentColorPicker', 'accentColor', () => { if (themeState.cycleAccent) { themeState.cycleAccent = false; if (dom.cycleAccentToggle) dom.cycleAccentToggle.checked = false; } }],
+            ['mutedColorPicker', 'mutedColor'],
+            ['brandColorPicker', 'brandColor'],
+        ].forEach(([pickerId, key, onPick]) => {
+            if (dom[pickerId]) {
+                dom[pickerId].addEventListener('input', (e) => {
+                    themeState[key] = e.target.value;
+                    if (onPick) onPick();
+                    applyThemeState();
+                    saveThemeConfig();
+                });
+            }
+        });
 
-        if (dom.sidebarTonePicker) {
-            dom.sidebarTonePicker.addEventListener('input', (e) => {
-                themeState.sidebarTone = e.target.value;
-                applyThemeState();
-                saveThemeConfig();
-            });
-        }
+        // Theme Toggles
+        [
+            ['clearTextToggle', 'clearText'],
+            ['cycleAccentToggle', 'cycleAccent'],
+            ['cycleBgToggle', 'cycleBg'],
+        ].forEach(([toggleId, key]) => {
+            if (dom[toggleId]) {
+                dom[toggleId].addEventListener('change', (e) => {
+                    themeState[key] = e.target.checked;
+                    saveThemeConfig();
+                });
+            }
+        });
 
-        if (dom.accentColorPicker) {
-            dom.accentColorPicker.addEventListener('input', (e) => {
-                themeState.accentColor = e.target.value;
-                if (themeState.cycleAccent) { themeState.cycleAccent = false; if (dom.cycleAccentToggle) dom.cycleAccentToggle.checked = false; }
-                applyThemeState();
-                saveThemeConfig();
-            });
-        }
-
-        if (dom.mutedColorPicker) {
-            dom.mutedColorPicker.addEventListener('input', (e) => {
-                themeState.mutedColor = e.target.value;
-                applyThemeState();
-                saveThemeConfig();
-            });
-        }
-
-        if (dom.brandColorPicker) {
-            dom.brandColorPicker.addEventListener('input', (e) => {
-                themeState.brandColor = e.target.value;
-                applyThemeState();
-                saveThemeConfig();
-            });
-        }
-
-        if (dom.clearTextToggle) {
-            dom.clearTextToggle.addEventListener('change', (e) => {
-                themeState.clearText = e.target.checked;
-                saveThemeConfig();
-            });
-        }
-
-        if (dom.cycleAccentToggle) {
-            dom.cycleAccentToggle.addEventListener('change', (e) => {
-                themeState.cycleAccent = e.target.checked;
-                saveThemeConfig();
-            });
-        }
-
-        if (dom.cycleBgToggle) {
-            dom.cycleBgToggle.addEventListener('change', (e) => {
-                themeState.cycleBg = e.target.checked;
-                saveThemeConfig();
-            });
-        }
-
-        if (dom.cycleSpeedSlider) {
-            dom.cycleSpeedSlider.addEventListener('input', (e) => {
-                themeState.cycleSpeed = e.target.value;
-                if (dom.cycleSpeedVal) dom.cycleSpeedVal.textContent = themeState.cycleSpeed + '%';
-                saveThemeConfig();
-            });
-        }
-
-        if (dom.fluidRadiusSlider) {
-            dom.fluidRadiusSlider.addEventListener('input', (e) => {
-                themeState.fluidRadius = parseFloat(e.target.value);
-                if (dom.fluidRadiusVal) dom.fluidRadiusVal.textContent = themeState.fluidRadius;
-                if (window.fluidConfig) window.fluidConfig.SPLAT_RADIUS = themeState.fluidRadius;
-                saveThemeConfig();
-            });
-        }
-        if (dom.fluidCurlSlider) {
-            dom.fluidCurlSlider.addEventListener('input', (e) => {
-                themeState.fluidCurl = parseInt(e.target.value);
-                if (dom.fluidCurlVal) dom.fluidCurlVal.textContent = themeState.fluidCurl;
-                if (window.fluidConfig) window.fluidConfig.CURL = themeState.fluidCurl;
-                saveThemeConfig();
-            });
-        }
-        if (dom.fluidBloomSlider) {
-            dom.fluidBloomSlider.addEventListener('input', (e) => {
-                themeState.fluidBloom = parseFloat(e.target.value);
-                if (dom.fluidBloomVal) dom.fluidBloomVal.textContent = themeState.fluidBloom;
-                if (window.fluidConfig) window.fluidConfig.BLOOM_INTENSITY = themeState.fluidBloom;
-                saveThemeConfig();
-            });
-        }
-
-        if (dom.nodesDensitySlider) {
-            dom.nodesDensitySlider.addEventListener('input', (e) => {
-                themeState.nodesDensity = parseInt(e.target.value);
-                if (dom.nodesDensityVal) dom.nodesDensityVal.textContent = themeState.nodesDensity;
-                saveThemeConfig();
-                if (window.resizeNodesCanvas) window.resizeNodesCanvas();
-            });
-        }
-        if (dom.nodesDistanceSlider) {
-            dom.nodesDistanceSlider.addEventListener('input', (e) => {
-                themeState.nodesDistance = parseInt(e.target.value);
-                if (dom.nodesDistanceVal) dom.nodesDistanceVal.textContent = themeState.nodesDistance;
-                saveThemeConfig();
-            });
-        }
-        if (dom.matrixSpeedSlider) {
-            dom.matrixSpeedSlider.addEventListener('input', (e) => {
-                themeState.matrixSpeed = parseInt(e.target.value);
-                if (dom.matrixSpeedVal) dom.matrixSpeedVal.textContent = themeState.matrixSpeed + 'ms';
-                saveThemeConfig();
-            });
-        }
-        if (dom.matrixFadeSlider) {
-            dom.matrixFadeSlider.addEventListener('input', (e) => {
-                themeState.matrixFade = parseFloat(e.target.value);
-                if (dom.matrixFadeVal) dom.matrixFadeVal.textContent = themeState.matrixFade;
-                saveThemeConfig();
-            });
-        }
-
-        if (dom.flowSpeedSlider) {
-            dom.flowSpeedSlider.addEventListener('input', (e) => {
-                themeState.flowSpeed = parseFloat(e.target.value);
-                if (dom.flowSpeedVal) dom.flowSpeedVal.textContent = themeState.flowSpeed + 'x';
-                saveThemeConfig();
-            });
-        }
-        if (dom.flowTrailSlider) {
-            dom.flowTrailSlider.addEventListener('input', (e) => {
-                themeState.flowTrail = parseFloat(e.target.value);
-                if (dom.flowTrailVal) dom.flowTrailVal.textContent = themeState.flowTrail;
-                saveThemeConfig();
-            });
-        }
-        if (dom.flowDensitySlider) {
-            dom.flowDensitySlider.addEventListener('input', (e) => {
-                themeState.flowDensity = parseInt(e.target.value);
-                if (dom.flowDensityVal) dom.flowDensityVal.textContent = themeState.flowDensity;
-                saveThemeConfig();
-                if (window.resizeFlowFieldCanvas) window.resizeFlowFieldCanvas();
-            });
-        }
+        // Theme Sliders
+        [
+            ['cycleSpeedSlider', 'cycleSpeedVal', 'cycleSpeed', v => v + '%', v => v],
+            ['fluidRadiusSlider', 'fluidRadiusVal', 'fluidRadius', v => v, v => { const n = parseFloat(v); if (window.fluidConfig) window.fluidConfig.SPLAT_RADIUS = n; return n; }],
+            ['fluidCurlSlider', 'fluidCurlVal', 'fluidCurl', v => v, v => { const n = parseInt(v); if (window.fluidConfig) window.fluidConfig.CURL = n; return n; }],
+            ['fluidBloomSlider', 'fluidBloomVal', 'fluidBloom', v => v, v => { const n = parseFloat(v); if (window.fluidConfig) window.fluidConfig.BLOOM_INTENSITY = n; return n; }],
+            ['nodesDensitySlider', 'nodesDensityVal', 'nodesDensity', v => v, v => { const n = parseInt(v); window.resizeNodesCanvas?.(); return n; }],
+            ['nodesDistanceSlider', 'nodesDistanceVal', 'nodesDistance', v => v, v => parseInt(v)],
+            ['matrixSpeedSlider', 'matrixSpeedVal', 'matrixSpeed', v => v + 'ms', v => parseInt(v)],
+            ['matrixFadeSlider', 'matrixFadeVal', 'matrixFade', v => v, v => parseFloat(v)],
+            ['flowSpeedSlider', 'flowSpeedVal', 'flowSpeed', v => v + 'x', v => parseFloat(v)],
+            ['flowTrailSlider', 'flowTrailVal', 'flowTrail', v => v, v => parseFloat(v)],
+            ['flowDensitySlider', 'flowDensityVal', 'flowDensity', v => v, v => { const n = parseInt(v); window.resizeFlowFieldCanvas?.(); return n; }],
+            ['circuitSpeedSlider', 'circuitSpeedVal', 'circuitSpeed', v => v + 'x', v => parseFloat(v)],
+            ['hexSpeedSlider', 'hexSpeedVal', 'hexSpeed', v => v + 'x', v => parseFloat(v)],
+            ['auroraSpeedSlider', 'auroraSpeedVal', 'auroraSpeed', v => v + 'x', v => parseFloat(v)],
+        ].forEach(([sliderId, valId, key, format, parse]) => {
+            const s = dom[sliderId];
+            if (s) {
+                s.addEventListener('input', (e) => {
+                    const raw = e.target.value;
+                    themeState[key] = parse ? parse(raw) : raw;
+                    if (dom[valId]) dom[valId].textContent = format ? format(raw) : raw;
+                    saveThemeConfig();
+                });
+            }
+        });
 
         document.querySelectorAll('button[data-font]').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -600,28 +500,6 @@ const startApp = async () => {
                 saveThemeConfig();
             });
         });
-
-        if (dom.circuitSpeedSlider) {
-            dom.circuitSpeedSlider.addEventListener('input', (e) => {
-                themeState.circuitSpeed = parseFloat(e.target.value);
-                if (dom.circuitSpeedVal) dom.circuitSpeedVal.textContent = themeState.circuitSpeed + 'x';
-                saveThemeConfig();
-            });
-        }
-        if (dom.hexSpeedSlider) {
-            dom.hexSpeedSlider.addEventListener('input', (e) => {
-                themeState.hexSpeed = parseFloat(e.target.value);
-                if (dom.hexSpeedVal) dom.hexSpeedVal.textContent = themeState.hexSpeed + 'x';
-                saveThemeConfig();
-            });
-        }
-        if (dom.auroraSpeedSlider) {
-            dom.auroraSpeedSlider.addEventListener('input', (e) => {
-                themeState.auroraSpeed = parseFloat(e.target.value);
-                if (dom.auroraSpeedVal) dom.auroraSpeedVal.textContent = themeState.auroraSpeed + 'x';
-                saveThemeConfig();
-            });
-        }
 
         if (dom.fontSizeSlider) {
             dom.fontSizeSlider.addEventListener('input', (e) => {

@@ -1,52 +1,69 @@
 import { state, saveConversations } from './state.js';
 import { dom } from './dom.js';
 
+// Unified HTTP request wrapper with automatic JSON serialization and error unwrapping
+export async function apiFetch(url, options = {}) {
+    const opts = { cache: 'no-store', ...options };
+    if (opts.body && typeof opts.body === 'object' && !(opts.body instanceof FormData)) {
+        opts.headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+        opts.body = JSON.stringify(opts.body);
+    }
+    const res = await fetch(url, opts);
+    if (!res.ok) {
+        let msg = `${res.status} ${res.statusText}`;
+        try {
+            const err = await res.json();
+            if (err?.detail) msg = err.detail;
+            else if (err?.error) msg = err.error;
+        } catch (_) {}
+        throw new Error(msg);
+    }
+    const cType = res.headers.get('content-type') || '';
+    return cType.includes('application/json') ? res.json() : res.text();
+}
+
+export async function apiFetchSafe(url, options = {}, fallback = null) {
+    try {
+        return await apiFetch(url, options);
+    } catch (_) {
+        return fallback;
+    }
+}
+
 // Helper: set slider + val span for a role prefix
 function _setSlider(slider, valSpan, value, isGpu) {
     if (slider) slider.value = value;
-    if (valSpan) {
-        if (isGpu) {
-            const layers = parseInt(slider?.dataset?.totalLayers || slider?.max || '128', 10);
-            const numVal = parseInt(value, 10);
-            if (numVal === -1) {
-                valSpan.textContent = layers > 0 && layers < 128 ? `-1 (All ${layers} Layers)` : '-1 (Max)';
-            } else if (numVal === 0) {
-                valSpan.textContent = '0 (CPU only)';
-            } else if (layers > 0 && layers < 128) {
-                const pct = Math.min(100, Math.round((numVal / layers) * 100));
-                valSpan.textContent = `${numVal} / ${layers} Layers (${pct}% GPU)`;
-            } else {
-                valSpan.textContent = String(numVal);
-            }
+    if (!valSpan) return;
+    if (isGpu) {
+        const layers = parseInt(slider?.dataset?.totalLayers || slider?.max || '128', 10);
+        const numVal = parseInt(value, 10);
+        if (numVal === -1) {
+            valSpan.textContent = layers > 0 && layers < 128 ? `-1 (All ${layers} Layers)` : '-1 (Max)';
+        } else if (numVal === 0) {
+            valSpan.textContent = '0 (CPU only)';
+        } else if (layers > 0 && layers < 128) {
+            valSpan.textContent = `${numVal} / ${layers} Layers (${Math.min(100, Math.round((numVal / layers) * 100))}% GPU)`;
         } else {
-            valSpan.textContent = value;
+            valSpan.textContent = String(numVal);
         }
+    } else {
+        valSpan.textContent = value;
     }
 }
 
 // Helper: read per-role config from DOM into a flat settings object
 function _readRoleFromDom(prefix) {
-    const gpuSlider = dom[prefix + 'GpuSlider'];
-    const ctxSlider = dom[prefix + 'CtxSlider'];
-    const batchSlider = dom[prefix + 'BatchSlider'];
-    const kvSelect = dom[prefix + 'KvSelect'];
-    const flashAttn = dom[prefix + 'FlashAttn'];
-    const offloadKqv = dom[prefix + 'OffloadKqv'];
-    const mlock = dom[prefix + 'Mlock'];
-    const mmap = dom[prefix + 'Mmap'];
-    
-    // Map camelCase DOM prefix → snake_case settings key prefix
-    const settingsPrefix = prefix.replace(/([A-Z])/g, '_$1').toLowerCase();
-    
+    const p = prefix.replace(/([A-Z])/g, '_$1').toLowerCase();
+    const g = dom[prefix + 'GpuSlider'], c = dom[prefix + 'CtxSlider'], b = dom[prefix + 'BatchSlider'], k = dom[prefix + 'KvSelect'];
     return {
-        [settingsPrefix + '_gpu_layers']: gpuSlider ? parseInt(gpuSlider.value) : -1,
-        [settingsPrefix + '_ctx']: ctxSlider ? parseInt(ctxSlider.value) : 8192,
-        [settingsPrefix + '_batch']: batchSlider ? parseInt(batchSlider.value) : 512,
-        [settingsPrefix + '_kv_type']: kvSelect ? kvSelect.value : 'f16',
-        [settingsPrefix + '_flash_attn']: flashAttn ? flashAttn.checked : true,
-        [settingsPrefix + '_offload_kqv']: offloadKqv ? offloadKqv.checked : true,
-        [settingsPrefix + '_use_mlock']: mlock ? mlock.checked : false,
-        [settingsPrefix + '_use_mmap']: mmap ? mmap.checked : true,
+        [`${p}_gpu_layers`]: g ? parseInt(g.value) : -1,
+        [`${p}_ctx`]: c ? parseInt(c.value) : 8192,
+        [`${p}_batch`]: b ? parseInt(b.value) : 512,
+        [`${p}_kv_type`]: k ? k.value : 'f16',
+        [`${p}_flash_attn`]: dom[prefix + 'FlashAttn'] ? dom[prefix + 'FlashAttn'].checked : true,
+        [`${p}_offload_kqv`]: dom[prefix + 'OffloadKqv'] ? dom[prefix + 'OffloadKqv'].checked : true,
+        [`${p}_use_mlock`]: dom[prefix + 'Mlock'] ? dom[prefix + 'Mlock'].checked : false,
+        [`${p}_use_mmap`]: dom[prefix + 'Mmap'] ? dom[prefix + 'Mmap'].checked : true,
     };
 }
 
@@ -63,93 +80,68 @@ function _populateRoleDom(prefix, data, settingsPrefix) {
 }
 
 export async function fetchApiSettings() {
-    try {
-        const res = await fetch('/api/settings', { cache: 'no-store' });
-        if (res.ok) {
-            const data = await res.json();
-            
-            // Engine mode
-            state.engineMode = 'native';
-            
-            // Inference mode
-            const inferenceMode = data.inference_mode || 'single';
-            state.inferenceMode = inferenceMode;
-            
-            // Update mode selector buttons
-            if (dom.routingModeBtn && dom.singleModeBtn) {
-                dom.routingModeBtn.classList.toggle('active', inferenceMode === 'routing');
-                dom.singleModeBtn.classList.toggle('active', inferenceMode === 'single');
-                if (dom.apiModeBtn) dom.apiModeBtn.classList.toggle('active', inferenceMode === 'api');
+    const data = await apiFetchSafe('/api/settings');
+    if (!data) return;
 
-                if (dom.routingModePanel) dom.routingModePanel.classList.toggle('hidden', inferenceMode !== 'routing');
-                if (dom.singleModePanel) dom.singleModePanel.classList.toggle('hidden', inferenceMode !== 'single');
-                if (dom.apiModePanel) dom.apiModePanel.classList.toggle('hidden', inferenceMode !== 'api');
+    state.engineMode = 'native';
+    const inferenceMode = data.inference_mode || 'single';
+    state.inferenceMode = inferenceMode;
 
-                const isApi = inferenceMode === 'api';
-                if (dom.downloadModelSection) dom.downloadModelSection.classList.toggle('hidden', isApi);
-                if (dom.downloadDivider) dom.downloadDivider.classList.toggle('hidden', isApi);
-                if (dom.memoryEstimatorCard) dom.memoryEstimatorCard.classList.toggle('hidden', isApi);
-                if (dom.smartEngineSection) dom.smartEngineSection.classList.toggle('hidden', isApi);
-            }
-            if (window.updateVisionAvailabilityUI) window.updateVisionAvailabilityUI();
-            
-            // Single model role
-            if (dom.singleModelRoleSelect) dom.singleModelRoleSelect.value = data.single_model_role || 'custom';
-            
-            // Custom model path & history
-            state.customModelPath = data.custom_model_path || '';
-            state.customMmprojPath = data.custom_mmproj_path || '';
-            state.rememberedPaths = data.remembered_model_paths || [];
-            if (dom.customModelPathInput) dom.customModelPathInput.value = state.customModelPath;
-            if (dom.customMmprojInput) dom.customMmprojInput.value = state.customMmprojPath;
-            if (dom.customMmprojCpu) dom.customMmprojCpu.checked = data.custom_mmproj_use_gpu === false;
-            if (dom.visionMmprojCpu) dom.visionMmprojCpu.checked = data.vision_mmproj_use_gpu === false;
-            if (dom.pdfDpiSelect) dom.pdfDpiSelect.value = String(data.pdf_render_dpi || 150);
+    if (dom.routingModeBtn && dom.singleModeBtn) {
+        dom.routingModeBtn.classList.toggle('active', inferenceMode === 'routing');
+        dom.singleModeBtn.classList.toggle('active', inferenceMode === 'single');
+        if (dom.apiModeBtn) dom.apiModeBtn.classList.toggle('active', inferenceMode === 'api');
 
-            // API Mode custom endpoints
-            if (dom.apiBaseUrl && data.api_base_url) dom.apiBaseUrl.value = data.api_base_url;
-            if (dom.apiChatUrl && data.api_chat_url) dom.apiChatUrl.value = data.api_chat_url;
-            if (dom.apiKeyInput && data.api_key !== undefined) dom.apiKeyInput.value = data.api_key;
-            if (dom.apiModelInput && data.api_model) dom.apiModelInput.value = data.api_model;
+        if (dom.routingModePanel) dom.routingModePanel.classList.toggle('hidden', inferenceMode !== 'routing');
+        if (dom.singleModePanel) dom.singleModePanel.classList.toggle('hidden', inferenceMode !== 'single');
+        if (dom.apiModePanel) dom.apiModePanel.classList.toggle('hidden', inferenceMode !== 'api');
 
-            const isMm = (data.api_multimodal !== undefined && data.api_multimodal !== null)
-                ? Boolean(data.api_multimodal)
-                : (window.isMultimodalModel ? window.isMultimodalModel(data.api_model || '', data.api_base_url || '') : false);
-            state.apiMultimodal = isMm;
-            if (dom.apiMultimodalCheck) dom.apiMultimodalCheck.checked = isMm;
-
-            // Vision default toggle: if mmproj is configured or API model supports vision, enable vision by default
-            const supported = window.isVisionSupported ? window.isVisionSupported() : false;
-            if (window.setVisionEnabled) {
-                window.setVisionEnabled(supported);
-            } else if (window.updateVisionAvailabilityUI) {
-                window.updateVisionAvailabilityUI();
-            }
-
-            if (dom.customModelCard) {
-                dom.customModelCard.classList.remove('hidden');
-            }
-
-            // Per-role configs
-            _populateRoleDom('router', data, 'router');
-            _populateRoleDom('coder', data, 'coder');
-            _populateRoleDom('vision', data, 'vision');
-            
-            // Single mode config — populate from whichever role is selected
-            const singleRole = data.single_model_role || 'coder';
-            _populateRoleDom('single', data, singleRole);
-        }
-    } catch (err) {
-        console.warn('Backend settings fetch failed:', err);
+        const isApi = inferenceMode === 'api';
+        ['downloadModelSection', 'downloadDivider', 'memoryEstimatorCard', 'smartEngineSection'].forEach(k => {
+            if (dom[k]) dom[k].classList.toggle('hidden', isApi);
+        });
     }
+    if (window.updateVisionAvailabilityUI) window.updateVisionAvailabilityUI();
+
+    if (dom.singleModelRoleSelect) dom.singleModelRoleSelect.value = data.single_model_role || 'custom';
+
+    state.customModelPath = data.custom_model_path || '';
+    state.customMmprojPath = data.custom_mmproj_path || '';
+    state.rememberedPaths = data.remembered_model_paths || [];
+    if (dom.customModelPathInput) dom.customModelPathInput.value = state.customModelPath;
+    if (dom.customMmprojInput) dom.customMmprojInput.value = state.customMmprojPath;
+    if (dom.customMmprojCpu) dom.customMmprojCpu.checked = data.custom_mmproj_use_gpu === false;
+    if (dom.visionMmprojCpu) dom.visionMmprojCpu.checked = data.vision_mmproj_use_gpu === false;
+    if (dom.pdfDpiSelect) dom.pdfDpiSelect.value = String(data.pdf_render_dpi || 150);
+
+    if (dom.apiBaseUrl && data.api_base_url) dom.apiBaseUrl.value = data.api_base_url;
+    if (dom.apiChatUrl && data.api_chat_url) dom.apiChatUrl.value = data.api_chat_url;
+    if (dom.apiKeyInput && data.api_key !== undefined) dom.apiKeyInput.value = data.api_key;
+    if (dom.apiModelInput && data.api_model) dom.apiModelInput.value = data.api_model;
+
+    const isMm = (data.api_multimodal !== undefined && data.api_multimodal !== null)
+        ? Boolean(data.api_multimodal)
+        : (window.isMultimodalModel ? window.isMultimodalModel(data.api_model || '', data.api_base_url || '') : false);
+    state.apiMultimodal = isMm;
+    if (dom.apiMultimodalCheck) dom.apiMultimodalCheck.checked = isMm;
+
+    const supported = window.isVisionSupported ? window.isVisionSupported() : false;
+    if (window.setVisionEnabled) window.setVisionEnabled(supported);
+    else if (window.updateVisionAvailabilityUI) window.updateVisionAvailabilityUI();
+
+    if (dom.customModelCard) dom.customModelCard.classList.remove('hidden');
+
+    _populateRoleDom('router', data, 'router');
+    _populateRoleDom('coder', data, 'coder');
+    _populateRoleDom('vision', data, 'vision');
+    _populateRoleDom('single', data, data.single_model_role || 'coder');
 }
 
 export async function saveApiSettings() {
-    // Base payload
     const inferenceMode = state.inferenceMode || 'single';
     const singleRole = dom.singleModelRoleSelect ? dom.singleModelRoleSelect.value : 'custom';
-    
-    const payload = { 
+
+    const payload = {
         engine_mode: 'native',
         inference_mode: inferenceMode,
         single_model_role: singleRole,
@@ -162,202 +154,92 @@ export async function saveApiSettings() {
         api_chat_url: dom.apiChatUrl ? dom.apiChatUrl.value.trim() : '',
         api_key: dom.apiKeyInput ? dom.apiKeyInput.value.trim() : '',
         api_model: dom.apiModelInput ? dom.apiModelInput.value.trim() : '',
-        api_multimodal: dom.apiMultimodalCheck ? dom.apiMultimodalCheck.checked : (state.apiMultimodal !== null && state.apiMultimodal !== undefined ? state.apiMultimodal : false),
+        api_multimodal: dom.apiMultimodalCheck ? dom.apiMultimodalCheck.checked : (state.apiMultimodal ?? false),
         remembered_model_paths: state.rememberedPaths || [],
+        ..._readRoleFromDom('router'),
+        ..._readRoleFromDom('coder'),
+        ..._readRoleFromDom('vision'),
     };
-    
-    // Per-role settings from routing mode
-    Object.assign(payload, _readRoleFromDom('router'));
-    Object.assign(payload, _readRoleFromDom('coder'));
-    Object.assign(payload, _readRoleFromDom('vision'));
-    
-    // If in single mode, the single panel's controls override the selected role
+
     if (inferenceMode === 'single') {
         const singleSettings = _readRoleFromDom('single');
-        // Map single_* keys to the appropriate role_* keys
         for (const [key, value] of Object.entries(singleSettings)) {
-            const roleKey = key.replace('single_', singleRole + '_');
-            payload[roleKey] = value;
+            payload[key.replace('single_', singleRole + '_')] = value;
         }
     }
-    
-    try {
-        await fetch('/api/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        state.customModelPath = payload.custom_model_path;
-        state.customMmprojPath = payload.custom_mmproj_path;
-        const hasMmproj = Boolean(state.customMmprojPath && state.customMmprojPath.trim()) || (singleRole === 'vision');
-        if (window.setVisionEnabled) {
-            window.setVisionEnabled(hasMmproj);
-        }
-    } catch (err) {
-        console.warn('Backend settings save failed:', err);
-    }
+
+    await apiFetchSafe('/api/settings', { method: 'POST', body: payload });
+    state.customModelPath = payload.custom_model_path;
+    state.customMmprojPath = payload.custom_mmproj_path;
+    const hasMmproj = Boolean(state.customMmprojPath && state.customMmprojPath.trim()) || (singleRole === 'vision');
+    if (window.setVisionEnabled) window.setVisionEnabled(hasMmproj);
 }
 
 export async function scanLocalGgufs() {
-    try {
-        const res = await fetch('/api/models/scan', { cache: 'no-store' });
-        if (res.ok) {
-            return await res.json();
-        }
-    } catch (err) {
-        console.warn('Failed to scan local GGUFs:', err);
-    }
-    return { models: [], remembered_paths: [] };
+    return (await apiFetchSafe('/api/models/scan')) || { models: [], remembered_paths: [] };
 }
 
 export async function openNativeFileDialog(initialDir = null, title = "Select GGUF Model File") {
-    try {
-        const res = await fetch('/api/files/browse-dialog', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initial_dir: initialDir, title: title })
-        });
-        if (res.ok) {
-            return await res.json();
-        }
-    } catch (err) {
-        console.warn('Failed to open native file dialog:', err);
-    }
-    return { success: false, error: 'Request failed' };
+    return (await apiFetchSafe('/api/files/browse-dialog', { method: 'POST', body: { initial_dir: initialDir, title } })) || { success: false, error: 'Request failed' };
 }
 
 export async function listDirectory(path = null) {
-    try {
-        const url = path ? `/api/files/list-dir?path=${encodeURIComponent(path)}` : '/api/files/list-dir';
-        const res = await fetch(url, { cache: 'no-store' });
-        if (res.ok) {
-            return await res.json();
-        }
-    } catch (err) {
-        console.warn('Failed to list directory:', err);
-    }
-    return { current_path: '', parent_path: null, folders: [], files: [], shortcuts: [] };
+    const url = path ? `/api/files/list-dir?path=${encodeURIComponent(path)}` : '/api/files/list-dir';
+    return (await apiFetchSafe(url)) || { current_path: '', parent_path: null, folders: [], files: [], shortcuts: [] };
 }
 
 export async function verifyFile(path) {
-    try {
-        const res = await fetch('/api/files/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path })
-        });
-        if (res.ok) {
-            return await res.json();
-        }
-    } catch (err) {
-        console.warn('Failed to verify file:', err);
-    }
-    return { exists: false, error: 'Verification failed' };
+    return (await apiFetchSafe('/api/files/verify', { method: 'POST', body: { path } })) || { exists: false, error: 'Verification failed' };
 }
 
 export async function locateFile(filename, size = null) {
-    try {
-        let url = `/api/files/locate?filename=${encodeURIComponent(filename)}`;
-        if (size) url += `&size=${size}`;
-        const res = await fetch(url, { cache: 'no-store' });
-        if (res.ok) {
-            return await res.json();
-        }
-    } catch (err) {
-        console.warn('Failed to locate file:', err);
-    }
-    return { found: false };
+    let url = `/api/files/locate?filename=${encodeURIComponent(filename)}`;
+    if (size) url += `&size=${size}`;
+    return (await apiFetchSafe(url)) || { found: false };
 }
 
 export async function startModelDownload(url, filename) {
-    const res = await fetch('/api/models/download', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, filename })
-    });
-    if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Download request failed');
-    }
-    return await res.json();
+    return apiFetch('/api/models/download', { method: 'POST', body: { url, filename } });
 }
 
 export async function pollDownloadStatus() {
-    try {
-        const res = await fetch('/api/models/download/status', { cache: 'no-store' });
-        if (res.ok) {
-            return await res.json();
-        }
-    } catch (err) {
-        console.warn('Failed to poll download status:', err);
-    }
-    return null;
+    return apiFetchSafe('/api/models/download/status');
 }
 
 export async function cancelModelDownload() {
-    try {
-        const res = await fetch('/api/models/download/cancel', { method: 'POST' });
-        if (res.ok) {
-            return await res.json();
-        }
-    } catch (err) {
-        console.warn('Failed to cancel download:', err);
-    }
-    return null;
+    return apiFetchSafe('/api/models/download/cancel', { method: 'POST' });
 }
 
 export async function smartToggleEngine() {
-    const res = await fetch('/api/engine/smart-toggle', { method: 'POST' });
-    if (res.ok) {
-        return await res.json();
-    }
-    throw new Error('Smart toggle failed');
+    return apiFetch('/api/engine/smart-toggle', { method: 'POST' });
 }
 
 export async function unloadAllModels() {
-    const res = await fetch('/api/engine/unload-all', { method: 'POST' });
-    if (res.ok) {
-        return await res.json();
-    }
-    throw new Error('Failed to unload all models');
+    return apiFetch('/api/engine/unload-all', { method: 'POST' });
 }
 
 export async function unloadVoiceEngine() {
-    const res = await fetch('/api/tts/unload', { method: 'POST' });
-    if (res.ok) {
-        return await res.json();
-    }
-    throw new Error('Failed to unload voice engine');
+    return apiFetch('/api/tts/unload', { method: 'POST' });
 }
 
 export async function fetchBackendConfig() {
-    try {
-        const res = await fetch('/api/config', { cache: 'no-store' });
-        if (res.ok) {
-            const config = await res.json();
-            if (!localStorage.getItem('nivm_lastModel')) {
-                state.selectedModel = config.default_model || state.selectedModel;
-            }
-            state.systemPrompt = config.default_system_prompt || state.systemPrompt;
-            state.temperature = config.default_temperature || state.temperature;
-            state.maxTokens = config.default_max_tokens || state.maxTokens;
+    const config = await apiFetchSafe('/api/config');
+    if (config) {
+        if (!localStorage.getItem('nivm_lastModel')) {
+            state.selectedModel = config.default_model || state.selectedModel;
         }
-    } catch (err) {
-        console.warn('Backend config fetch failed:', err);
+        state.systemPrompt = config.default_system_prompt || state.systemPrompt;
+        state.temperature = config.default_temperature || state.temperature;
+        state.maxTokens = config.default_max_tokens || state.maxTokens;
     }
 }
 
 export async function checkBackendHealth() {
-    try {
-        const res = await fetch('/api/health', { cache: 'no-store' });
-        if (res.ok) {
-            const data = await res.json();
-            state.lmStudioConnected = data.has_llama_cpp;
-            updateStatusDot(data.has_llama_cpp, data.has_llama_cpp ? null : 'llama-cpp-python not available');
-        } else {
-            updateStatusDot(false, 'Backend API unresponsive');
-        }
-    } catch (err) {
+    const data = await apiFetchSafe('/api/health');
+    if (data) {
+        state.lmStudioConnected = data.has_llama_cpp;
+        updateStatusDot(data.has_llama_cpp, data.has_llama_cpp ? null : 'llama-cpp-python not available');
+    } else {
         updateStatusDot(false, 'Backend server offline');
     }
 }
@@ -375,330 +257,165 @@ export function updateStatusDot(online, errorMsg) {
 }
 
 export async function fetchEngineStatus() {
-    try {
-        const res = await fetch('/api/engine/status', { cache: 'no-store' });
-        if (res.ok) {
-            const data = await res.json();
-            const isLoaded = !!(data.active && data.active.loaded);
-            if (state.inferenceMode !== 'api') {
-                state.isModelLoaded = isLoaded;
-            } else {
-                state.isModelLoaded = true;
-            }
+    const data = await apiFetchSafe('/api/engine/status');
+    if (!data) return;
 
-            if (dom.engineStatusText) {
-                if (isLoaded) {
-                    dom.engineStatusText.textContent = `Active: ${data.active.name}`;
-                    dom.engineStatusText.style.color = "var(--accent-emerald)";
-                    if (dom.smartToggleBtn) dom.smartToggleBtn.classList.add('is-loaded');
-                    if (dom.smartToggleLabel) dom.smartToggleLabel.textContent = 'Unload Engine';
-                } else if (data.has_llama_cpp) {
-                    dom.engineStatusText.textContent = "Ready";
-                    dom.engineStatusText.style.color = "var(--text-tertiary)";
-                    if (dom.smartToggleBtn) dom.smartToggleBtn.classList.remove('is-loaded');
-                    if (dom.smartToggleLabel) dom.smartToggleLabel.textContent = 'Load Engine';
-                } else {
-                    dom.engineStatusText.textContent = "Status: Unavailable";
-                    dom.engineStatusText.style.color = "#ef4444";
-                }
-            }
+    const isLoaded = !!(data.active && data.active.loaded);
+    state.isModelLoaded = state.inferenceMode !== 'api' ? isLoaded : true;
 
-            if (window.updateModelAvailabilityUI) {
-                window.updateModelAvailabilityUI(isLoaded);
-            }
-            if (isLoaded && data.active && window.applyModelMetadataToUI) {
-                window.applyModelMetadataToUI(data.active);
-            }
-            return data;
+    if (dom.engineStatusText) {
+        if (isLoaded) {
+            dom.engineStatusText.textContent = `Active: ${data.active.name}`;
+            dom.engineStatusText.style.color = "var(--accent-emerald)";
+            if (dom.smartToggleBtn) dom.smartToggleBtn.classList.add('is-loaded');
+            if (dom.smartToggleLabel) dom.smartToggleLabel.textContent = 'Unload Engine';
+        } else if (data.has_llama_cpp) {
+            dom.engineStatusText.textContent = "Ready";
+            dom.engineStatusText.style.color = "var(--text-tertiary)";
+            if (dom.smartToggleBtn) dom.smartToggleBtn.classList.remove('is-loaded');
+            if (dom.smartToggleLabel) dom.smartToggleLabel.textContent = 'Load Engine';
+        } else {
+            dom.engineStatusText.textContent = "Status: Unavailable";
+            dom.engineStatusText.style.color = "#ef4444";
         }
-    } catch (e) {
-        console.warn('Failed to fetch engine status:', e);
     }
+
+    if (window.updateModelAvailabilityUI) window.updateModelAvailabilityUI(isLoaded);
+    if (isLoaded && data.active && window.applyModelMetadataToUI) window.applyModelMetadataToUI(data.active);
+    return data;
 }
 
 export async function loadAvailableModels() {
-    try {
-        const res = await fetch('/api/models', { cache: 'no-store' });
-        if (res.ok) {
-            const data = await res.json();
-            state.models = data.data || [];
-            
-            if (dom.modelSelect) {
-                dom.modelSelect.innerHTML = '';
-                if (state.models.length === 0) {
-                    state.models.push({ id: state.selectedModel });
-                }
+    const data = await apiFetchSafe('/api/models');
+    if (!data?.data) return;
+    state.models = data.data;
 
-                let found = false;
-                state.models.forEach(m => {
-                    const opt = document.createElement('option');
-                    opt.value = m.id;
-                    let text = m.id;
-                    if (m.context_window) {
-                        const ctxK = Math.round(m.context_window / 1000);
-                        text += ` (${ctxK}k context)`;
-                    } else if (m.context_length) {
-                        const ctxK = Math.round(m.context_length / 1000);
-                        text += ` (${ctxK}k context)`;
-                    }
-                    opt.textContent = text;
-                    if (m.id === state.selectedModel) {
-                        opt.selected = true;
-                        found = true;
-                    }
-                    dom.modelSelect.appendChild(opt);
-                });
-
-                if (!found && state.models.length > 0) {
-                    state.selectedModel = state.models[0].id;
-                    dom.modelSelect.value = state.selectedModel;
-                    localStorage.setItem('nivm_lastModel', state.selectedModel);
-                } else if (found) {
-                    localStorage.setItem('nivm_lastModel', state.selectedModel);
-                }
-            } else {
-                if (state.models.length > 0) {
-                    const found = state.models.some(m => m.id === state.selectedModel);
-                    if (!found) {
-                        state.selectedModel = state.models[0].id;
-                    }
-                    localStorage.setItem('nivm_lastModel', state.selectedModel);
-                }
-            }
+    if (dom.modelSelect) {
+        dom.modelSelect.innerHTML = '';
+        if (state.models.length === 0) {
+            state.models.push({ id: state.selectedModel });
         }
-    } catch (err) {
-        console.warn('Failed to load models list:', err);
+
+        let found = false;
+        state.models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            const ctx = m.context_window || m.context_length;
+            opt.textContent = ctx ? `${m.id} (${Math.round(ctx / 1000)}k context)` : m.id;
+            if (m.id === state.selectedModel) {
+                opt.selected = true;
+                found = true;
+            }
+            dom.modelSelect.appendChild(opt);
+        });
+
+        if (!found && state.models.length > 0) {
+            state.selectedModel = state.models[0].id;
+            dom.modelSelect.value = state.selectedModel;
+        }
+        localStorage.setItem('nivm_lastModel', state.selectedModel);
+    } else if (state.models.length > 0) {
+        if (!state.models.some(m => m.id === state.selectedModel)) {
+            state.selectedModel = state.models[0].id;
+        }
+        localStorage.setItem('nivm_lastModel', state.selectedModel);
     }
 }
 
 export async function fetchChats() {
-    try {
-        const res = await fetch('/api/chats', { cache: 'no-store' });
-        if (res.ok) {
-            const serverChats = await res.json();
-            if (Array.isArray(serverChats)) {
-                return serverChats;
-            }
-        }
-    } catch (err) {
-        console.warn('Failed to fetch chats from server:', err);
-    }
-    return [];
+    const serverChats = await apiFetchSafe('/api/chats', {}, []);
+    return Array.isArray(serverChats) ? serverChats : [];
 }
 
 export async function saveChats(conversations) {
-    if (!conversations || !Array.isArray(conversations)) return;
-    try {
-        const response = await fetch('/api/chats', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(conversations)
-        });
-        if (!response.ok) {
-            console.error("Failed to save chats to server, status:", response.status);
-        }
-    } catch (err) {
-        console.error("Error connecting to server for chat save:", err);
-    }
+    if (!Array.isArray(conversations)) return;
+    await apiFetchSafe('/api/chats', { method: 'POST', body: conversations });
 }
 
 export async function fetchMemoryAPI() {
-    try {
-        const response = await fetch('/api/memory', { cache: 'no-store' });
-        if (!response.ok) return {};
-        return await response.json();
-    } catch (e) {
-        console.error("Failed to fetch memory", e);
-        return {};
-    }
+    return (await apiFetchSafe('/api/memory', {}, {})) || {};
 }
 
 export async function saveMemoryAPI(key, value) {
-    try {
-        const response = await fetch('/api/memory', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key, value })
-        });
-        if (!response.ok) {
-            console.error("Failed to save memory to server");
-        }
-    } catch (e) {
-        console.error("Failed to save memory", e);
-    }
+    return apiFetchSafe('/api/memory', { method: 'POST', body: { key, value } });
 }
 
 export async function deleteMemoryAPI(key) {
-    try {
-        const response = await fetch('/api/memory', {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key })
-        });
-        if (!response.ok) {
-            console.error("Failed to delete memory from server");
-        }
-    } catch (e) {
-        console.error("Failed to delete memory", e);
-    }
+    return apiFetchSafe('/api/memory', { method: 'DELETE', body: { key } });
 }
 
 export async function fetchModelDetailsAPI(modelId) {
     if (!modelId) return null;
-    try {
-        const response = await fetch('/api/models', { cache: 'no-store' });
-        if (!response.ok) return null;
-        const data = await response.json();
-        if (data && data.data && Array.isArray(data.data)) {
-            const foundModel = data.data.find(m => m.id === modelId);
-            if (foundModel) {
-                return {
-                    arch: 'GGUF',
-                    type: foundModel.available ? 'local' : 'missing',
-                    quantization: foundModel.name || 'Unknown',
-                    loadedContextLength: '8192'
-                };
-            }
-        }
-        return null;
-    } catch (e) {
-        console.warn('Failed to fetch local model metadata', e);
-        return null;
-    }
+    const data = await apiFetchSafe('/api/models');
+    const found = data?.data?.find(m => m.id === modelId);
+    return found ? { arch: 'GGUF', type: found.available ? 'local' : 'missing', quantization: found.name || 'Unknown', loadedContextLength: '8192' } : null;
 }
 
 export async function generateChatTitle(activeChat) {
     if (!activeChat || activeChat.messages.length < 2) return;
-    
-    // Create a payload similar to what sendMessage sends, but for title generation
     const { renderChatHistory } = await import('./ui.js');
-    
+
     let userPrompt = activeChat.messages.find(m => m.role === 'user')?.content;
     if (Array.isArray(userPrompt)) {
-        const textItem = userPrompt.find(i => i.type === 'text');
-        userPrompt = textItem ? textItem.text : '';
+        userPrompt = userPrompt.find(i => i.type === 'text')?.text || '';
     }
-
     let titleContext = (typeof userPrompt === 'string' ? userPrompt.trim() : '');
 
-    // If user's first prompt had no text (e.g. voice note / audio or media only),
-    // derive context from the assistant's response to understand what was asked/discussed!
     if (!titleContext) {
         const assistantMsg = [...activeChat.messages].reverse().find(m => m.role === 'assistant');
-        if (assistantMsg && assistantMsg.content) {
-            let content = typeof assistantMsg.content === 'string' ? assistantMsg.content : '';
-            // Strip thinking blocks
-            content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-            if (content.includes('</think>')) {
-                content = content.split('</think>').pop().trim();
-            }
-            if (content) {
-                // Take an excerpt of the assistant's answer or audio transcription
-                titleContext = content.slice(0, 350).trim();
-            }
+        if (assistantMsg?.content) {
+            let c = typeof assistantMsg.content === 'string' ? assistantMsg.content : '';
+            c = c.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+            if (c.includes('</think>')) c = c.split('</think>').pop().trim();
+            if (c) titleContext = c.slice(0, 350).trim();
         }
     }
-
     if (!titleContext) return;
 
-    const payload = {
-        messages: [
-            { 
-                role: 'system', 
-                content: 'You generate short, accurate conversation titles. Based on the provided message or response topic, generate a concise 3 to 5 word title. Respond ONLY with the title text. Do NOT use quotes, punctuation, or prefixes like "Title:".' 
-            },
-            { role: 'user', content: titleContext }
-        ],
-        model: state.selectedModel,
-        temperature: 0.3,
-        max_tokens: 20,
-        stream: false,
-        engine_mode: state.engineMode
-    };
-
     try {
-        const response = await fetch('/api/chat', {
+        const data = await apiFetch('/api/chat', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: {
+                messages: [
+                    { role: 'system', content: 'Generate a short 3 to 5 word title for this conversation. Respond ONLY with title text, no quotes or prefixes.' },
+                    { role: 'user', content: titleContext }
+                ],
+                model: state.selectedModel,
+                temperature: 0.3,
+                max_tokens: 20,
+                stream: false,
+                engine_mode: state.engineMode
+            }
         });
 
-        if (response.ok) {
-            const data = await response.json();
-            let title = '';
-            if (data.choices && data.choices[0] && data.choices[0].message) {
-                title = data.choices[0].message.content.trim();
-            } else if (data.message && data.message.content) {
-                title = data.message.content.trim();
-            }
-            
-            // Cleanup thinking tags, prefixes, and quotes
-            title = title.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-            if (title.includes('</think>')) {
-                title = title.split('</think>').pop().trim();
-            }
-            title = title.replace(/^(Title|Topic):\s*/i, '').trim();
-            title = title.replace(/^["'`*#\-_.\s]+|["'`*#\-_.\s]+$/g, '').trim();
-            
-            if (title) {
-                if (title.length > 45) {
-                    title = title.slice(0, 45).trim() + '...';
-                }
-                activeChat.title = title;
-                activeChat.titleGenerated = true;
-                saveConversations();
-                renderChatHistory();
-            }
+        let title = (data.choices?.[0]?.message?.content || data.message?.content || '').trim();
+        title = title.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/^(Title|Topic):\s*/i, '').replace(/^["'`*#\-_.\s]+|["'`*#\-_.\s]+$/g, '').trim();
+        if (title) {
+            activeChat.title = title.length > 45 ? title.slice(0, 45).trim() + '...' : title;
+            activeChat.titleGenerated = true;
+            saveConversations();
+            renderChatHistory();
         }
-    } catch (e) {
-        console.warn('Failed to generate chat title:', e);
-    }
+    } catch (_) {}
 }
 
 export async function uploadImage(file) {
     const formData = new FormData();
     formData.append('file', file);
-    try {
-        const res = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData
-        });
-        if (res.ok) {
-            const data = await res.json();
-            return data.url;
-        }
-    } catch (e) {
-        console.error("Upload failed", e);
-    }
-    return null;
+    const data = await apiFetchSafe('/api/upload', { method: 'POST', body: formData });
+    return data?.url || null;
 }
 
 export async function deleteUploadedFilesAPI(urls) {
     if (!urls || urls.length === 0) return;
-    try {
-        await fetch('/api/upload/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ urls })
-        });
-    } catch (e) {
-        console.warn("Failed to delete uploaded files on server", e);
-    }
+    await apiFetchSafe('/api/upload/delete', { method: 'POST', body: { urls } });
 }
 window.deleteUploadedFilesAPI = deleteUploadedFilesAPI;
 
 export async function executeTerminalAPI(command) {
     try {
-        const res = await fetch('/api/tools/execute_terminal', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ command: command })
-        });
-        if (res.ok) {
-            const data = await res.json();
-            return data.output || data.error;
-        }
-        return `HTTP Error: ${res.status}`;
+        const data = await apiFetch('/api/tools/execute_terminal', { method: 'POST', body: { command } });
+        return data.output || data.error;
     } catch (e) {
         return `Execution failed: ${e.message}`;
     }

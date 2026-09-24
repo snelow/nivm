@@ -80,6 +80,8 @@ function normalizeAspectRatio(val, fallback = 'square') {
     if (s.includes('3:4')) return '3:4';
     if (s.includes('original')) return 'original';
     return fallback;
+}
+
 function _trackImageTask(taskId, progressCard, defaultFilename, successDesc, originalUrl = null) {
     return new Promise((resolve) => {
         let completed = false, pollTimer = null;

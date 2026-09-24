@@ -345,16 +345,29 @@ async def delete_uploaded_files_endpoint(request: Request):
         return {"status": "error", "detail": str(e)}
 
 
+def _read_json_file(filepath: str, default: Any = None) -> Any:
+    """Reads JSON from file safely, returning default on missing or malformed content."""
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.debug(f"Failed reading {filepath}: {e}")
+    return default if default is not None else {}
+
+
+def _write_json_file(filepath: str, data: Any):
+    """Atomically writes JSON to a temp file and replaces the destination."""
+    tmp = f"{filepath}.tmp_{os.getpid()}_{int(time.time() * 1000)}"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, filepath)
+
+
 @router.get("/api/chats")
 async def get_chats_endpoint():
     """Returns all saved chats from the server."""
-    if os.path.exists(CHATS_FILE):
-        try:
-            with open(CHATS_FILE, "r") as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
+    return _read_json_file(CHATS_FILE, default=[])
 
 
 @router.post("/api/chats")
@@ -364,8 +377,7 @@ async def save_chats_endpoint(request: Request):
         chats = await request.json()
         if not isinstance(chats, list):
             raise HTTPException(status_code=400, detail="Expected a JSON array of conversations")
-        with open(CHATS_FILE, "w") as f:
-            json.dump(chats, f, indent=2)
+        _write_json_file(CHATS_FILE, chats)
         _cleanup_orphaned_uploads(chats)
         return {"status": "success"}
     except HTTPException:
@@ -378,14 +390,7 @@ async def save_chats_endpoint(request: Request):
 @router.get("/api/memory")
 async def get_memory_endpoint():
     """Returns the user's memory database."""
-    if not os.path.exists(MEMORY_FILE):
-        return {}
-    try:
-        with open(MEMORY_FILE, "r") as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error(f"Error reading memory file: {e}")
-        return {}
+    return _read_json_file(MEMORY_FILE, default={})
 
 
 @router.post("/api/memory")
@@ -393,26 +398,15 @@ async def save_memory_endpoint(request: Request):
     """Updates the user's memory database."""
     try:
         body = await request.json()
-        key = body.get("key")
-        value = body.get("value")
-
+        key, value = body.get("key"), body.get("value")
         if not key:
             raise HTTPException(status_code=400, detail="Key is required")
-
-        memory_data = {}
-        if os.path.exists(MEMORY_FILE):
-            try:
-                with open(MEMORY_FILE, "r") as f:
-                    memory_data = json.load(f)
-            except Exception:
-                pass
-
+        memory_data = _read_json_file(MEMORY_FILE, default={})
         memory_data[key] = value
-
-        with open(MEMORY_FILE, "w") as f:
-            json.dump(memory_data, f, indent=2)
-
+        _write_json_file(MEMORY_FILE, memory_data)
         return {"status": "success"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error saving memory file: {e}")
         raise HTTPException(status_code=500, detail="Failed to save memory")
@@ -424,24 +418,15 @@ async def delete_memory_endpoint(request: Request):
     try:
         body = await request.json()
         key = body.get("key")
-
         if not key:
             raise HTTPException(status_code=400, detail="Key is required")
-
-        memory_data = {}
-        if os.path.exists(MEMORY_FILE):
-            try:
-                with open(MEMORY_FILE, "r") as f:
-                    memory_data = json.load(f)
-            except Exception:
-                pass
-
+        memory_data = _read_json_file(MEMORY_FILE, default={})
         if key in memory_data:
             del memory_data[key]
-            with open(MEMORY_FILE, "w") as f:
-                json.dump(memory_data, f, indent=2)
-
+            _write_json_file(MEMORY_FILE, memory_data)
         return {"status": "success"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error deleting memory file: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete memory")

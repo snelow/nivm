@@ -24,51 +24,22 @@ logger = logging.getLogger("nivm.chat_manager")
 
 import re
 
+_THINK_OPEN_RE = re.compile(
+    r'<(?:thought|reasoning|internal_thought)>|<\|?channel\|?>?\s*thought\s*\n?|\[THINK\]|<\|(?:start_)?thinking\|>',
+    re.IGNORECASE
+)
+_THINK_CLOSE_RE = re.compile(
+    r'</(?:thought|reasoning|internal_thought)>|<channel\|>|<\|channel\|>(?:model)?|\[/THINK\]|<\|(?:/thinking|end_thinking)\|>',
+    re.IGNORECASE
+)
+
+
 def _normalize_think_tags(text: str) -> str:
-    """Normalize all model-specific thinking tags to standard <think>...</think>.
-    
-    This is the Python counterpart to static/js/think_tags.js.
-    
-    HOW TO ADD A NEW MODEL:
-        1. Add re.sub() lines below for both open and close tags.
-        2. Add matching entries in static/js/think_tags.js (OPEN_TAGS, CLOSE_TAGS, RAW_OPEN_TAGS, RAW_CLOSE_TAGS).
-        3. Add the open-tag string to PREFILL_MARKERS in core/engine.py → get_active_info().
-    See the HOW-TO in static/js/think_tags.js for a full example.
-    """
+    """Normalize all model-specific thinking tags to standard <think>...</think>."""
     if not text:
         return text
-
-    # Open tags -> <think>
-    # Standard variants
-    text = re.sub(r'<thought>', '<think>', text, flags=re.IGNORECASE)
-    text = re.sub(r'<reasoning>', '<think>', text, flags=re.IGNORECASE)
-    text = re.sub(r'<internal_thought>', '<think>', text, flags=re.IGNORECASE)
-    # Gemma 4
-    text = re.sub(r'<\|channel\|?>\s*thought\s*\n?', '<think>', text, flags=re.IGNORECASE)
-    text = re.sub(r'<\|channel>thought', '<think>', text, flags=re.IGNORECASE)
-    text = re.sub(r'<\|channel\|>thought', '<think>', text, flags=re.IGNORECASE)
-    # Mistral
-    text = re.sub(r'\[THINK\]', '<think>', text, flags=re.IGNORECASE)
-    # Llama-style
-    text = re.sub(r'<\|thinking\|>', '<think>', text, flags=re.IGNORECASE)
-    text = re.sub(r'<\|start_thinking\|>', '<think>', text, flags=re.IGNORECASE)
-
-    # Close tags -> </think>
-    # Standard variants
-    text = re.sub(r'</thought>', '</think>', text, flags=re.IGNORECASE)
-    text = re.sub(r'</reasoning>', '</think>', text, flags=re.IGNORECASE)
-    text = re.sub(r'</internal_thought>', '</think>', text, flags=re.IGNORECASE)
-    # Gemma 4
-    text = re.sub(r'<channel\|>', '</think>', text, flags=re.IGNORECASE)
-    text = re.sub(r'<\|channel\|>model', '</think>', text, flags=re.IGNORECASE)
-    text = re.sub(r'<\|channel\|>', '</think>', text, flags=re.IGNORECASE)
-    # Mistral
-    text = re.sub(r'\[/THINK\]', '</think>', text, flags=re.IGNORECASE)
-    # Llama-style
-    text = re.sub(r'<\|/thinking\|>', '</think>', text, flags=re.IGNORECASE)
-    text = re.sub(r'<\|end_thinking\|>', '</think>', text, flags=re.IGNORECASE)
-
-    return text
+    text = _THINK_OPEN_RE.sub('<think>', text)
+    return _THINK_CLOSE_RE.sub('</think>', text)
 
 
 def _calc_tokens(c) -> int:
@@ -76,16 +47,12 @@ def _calc_tokens(c) -> int:
     if isinstance(c, str):
         return len(c.split())
     if isinstance(c, list):
-        count = 0
-        for p in c:
-            if isinstance(p, dict):
-                if p.get("type") == "text":
-                    count += len(p.get("text", "").split())
-                elif p.get("type") == "image_url":
-                    count += 256
-            elif isinstance(p, str):
-                count += len(p.split())
-        return count
+        return sum(
+            len(p.get("text", "").split()) if isinstance(p, dict) and p.get("type") == "text"
+            else 256 if isinstance(p, dict) and p.get("type") == "image_url"
+            else len(p.split()) if isinstance(p, str) else 0
+            for p in c
+        )
     return 0
 
 

@@ -312,22 +312,27 @@ async def get_pronunciations():
     return get_pronunciation_dict()
 
 
+def _validate_pronunciation_body(body: dict, require_val: bool = True):
+    word = body.get("word", "").strip()
+    pron = body.get("pronunciation", "").strip()
+    if not word or (require_val and not pron):
+        raise HTTPException(status_code=400, detail="Required parameters missing.")
+    if word.lower() == "nivm":
+        raise HTTPException(status_code=400, detail="'nivm' is a protected core pronunciation.")
+    return word, pron
+
+
 @app.post("/api/tts/pronunciations")
 async def add_pronunciation(request: Request):
     """Add or update a user custom pronunciation rule."""
     from core.tts import save_user_pronunciation
     try:
-        body = await request.json()
+        word, pron = _validate_pronunciation_body(await request.json(), require_val=True)
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
-    word = body.get("word", "").strip()
-    pronunciation = body.get("pronunciation", "").strip()
-    if not word or not pronunciation:
-        raise HTTPException(status_code=400, detail="Both 'word' and 'pronunciation' are required.")
-    if word.lower() == "nivm":
-        raise HTTPException(status_code=400, detail="'nivm' is a protected core pronunciation and cannot be modified.")
-    custom = save_user_pronunciation(word, pronunciation)
-    return {"status": "success", "custom": custom}
+    return {"status": "success", "custom": save_user_pronunciation(word, pron)}
 
 
 @app.delete("/api/tts/pronunciations")
@@ -335,16 +340,12 @@ async def delete_pronunciation(request: Request):
     """Delete a user custom pronunciation rule."""
     from core.tts import delete_user_pronunciation
     try:
-        body = await request.json()
+        word, _ = _validate_pronunciation_body(await request.json(), require_val=False)
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
-    word = body.get("word", "").strip()
-    if not word:
-        raise HTTPException(status_code=400, detail="Missing 'word' parameter.")
-    if word.lower() == "nivm":
-        raise HTTPException(status_code=400, detail="'nivm' is a protected core pronunciation and cannot be deleted.")
-    custom = delete_user_pronunciation(word)
-    return {"status": "success", "custom": custom}
+    return {"status": "success", "custom": delete_user_pronunciation(word)}
 
 
 # Chat completion endpoint
@@ -648,64 +649,38 @@ app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 app.mount("/images", StaticFiles(directory=IMAGES_DIR), name="images")
 
 
+def _serve_static_file(rel_path: str, media_type: Optional[str] = None, extra_headers: Optional[dict] = None, fallback: Any = None):
+    full_path = os.path.join(static_dir, rel_path)
+    if os.path.exists(full_path):
+        headers = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
+        if extra_headers:
+            headers.update(extra_headers)
+        return FileResponse(full_path, media_type=media_type, headers=headers)
+    if fallback is not None:
+        return fallback
+    raise HTTPException(status_code=404, detail=f"{rel_path} not found")
+
+
 @app.get("/sw.js")
 async def service_worker():
-    sw_path = os.path.join(static_dir, "sw.js")
-    if os.path.exists(sw_path):
-        return FileResponse(
-            sw_path,
-            media_type="application/javascript",
-            headers={
-                "Service-Worker-Allowed": "/",
-                "Cache-Control": "no-cache, no-store, must-revalidate"
-            }
-        )
-    raise HTTPException(status_code=404, detail="Service worker not found")
+    return _serve_static_file("sw.js", "application/javascript", {"Service-Worker-Allowed": "/"})
 
 
 @app.get("/offline.html")
 async def offline_page():
-    offline_path = os.path.join(static_dir, "offline.html")
-    if os.path.exists(offline_path):
-        return FileResponse(
-            offline_path,
-            media_type="text/html",
-            headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
-        )
-    raise HTTPException(status_code=404, detail="Offline page not found")
+    return _serve_static_file("offline.html", "text/html")
 
 
 @app.get("/manifest.json")
 async def web_manifest():
-    manifest_path = os.path.join(static_dir, "manifest.json")
-    if os.path.exists(manifest_path):
-        return FileResponse(
-            manifest_path,
-            media_type="application/manifest+json",
-            headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
-        )
-    raise HTTPException(status_code=404, detail="Manifest not found")
+    return _serve_static_file("manifest.json", "application/manifest+json")
 
 
 @app.get("/favicon.ico")
 async def favicon_ico():
-    fav_path = os.path.join(static_dir, "favicon.ico")
-    if os.path.exists(fav_path):
-        return FileResponse(fav_path, media_type="image/x-icon")
-    raise HTTPException(status_code=404, detail="Favicon not found")
+    return _serve_static_file("favicon.ico", "image/x-icon")
 
 
 @app.get("/")
 async def root():
-    """Serve index.html at root."""
-    index_path = os.path.join(static_dir, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(
-            index_path,
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0"
-            }
-        )
-    return {"message": "Frontend index.html not yet created."}
+    return _serve_static_file("index.html", fallback={"message": "Frontend index.html not yet created."})

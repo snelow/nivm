@@ -153,87 +153,24 @@ async def set_comfy_engine_path(req: SetPathRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# Image generation and editing endpoints
+def _match_prompt_option(options: dict, text: str, min_len: int = 4) -> str:
+    """Matches a keyword or token from an options dictionary against a search string."""
+    for k, v in options.items():
+        if k == "none":
+            continue
+        disp = v.get("display_name", "").lower()
+        tokens = [tok for tok in disp.split() if len(tok) >= min_len and not tok.startswith("&")]
+        if k in text or k.replace("_", " ") in text or disp in text or (tokens and any(tok in text for tok in tokens)):
+            return k
+    return "none"
 
-@router.post("/generate")
-async def generate_image_endpoint(req: GenerateRequest):
-    """
-    Generate an image from pure text description.
-    """
-    # Auto-detect if request targets a registered anime character
-    try:
-        from .image_engine.illustrious.characters import get_characters
-        from .image_engine.illustrious.config import find_illustrious_checkpoint
 
-        ckpt_name, ckpt_path = find_illustrious_checkpoint()
-        if ckpt_path and os.path.isfile(ckpt_path):
-            chars = get_characters(nsfw_enabled=True)
-            prompt_l = req.prompt.lower()
-            matched_char = None
-            for ck, cv in chars.items():
-                disp_lower = cv.get("display_name", "").lower()
-                key_clean = ck.replace("_", " ")
-                name_tokens = [tok for tok in disp_lower.split() if len(tok) >= 3]
-                if disp_lower in prompt_l or key_clean in prompt_l or (name_tokens and any(tok in prompt_l for tok in name_tokens)):
-                    matched_char = ck
-                    break
-
-            # Check for registered pose in prompt
-            matched_pose = "none"
-            from .image_engine.illustrious.characters import POSE_OPTIONS, CONCEPT_OPTIONS
-            for pk, pv in POSE_OPTIONS.items():
-                if pk == "none":
-                    continue
-                pk_clean = pk.replace("_", " ")
-                p_disp = pv.get("display_name", "").lower()
-                p_tokens = [tok for tok in p_disp.split() if len(tok) >= 4 and not tok.startswith("&")]
-                if pk in prompt_l or pk_clean in prompt_l or (p_tokens and any(tok in prompt_l for tok in p_tokens)):
-                    matched_pose = pk
-                    break
-
-            # Check for registered concept in prompt
-            matched_concept = "none"
-            for ck_opt, cv_opt in CONCEPT_OPTIONS.items():
-                if ck_opt == "none":
-                    continue
-                ck_clean = ck_opt.replace("_", " ")
-                c_disp = cv_opt.get("display_name", "").lower()
-                c_tokens = [tok for tok in c_disp.split() if len(tok) >= 4 and not tok.startswith("&")]
-                if ck_opt in prompt_l or ck_clean in prompt_l or (c_tokens and any(tok in prompt_l for tok in c_tokens)):
-                    matched_concept = ck_opt
-                    break
-
-            is_anime_prompt = bool(matched_char) or (matched_pose != "none") or (matched_concept != "none") or any(
-                w in prompt_l for w in ("anime", "illustrious", "waifu", "manga", "vtuber")
-            )
-
-            if is_anime_prompt:
-                is_turbo = any(w in prompt_l for w in ("turbo", "fast", "faster", "quick", "lcm", "speed"))
-                anime_req = AnimeGenerateRequest(
-                    character=matched_char or "none",
-                    concept=matched_concept,
-                    pose=matched_pose,
-                    user_prompt=req.prompt,
-                    resolution=req.aspect_ratio if req.aspect_ratio in ("portrait", "landscape", "square") else "portrait",
-                    seed=req.seed,
-                    use_lcm=is_turbo,
-                )
-                return await generate_anime_endpoint(anime_req)
-    except Exception as e:
-        logger.debug(f"Anime auto-detect check passed: {e}")
-
-    model_status = check_image_models_status()
-    if not model_status.get("installed"):
-        raise HTTPException(
-            status_code=400,
-            detail="Image Studio models are not installed. Please download them in Model Settings first."
-        )
-
-    task_id = str(uuid.uuid4())
+def _init_task(task_id: str, max_steps: int):
+    """Initializes task state and event queue for live SSE streaming."""
     _active_tasks[task_id] = {
         "status": "queued",
         "step": 0,
-        "max_steps": req.steps,
+        "max_steps": max_steps,
         "percentage": 0,
         "time_elapsed": 0.0,
         "preview_url": None,
@@ -251,7 +188,105 @@ async def generate_image_endpoint(req: GenerateRequest):
         except Exception:
             pass
 
-    # Build workflow
+    return queue, on_progress
+
+
+async def _execute_workflow_task(
+    task_id: str,
+    workflow: dict,
+    queue: asyncio.Queue,
+    on_progress,
+    extra_result_fields: Optional[dict] = None,
+    label: str = "Image generation"
+):
+    """Handles VRAM swapping, workflow execution, error trapping, and state cleanup."""
+    saved_vram_state = prepare_vram_for_image_generation()
+    try:
+        result = await execute_image_workflow(workflow, progress_callback=on_progress)
+        if saved_vram_state:
+            on_progress({"stage_text": "Restoring language model into memory...", "percentage": 98})
+            await restore_vram_after_image_generation_async(saved_vram_state)
+            saved_vram_state = None
+
+        res_data = {"status": "complete", "percentage": 100, "result": result, "image": result}
+        if extra_result_fields:
+            res_data.update(extra_result_fields)
+        _active_tasks[task_id].update(res_data)
+        try:
+            queue.put_nowait(res_data)
+        except Exception:
+            pass
+    except InterruptedError:
+        logger.info(f"{label} {task_id} was interrupted by user.")
+        msg = "Generation stopped by user"
+        data = {"status": "interrupted", "stage_text": msg, "error": msg}
+        _active_tasks[task_id].update(data)
+        try:
+            queue.put_nowait(data)
+        except Exception:
+            pass
+    except Exception as e:
+        logger.error(f"{label} failed: {e}")
+        data = {"status": "error", "error": str(e)}
+        _active_tasks[task_id].update(data)
+        try:
+            queue.put_nowait(data)
+        except Exception:
+            pass
+    finally:
+        if saved_vram_state:
+            try:
+                await restore_vram_after_image_generation_async(saved_vram_state)
+            except Exception:
+                pass
+
+
+# Image generation and editing endpoints
+
+@router.post("/generate")
+async def generate_image_endpoint(req: GenerateRequest):
+    """Generate an image from pure text description."""
+    # Auto-detect if request targets a registered anime character
+    try:
+        from .image_engine.illustrious.characters import get_characters, POSE_OPTIONS, CONCEPT_OPTIONS
+        from .image_engine.illustrious.config import find_illustrious_checkpoint
+
+        _, ckpt_path = find_illustrious_checkpoint()
+        if ckpt_path and os.path.isfile(ckpt_path):
+            prompt_l = req.prompt.lower()
+            chars = get_characters(nsfw_enabled=True)
+            matched_char = _match_prompt_option(chars, prompt_l, min_len=3)
+            if matched_char == "none":
+                matched_char = None
+            matched_pose = _match_prompt_option(POSE_OPTIONS, prompt_l)
+            matched_concept = _match_prompt_option(CONCEPT_OPTIONS, prompt_l)
+
+            if matched_char or (matched_pose != "none") or (matched_concept != "none") or any(
+                w in prompt_l for w in ("anime", "illustrious", "waifu", "manga", "vtuber")
+            ):
+                anime_req = AnimeGenerateRequest(
+                    character=matched_char or "none",
+                    concept=matched_concept,
+                    pose=matched_pose,
+                    user_prompt=req.prompt,
+                    resolution=req.aspect_ratio if req.aspect_ratio in ("portrait", "landscape", "square") else "portrait",
+                    seed=req.seed,
+                    use_lcm=any(w in prompt_l for w in ("turbo", "fast", "faster", "quick", "lcm", "speed")),
+                )
+                return await generate_anime_endpoint(anime_req)
+    except Exception as e:
+        logger.debug(f"Anime auto-detect check passed: {e}")
+
+    model_status = check_image_models_status()
+    if not model_status.get("installed"):
+        raise HTTPException(
+            status_code=400,
+            detail="Image Studio models are not installed. Please download them in Model Settings first."
+        )
+
+    task_id = str(uuid.uuid4())
+    queue, on_progress = _init_task(task_id, req.steps)
+
     workflow = build_qwen_workflow(
         prompt=req.prompt,
         negative_prompt=req.negative_prompt,
@@ -265,65 +300,7 @@ async def generate_image_endpoint(req: GenerateRequest):
         height=req.height,
     )
 
-    # Dynamic VRAM Swapping & Background Execution
-    async def _run_generate_task():
-        saved_vram_state = prepare_vram_for_image_generation()
-        try:
-            result = await execute_image_workflow(workflow, progress_callback=on_progress)
-
-            # Wait for LLM to be fully restored into memory before signaling completion
-            if saved_vram_state:
-                on_progress({
-                    "stage_text": "Restoring language model into memory...",
-                    "percentage": 98,
-                })
-                await restore_vram_after_image_generation_async(saved_vram_state)
-                saved_vram_state = None
-
-            _active_tasks[task_id]["result"] = result
-            _active_tasks[task_id]["image"] = result
-            _active_tasks[task_id]["status"] = "complete"
-            _active_tasks[task_id]["percentage"] = 100
-            try:
-                queue.put_nowait({
-                    "status": "complete",
-                    "percentage": 100,
-                    "image": result,
-                })
-            except Exception:
-                pass
-        except InterruptedError:
-            logger.info(f"Image generation {task_id} was interrupted by user.")
-            _active_tasks[task_id]["status"] = "interrupted"
-            _active_tasks[task_id]["stage_text"] = "Generation stopped by user"
-            _active_tasks[task_id]["error"] = "Generation stopped by user"
-            try:
-                queue.put_nowait({
-                    "status": "interrupted",
-                    "stage_text": "Generation stopped by user",
-                    "error": "Generation stopped by user",
-                })
-            except Exception:
-                pass
-        except Exception as e:
-            logger.error(f"Image generation failed: {e}")
-            _active_tasks[task_id]["status"] = "error"
-            _active_tasks[task_id]["error"] = str(e)
-            try:
-                queue.put_nowait({
-                    "status": "error",
-                    "error": str(e),
-                })
-            except Exception:
-                pass
-        finally:
-            if saved_vram_state:
-                try:
-                    await restore_vram_after_image_generation_async(saved_vram_state)
-                except Exception:
-                    pass
-
-    asyncio.create_task(_run_generate_task())
+    asyncio.create_task(_execute_workflow_task(task_id, workflow, queue, on_progress, label="Image generation"))
 
     return {
         "success": True,
@@ -363,33 +340,11 @@ async def edit_image_endpoint(req: EditRequest):
                     logger.warning(f"Reference image not found: {r_name}")
 
     task_id = str(uuid.uuid4())
-    _active_tasks[task_id] = {
-        "status": "queued",
-        "step": 0,
-        "max_steps": req.steps,
-        "percentage": 0,
-        "time_elapsed": 0.0,
-        "preview_url": None,
-        "result": None,
-        "error": None,
-    }
-    queue = asyncio.Queue()
-    _task_queues[task_id] = queue
-
-    def on_progress(event_data: Dict[str, Any]):
-        if task_id in _active_tasks:
-            _active_tasks[task_id].update(event_data)
-        try:
-            queue.put_nowait(event_data)
-        except Exception:
-            pass
+    queue, on_progress = _init_task(task_id, req.steps)
 
     # Construct original preview URL
     orig_filename = os.path.basename(primary_abs_path)
-    if primary_abs_path.startswith(UPLOADS_DIR):
-        orig_url = f"/uploads/{orig_filename}"
-    else:
-        orig_url = f"/images/{orig_filename}"
+    orig_url = f"/uploads/{orig_filename}" if primary_abs_path.startswith(UPLOADS_DIR) else f"/images/{orig_filename}"
 
     # Upload images to Comfy input folder
     try:
@@ -404,12 +359,8 @@ async def edit_image_endpoint(req: EditRequest):
     # Check if aspect ratio was explicitly requested in prompt
     explicit_aspect_keywords = ["16:9", "9:16", "1:1", "4:3", "3:4", "landscape", "widescreen", "portrait", "square", "vertical", "horizontal"]
     prompt_lower = (req.prompt or "").lower()
-    has_explicit_ratio_in_prompt = any(kw in prompt_lower for kw in explicit_aspect_keywords)
-
-    edit_aspect = req.aspect_ratio or "original"
-    if not has_explicit_ratio_in_prompt:
-        # Preserve original aspect ratio and dimensions unless explicitly commanded in prompt
-        edit_aspect = "original"
+    has_explicit_ratio = any(kw in prompt_lower for kw in explicit_aspect_keywords)
+    edit_aspect = req.aspect_ratio if (has_explicit_ratio and req.aspect_ratio) else "original"
 
     # Compute target dimensions from the primary source image
     computed_w, computed_h = compute_dimensions(
@@ -431,67 +382,11 @@ async def edit_image_endpoint(req: EditRequest):
         height=computed_h,
     )
 
-    # Dynamic VRAM Swapping & Background Execution
-    async def _run_edit_task():
-        saved_vram_state = prepare_vram_for_image_generation()
-        try:
-            result = await execute_image_workflow(workflow, progress_callback=on_progress)
-
-            # Wait for LLM to be fully restored into memory before signaling completion
-            if saved_vram_state:
-                on_progress({
-                    "stage_text": "Restoring language model into memory...",
-                    "percentage": 98,
-                })
-                await restore_vram_after_image_generation_async(saved_vram_state)
-                saved_vram_state = None
-
-            _active_tasks[task_id]["result"] = result
-            _active_tasks[task_id]["image"] = result
-            _active_tasks[task_id]["original_url"] = orig_url
-            _active_tasks[task_id]["status"] = "complete"
-            _active_tasks[task_id]["percentage"] = 100
-            try:
-                queue.put_nowait({
-                    "status": "complete",
-                    "percentage": 100,
-                    "image": result,
-                    "original_url": orig_url,
-                })
-            except Exception:
-                pass
-        except InterruptedError:
-            logger.info(f"Image edit {task_id} was interrupted by user.")
-            _active_tasks[task_id]["status"] = "interrupted"
-            _active_tasks[task_id]["stage_text"] = "Generation stopped by user"
-            _active_tasks[task_id]["error"] = "Generation stopped by user"
-            try:
-                queue.put_nowait({
-                    "status": "interrupted",
-                    "stage_text": "Generation stopped by user",
-                    "error": "Generation stopped by user",
-                })
-            except Exception:
-                pass
-        except Exception as e:
-            logger.error(f"Image edit failed: {e}")
-            _active_tasks[task_id]["status"] = "error"
-            _active_tasks[task_id]["error"] = str(e)
-            try:
-                queue.put_nowait({
-                    "status": "error",
-                    "error": str(e),
-                })
-            except Exception:
-                pass
-        finally:
-            if saved_vram_state:
-                try:
-                    await restore_vram_after_image_generation_async(saved_vram_state)
-                except Exception:
-                    pass
-
-    asyncio.create_task(_run_edit_task())
+    asyncio.create_task(_execute_workflow_task(
+        task_id, workflow, queue, on_progress,
+        extra_result_fields={"original_url": orig_url},
+        label="Image edit"
+    ))
 
     return {
         "success": True,
@@ -754,27 +649,7 @@ async def generate_anime_endpoint(req: AnimeGenerateRequest):
     task_id = str(uuid.uuid4())
     steps = req.steps or (LCM_STEPS if req.use_lcm else DEFAULT_STEPS)
     cfg = req.cfg or (LCM_CFG if req.use_lcm else DEFAULT_CFG)
-
-    _active_tasks[task_id] = {
-        "status": "queued",
-        "step": 0,
-        "max_steps": steps,
-        "percentage": 0,
-        "time_elapsed": 0.0,
-        "preview_url": None,
-        "result": None,
-        "error": None,
-    }
-    queue = asyncio.Queue()
-    _task_queues[task_id] = queue
-
-    def on_progress(event_data: Dict[str, Any]):
-        if task_id in _active_tasks:
-            _active_tasks[task_id].update(event_data)
-        try:
-            queue.put_nowait(event_data)
-        except Exception:
-            pass
+    queue, on_progress = _init_task(task_id, steps)
 
     builder_fn = build_lcm_workflow if req.use_lcm else build_illustrious_workflow
     workflow, positive_prompt = builder_fn(
@@ -794,63 +669,7 @@ async def generate_anime_endpoint(req: AnimeGenerateRequest):
         batch_count=req.batch_count or 1,
     )
 
-    async def _run_anime_task():
-        saved_vram_state = prepare_vram_for_image_generation()
-        try:
-            result = await execute_image_workflow(workflow, progress_callback=on_progress)
-
-            if saved_vram_state:
-                on_progress({
-                    "stage_text": "Restoring language model into memory...",
-                    "percentage": 98,
-                })
-                await restore_vram_after_image_generation_async(saved_vram_state)
-                saved_vram_state = None
-
-            _active_tasks[task_id]["result"] = result
-            _active_tasks[task_id]["image"] = result
-            _active_tasks[task_id]["status"] = "complete"
-            _active_tasks[task_id]["percentage"] = 100
-            try:
-                queue.put_nowait({
-                    "status": "complete",
-                    "percentage": 100,
-                    "image": result,
-                })
-            except Exception:
-                pass
-        except InterruptedError:
-            logger.info(f"Anime generation {task_id} was interrupted by user.")
-            _active_tasks[task_id]["status"] = "interrupted"
-            _active_tasks[task_id]["stage_text"] = "Generation stopped by user"
-            _active_tasks[task_id]["error"] = "Generation stopped by user"
-            try:
-                queue.put_nowait({
-                    "status": "interrupted",
-                    "stage_text": "Generation stopped by user",
-                    "error": "Generation stopped by user",
-                })
-            except Exception:
-                pass
-        except Exception as e:
-            logger.error(f"Anime generation failed: {e}")
-            _active_tasks[task_id]["status"] = "error"
-            _active_tasks[task_id]["error"] = str(e)
-            try:
-                queue.put_nowait({
-                    "status": "error",
-                    "error": str(e),
-                })
-            except Exception:
-                pass
-        finally:
-            if saved_vram_state:
-                try:
-                    await restore_vram_after_image_generation_async(saved_vram_state)
-                except Exception:
-                    pass
-
-    asyncio.create_task(_run_anime_task())
+    asyncio.create_task(_execute_workflow_task(task_id, workflow, queue, on_progress, label="Anime generation"))
 
     return {
         "success": True,
@@ -861,6 +680,65 @@ async def generate_anime_endpoint(req: AnimeGenerateRequest):
         "steps": steps,
         "max_steps": steps,
     }
+
+
+def _resolve_lora_target(category: str, name: str, key: Optional[str]) -> Tuple[str, str]:
+    """Generates clean key and prefixed target filename for a LoRA model."""
+    raw_key = (key or "").strip() or name.strip()
+    clean_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in raw_key.lower()).strip("_-") or "custom_lora"
+    prefix = {"character": "char_", "concept": "concept_", "pose": "pose_"}.get(category, "lora_")
+    clean_name = clean_key[len(prefix):] if clean_key.startswith(prefix) else clean_key
+    clean_name = clean_name.strip("_-") or "custom_lora"
+    return clean_key, f"{prefix}{clean_name}.safetensors"
+
+
+def _save_lora_entry(
+    category: str,
+    clean_key: str,
+    target_filename: str,
+    name: str,
+    strength: float,
+    is_nsfw: bool,
+    trigger_word: str = "",
+    appearance: str = "",
+    outfit_name: str = "Default",
+    outfit_trigger: str = "",
+    outfit_is_nsfw: bool = False
+) -> Dict[str, Any]:
+    """Saves metadata record into characters or options JSON registry."""
+    from .image_engine.illustrious.characters import save_character, save_option_item
+    if category == "character":
+        res_outfit = outfit_name.strip() or "Default"
+        outfit_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in res_outfit.lower()).strip("_-") or "default"
+        data = {
+            "display_name": name.strip(),
+            "lora_file": target_filename,
+            "lora_strength_model": float(strength),
+            "lora_strength_clip": float(strength),
+            "trigger_word": trigger_word.strip(),
+            "appearance": appearance.strip(),
+            "nsfw": bool(is_nsfw),
+            "outfits": {
+                outfit_key: {
+                    "display_name": res_outfit,
+                    "trigger": outfit_trigger.strip(),
+                    "nsfw": bool(outfit_is_nsfw),
+                }
+            },
+        }
+        save_character(clean_key, data)
+        return {"success": True, "category": category, "key": clean_key, "filename": target_filename, "data": data}
+    else:
+        group_key = "poses" if category == "pose" else "concepts"
+        data = {
+            "display_name": name.strip(),
+            "trigger": trigger_word.strip(),
+            "lora_file": target_filename,
+            "strength": float(strength),
+            "nsfw": bool(is_nsfw),
+        }
+        save_option_item(group_key, clean_key, data)
+        return {"success": True, "category": category, "key": clean_key, "filename": target_filename, "data": data}
 
 
 @router.post("/anime/loras/import")
@@ -879,92 +757,40 @@ async def import_lora_file(
 ):
     """Saves uploaded LoRA into models/image/loras and registers it in the JSON catalog."""
     from .image_engine.illustrious.config import LORAS_DIR
-    from .image_engine.illustrious.characters import save_character, save_option_item
 
     if not file.filename.lower().endswith((".safetensors", ".pt")):
         raise HTTPException(status_code=400, detail="Only .safetensors files are supported.")
 
     os.makedirs(LORAS_DIR, exist_ok=True)
-
-    def _parse_bool(v: Any) -> bool:
-        if isinstance(v, bool):
-            return v
-        if isinstance(v, str):
-            return v.strip().lower() in ("true", "1", "yes", "on")
-        return bool(v)
-
-    parsed_is_nsfw = _parse_bool(is_nsfw)
-    parsed_outfit_is_nsfw = _parse_bool(outfit_is_nsfw)
-
-    raw_key = (key or "").strip()
-    if raw_key:
-        clean_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in raw_key.lower()).strip("_-")
-    else:
-        clean_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in name.strip().lower()).strip("_-")
-    clean_key = clean_key or "custom_lora"
-
-    clean_name = clean_key
-    prefix_map = {
-        "character": "char_",
-        "concept": "concept_",
-        "pose": "pose_",
-    }
-    prefix = prefix_map.get(category, "lora_")
-    if clean_name.startswith(prefix):
-        clean_name = clean_name[len(prefix):]
-    clean_name = clean_name.strip("_-") or "custom_lora"
-
-    target_filename = f"{prefix}{clean_name}.safetensors"
+    clean_key, target_filename = _resolve_lora_target(category, name, key)
     target_path = os.path.join(LORAS_DIR, target_filename)
 
     with open(target_path, "wb") as f:
-        content = await file.read()
-        f.write(content)
+        f.write(await file.read())
 
-    if category == "character":
-        resolved_outfit_name = outfit_name.strip() or "Default"
-        outfit_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in resolved_outfit_name.lower()).strip("_-") or "default"
-        char_data = {
-            "display_name": name.strip(),
-            "lora_file": target_filename,
-            "lora_strength_model": float(strength),
-            "lora_strength_clip": float(strength),
-            "trigger_word": trigger_word.strip(),
-            "appearance": appearance.strip(),
-            "nsfw": parsed_is_nsfw,
-            "outfits": {
-                outfit_key: {
-                    "display_name": resolved_outfit_name,
-                    "trigger": outfit_trigger.strip(),
-                    "nsfw": parsed_outfit_is_nsfw,
-                }
-            },
-        }
-        save_character(clean_key, char_data)
-        return {"success": True, "category": category, "key": clean_key, "filename": target_filename, "data": char_data}
-    else:
-        plural_map = {
-            "concept": "concepts",
-            "pose": "poses",
-        }
-        group_key = plural_map.get(category, "concepts")
-        entry = {
-            "display_name": name.strip(),
-            "trigger": trigger_word.strip(),
-            "lora_file": target_filename,
-            "strength": float(strength),
-            "nsfw": parsed_is_nsfw,
-        }
-        save_option_item(group_key, clean_key, entry)
-        return {"success": True, "category": category, "key": clean_key, "filename": target_filename, "data": entry}
+    def _parse_bool(v: Any) -> bool:
+        return v if isinstance(v, bool) else str(v).strip().lower() in ("true", "1", "yes", "on")
+
+    return _save_lora_entry(
+        category=category,
+        clean_key=clean_key,
+        target_filename=target_filename,
+        name=name,
+        strength=strength,
+        is_nsfw=_parse_bool(is_nsfw),
+        trigger_word=trigger_word,
+        appearance=appearance,
+        outfit_name=outfit_name,
+        outfit_trigger=outfit_trigger,
+        outfit_is_nsfw=_parse_bool(outfit_is_nsfw),
+    )
 
 
 @router.post("/anime/loras/sync")
 async def sync_installed_loras():
     """Triggers bidirectional sync: removes registered items whose LoRA files were deleted on disk."""
     from .image_engine.illustrious.characters import sync_lora_files_with_disk
-    result = sync_lora_files_with_disk()
-    return {"success": True, "sync": result}
+    return {"success": True, "sync": sync_lora_files_with_disk()}
 
 
 @router.delete("/anime/options/{category}/{item_key}")
@@ -1017,7 +843,6 @@ async def import_host_lora_file(req: HostLoraImportRequest):
     """Imports an existing LoRA file from the host filesystem into models/image/loras and registers it."""
     import shutil
     from .image_engine.illustrious.config import LORAS_DIR
-    from .image_engine.illustrious.characters import save_character, save_option_item
 
     source = req.source_path.strip()
     if not os.path.isfile(source):
@@ -1026,26 +851,7 @@ async def import_host_lora_file(req: HostLoraImportRequest):
         raise HTTPException(status_code=400, detail="Only .safetensors and .pt files are supported.")
 
     os.makedirs(LORAS_DIR, exist_ok=True)
-
-    raw_key = (req.key or "").strip()
-    if raw_key:
-        clean_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in raw_key.lower()).strip("_-")
-    else:
-        clean_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in req.name.strip().lower()).strip("_-")
-    clean_key = clean_key or "custom_lora"
-
-    clean_name = clean_key
-    prefix_map = {
-        "character": "char_",
-        "concept": "concept_",
-        "pose": "pose_",
-    }
-    prefix = prefix_map.get(req.category, "lora_")
-    if clean_name.startswith(prefix):
-        clean_name = clean_name[len(prefix):]
-    clean_name = clean_name.strip("_-") or "custom_lora"
-
-    target_filename = f"{prefix}{clean_name}.safetensors"
+    clean_key, target_filename = _resolve_lora_target(req.category, req.name, req.key)
     target_path = os.path.join(LORAS_DIR, target_filename)
 
     if os.path.abspath(source) != os.path.abspath(target_path):
@@ -1054,39 +860,19 @@ async def import_host_lora_file(req: HostLoraImportRequest):
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to copy LoRA file: {e}")
 
-    if req.category == "character":
-        resolved_outfit_name = req.outfit_name.strip() or "Default"
-        outfit_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in resolved_outfit_name.lower()).strip("_-") or "default"
-        char_data = {
-            "display_name": req.name.strip(),
-            "lora_file": target_filename,
-            "lora_strength_model": float(req.strength),
-            "lora_strength_clip": float(req.strength),
-            "trigger_word": req.trigger_word.strip(),
-            "appearance": req.appearance.strip(),
-            "nsfw": bool(req.is_nsfw),
-            "outfits": {
-                outfit_key: {
-                    "display_name": resolved_outfit_name,
-                    "trigger": req.outfit_trigger.strip(),
-                    "nsfw": bool(req.outfit_is_nsfw),
-                }
-            },
-        }
-        save_character(clean_key, char_data)
-        return {"success": True, "category": req.category, "key": clean_key, "filename": target_filename, "data": char_data}
-    else:
-        plural_map = {"concept": "concepts", "pose": "poses"}
-        group_key = plural_map.get(req.category, "concepts")
-        entry = {
-            "display_name": req.name.strip(),
-            "trigger": req.trigger_word.strip(),
-            "lora_file": target_filename,
-            "strength": float(req.strength),
-            "nsfw": bool(req.is_nsfw),
-        }
-        save_option_item(group_key, clean_key, entry)
-        return {"success": True, "category": req.category, "key": clean_key, "filename": target_filename, "data": entry}
+    return _save_lora_entry(
+        category=req.category,
+        clean_key=clean_key,
+        target_filename=target_filename,
+        name=req.name,
+        strength=req.strength,
+        is_nsfw=req.is_nsfw,
+        trigger_word=req.trigger_word,
+        appearance=req.appearance,
+        outfit_name=req.outfit_name,
+        outfit_trigger=req.outfit_trigger,
+        outfit_is_nsfw=req.outfit_is_nsfw,
+    )
 
 
 @router.get("/anime/loras")

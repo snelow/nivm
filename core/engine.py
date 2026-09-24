@@ -675,33 +675,13 @@ class ModelManager:
     
     @staticmethod
     def apply_user_overrides(role: str, overrides: Dict[str, Any]):
-        """
-        Merge user-provided settings into MODEL_REGISTRY for a given role.
-        
-        Only known engine keys are applied; unknown keys are ignored.
-        This must be called BEFORE activate() to take effect.
-        """
-        if role not in MODEL_REGISTRY:
-            return
-        
-        config = MODEL_REGISTRY[role]
-        key_map = {
-            "path": "path",
-            "n_ctx": "n_ctx",
-            "n_batch": "n_batch",
-            "n_gpu_layers": "n_gpu_layers",
-            "flash_attn": "flash_attn",
-            "kv_type": "kv_type",
-            "use_mlock": "use_mlock",
-            "use_mmap": "use_mmap",
-            "offload_kqv": "offload_kqv",
-            "chat_handler_type": "chat_handler_type",
-            "mmproj_path": "mmproj_path",
-            "mmproj_use_gpu": "mmproj_use_gpu",
-        }
-        for key, registry_key in key_map.items():
-            if key in overrides:
-                config[registry_key] = overrides[key]
+        """Merge user-provided settings into MODEL_REGISTRY for a given role."""
+        if role in MODEL_REGISTRY and overrides:
+            allowed = {
+                "path", "n_ctx", "n_batch", "n_gpu_layers", "flash_attn", "kv_type",
+                "use_mlock", "use_mmap", "offload_kqv", "chat_handler_type", "mmproj_path", "mmproj_use_gpu"
+            }
+            MODEL_REGISTRY[role].update({k: v for k, v in overrides.items() if k in allowed})
     
     def has_any_loaded(self) -> bool:
         """Check if any models are currently loaded in memory."""

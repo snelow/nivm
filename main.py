@@ -463,6 +463,15 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
         headers = {"Content-Type": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
+            if "generativelanguage.googleapis.com" in api_chat_url.lower():
+                headers["x-goog-api-key"] = api_key
+
+        # If calling loopback (localhost / 127.0.0.1) internal API, include internal key
+        if any(h in api_chat_url for h in ("localhost", "127.0.0.1", "::1")):
+            auth_data = get_auth_data()
+            secret = auth_data.get("signing_secret")
+            if secret:
+                headers["X-NIVM-Internal-Key"] = secret
 
         api_req_tokens = body.get("max_tokens")
         if not api_req_tokens or not isinstance(api_req_tokens, int) or api_req_tokens <= 0:
@@ -497,11 +506,19 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
         else:
             record_api_start()
             try:
-                async with httpx.AsyncClient(timeout=120.0) as client:
-                    resp = await client.post(api_chat_url, headers=headers, json=payload)
-                    if resp.status_code != 200:
-                        raise HTTPException(status_code=resp.status_code, detail=resp.text)
-                    return resp.json()
+                for attempt in range(3):
+                    try:
+                        async with httpx.AsyncClient(timeout=120.0) as client:
+                            resp = await client.post(api_chat_url, headers=headers, json=payload)
+                            if resp.status_code != 200:
+                                raise HTTPException(status_code=resp.status_code, detail=resp.text)
+                            return resp.json()
+                    except (httpx.ConnectError, httpx.NetworkError) as conn_err:
+                        if attempt < 2:
+                            logger.warning(f"API non-stream connection failed ({conn_err}), retrying in 1.5s...")
+                            await asyncio.sleep(1.5)
+                            continue
+                        raise
             finally:
                 record_api_end()
 

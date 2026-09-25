@@ -88,12 +88,23 @@ export async function fetchRemoteModels(silent = false) {
             }
             if (dom.apiModelSelect) {
                 dom.apiModelSelect.innerHTML = `<option value="">(Select model)</option>` +
-                    data.models.map(m => `<option value="${m}">${m}</option>`).join('');
+                    data.models.map(m => `<option value="${m}">${m}</option>`).join('') +
+                    `<option value="__custom__">+ Enter Custom Model...</option>`;
                 dom.apiModelSelect.style.display = 'block';
 
                 const curr = dom.apiModelInput?.value.trim();
-                if (curr && data.models.includes(curr)) {
+                const matched = curr ? data.models.find(m => m === curr || m.replace(/^models\//, '') === curr || m === `models/${curr}`) : null;
+                if (matched) {
+                    dom.apiModelSelect.value = matched;
+                    if (dom.apiModelInput) dom.apiModelInput.value = matched;
+                    state.selectedModel = matched;
+                } else if (curr) {
+                    const opt = document.createElement('option');
+                    opt.value = curr;
+                    opt.textContent = `${curr}`;
+                    dom.apiModelSelect.insertBefore(opt, dom.apiModelSelect.firstChild);
                     dom.apiModelSelect.value = curr;
+                    state.selectedModel = curr;
                 } else {
                     const chosen = data.models[0];
                     if (dom.apiModelInput) dom.apiModelInput.value = chosen;
@@ -121,6 +132,67 @@ export async function fetchRemoteModels(silent = false) {
             dom.fetchRemoteModelsBtn.disabled = false;
             dom.fetchRemoteModelsBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Fetch Models';
         }
+    }
+}
+
+export async function testApiConnection() {
+    const btn = dom.testApiConnectionBtn || document.getElementById('testApiConnectionBtn');
+    const badge = dom.apiTestStatusBadge || document.getElementById('apiTestStatusBadge');
+    const statusText = dom.apiTestStatusText || document.getElementById('apiTestStatusText');
+    if (!btn || !badge || !statusText) return;
+
+    const baseUrl = dom.apiBaseUrl?.value?.trim() || '';
+    const chatUrl = dom.apiChatUrl?.value?.trim() || '';
+    const apiKey = dom.apiKeyInput?.value?.trim() || '';
+    const model = dom.apiModelInput?.value?.trim() || dom.apiModelSelect?.value || '';
+
+    if (!baseUrl && !chatUrl) {
+        showNotification({
+            title: 'Missing Endpoint',
+            message: 'Please provide at least a Base URL or Chat Completions URL',
+            type: 'warning'
+        });
+        return;
+    }
+
+    btn.disabled = true;
+    const origHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Testing...</span>';
+
+    badge.className = 'api-test-badge testing';
+    badge.classList.remove('hidden');
+    statusText.textContent = 'Probing endpoint…';
+
+    try {
+        const res = await fetch('/api/external/test-connection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                base_url: baseUrl,
+                chat_url: chatUrl,
+                api_key: apiKey,
+                model: model
+            })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+            badge.className = 'api-test-badge success';
+            badge.title = `Status 200 OK • Response model: ${data.model || model}`;
+            statusText.innerHTML = `<i class="fa-solid fa-check"></i> Connected • ${data.latency_ms}ms`;
+        } else {
+            badge.className = 'api-test-badge error';
+            const errDetail = data.error || 'Connection failed';
+            badge.title = errDetail;
+            statusText.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${errDetail.length > 45 ? errDetail.slice(0, 42) + '…' : errDetail}`;
+        }
+    } catch (err) {
+        badge.className = 'api-test-badge error';
+        badge.title = err.message;
+        statusText.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${err.message}`;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
     }
 }
 
@@ -1026,10 +1098,19 @@ export function setupSettingsUI() {
 
     if (dom.apiModelSelect) {
         dom.apiModelSelect.addEventListener('change', () => {
-            if (dom.apiModelSelect.value) {
-                if (dom.apiModelInput) dom.apiModelInput.value = dom.apiModelSelect.value;
-                state.selectedModel = dom.apiModelSelect.value;
-                syncMultimodalFromModel(dom.apiModelSelect.value);
+            const val = dom.apiModelSelect.value;
+            if (val === '__custom__') {
+                if (dom.apiModelInput) {
+                    dom.apiModelInput.classList.remove('hidden');
+                    dom.apiModelInput.focus();
+                }
+            } else if (val) {
+                if (dom.apiModelInput) {
+                    dom.apiModelInput.value = val;
+                    dom.apiModelInput.classList.add('hidden');
+                }
+                state.selectedModel = val;
+                syncMultimodalFromModel(val);
                 updateApiCurlSnippet();
                 saveApiSettings();
             }
@@ -1071,6 +1152,13 @@ export function setupSettingsUI() {
             const val = dom.apiModelInput.value.trim();
             state.selectedModel = val;
             if (dom.apiModelSelect && val) {
+                let optExists = Array.from(dom.apiModelSelect.options).some(o => o.value === val);
+                if (!optExists) {
+                    const opt = document.createElement('option');
+                    opt.value = val;
+                    opt.textContent = val;
+                    dom.apiModelSelect.insertBefore(opt, dom.apiModelSelect.firstChild);
+                }
                 dom.apiModelSelect.value = val;
             }
             syncMultimodalFromModel(val);
@@ -1096,7 +1184,7 @@ export function setupSettingsUI() {
     }
 
     const apiPresets = {
-        gemini: { base: 'https://generativelanguage.googleapis.com/v1beta/openai', chat: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', model: 'gemini-3.8-flash', multimodal: true },
+        gemini: { base: 'https://generativelanguage.googleapis.com/v1beta/openai', chat: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', model: 'gemini-2.5-flash', multimodal: true },
         groq: { base: 'https://api.groq.com/openai/v1', chat: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.3-70b-versatile', multimodal: false },
         openai: { base: 'https://api.openai.com/v1', chat: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini', multimodal: true },
         ollama: { base: 'http://localhost:11434/v1', chat: 'http://localhost:11434/v1/chat/completions', model: 'llama3.2', multimodal: false },
@@ -1140,6 +1228,10 @@ export function setupSettingsUI() {
     setupCopyBtn(dom.copyApiChatUrlBtn, () => dom.apiChatUrl?.value || '');
     setupCopyBtn(dom.copyApiKeyBtn, () => dom.apiKeyInput?.value || '');
     setupCopyBtn(dom.copyApiCurlBtn, () => dom.apiCurlSnippet?.textContent || '');
+
+    if (dom.testApiConnectionBtn) {
+        dom.testApiConnectionBtn.addEventListener('click', testApiConnection);
+    }
 
     updateApiCurlSnippet();
     if (state.inferenceMode === 'api') {

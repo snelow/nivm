@@ -3,7 +3,7 @@
 import { state, saveEnabledTools, saveTerminalSecurityMode } from '../state.js';
 import { dom } from '../dom.js';
 import { tools } from '../tools.js';
-import { fetchModelDetailsAPI } from '../api.js';
+import { fetchModelDetailsAPI, apiFetchSafe } from '../api.js';
 import { showNotification, showAlert, escapeHtml } from './dialogs.js';
 
 export async function populateStatsModal() {
@@ -20,7 +20,7 @@ export async function populateStatsModal() {
         const apiModel = dom.apiModelInput?.value?.trim() 
             || dom.apiModelSelect?.value 
             || state.selectedModel 
-            || 'gemini-3.8-flash';
+            || 'gemini-2.5-flash';
 
         const baseUrl = dom.apiBaseUrl?.value?.trim() || '';
         const lowerBase = baseUrl.toLowerCase();
@@ -130,6 +130,67 @@ export async function populateStatsModal() {
         } else {
             avgSpeedEl.textContent = '— tk/s';
         }
+    }
+
+    // Refresh Live VRAM Pill
+    updateStatsVramPill();
+}
+
+let _statsVramPollInterval = null;
+
+export async function updateStatsVramPill() {
+    const pill = dom.statsVramPill || document.getElementById('statsVramPill');
+    const textEl = dom.statsVramText || document.getElementById('statsVramText');
+    if (!pill || !textEl) return;
+
+    try {
+        const hw = await apiFetchSafe('/api/hardware/vram');
+        if (!hw) return;
+
+        if (hw.gpu_available && hw.vram_total_gb > 0) {
+            const used = hw.vram_used_gb.toFixed(1);
+            const total = hw.vram_total_gb.toFixed(1);
+            const pct = Math.round((hw.vram_used_gb / hw.vram_total_gb) * 100);
+            textEl.textContent = `VRAM: ${used} / ${total} GB (${pct}%)`;
+            pill.title = `${hw.gpu_name || 'NVIDIA GPU'} — ${used} GB used of ${total} GB (${pct}%)`;
+
+            pill.className = 'stats-vram-pill';
+            if (pct >= 90) {
+                pill.classList.add('vram-critical');
+            } else if (pct >= 70) {
+                pill.classList.add('vram-warn');
+            } else {
+                pill.classList.add('vram-normal');
+            }
+        } else if (hw.ram_total_gb > 0) {
+            const usedRam = (hw.ram_total_gb - hw.ram_available_gb).toFixed(1);
+            const totalRam = hw.ram_total_gb.toFixed(1);
+            const pct = Math.round(((hw.ram_total_gb - hw.ram_available_gb) / hw.ram_total_gb) * 100);
+            textEl.textContent = `RAM: ${usedRam} / ${totalRam} GB (${pct}%)`;
+            pill.title = `Host RAM — ${usedRam} GB used of ${totalRam} GB (${pct}%)`;
+
+            pill.className = 'stats-vram-pill';
+            if (pct >= 90) {
+                pill.classList.add('vram-critical');
+            } else if (pct >= 75) {
+                pill.classList.add('vram-warn');
+            } else {
+                pill.classList.add('vram-normal');
+            }
+        }
+    } catch (_) {}
+}
+
+export function startStatsVramPolling() {
+    updateStatsVramPill();
+    if (_statsVramPollInterval) clearInterval(_statsVramPollInterval);
+    _statsVramPollInterval = setInterval(updateStatsVramPill, 2500);
+}
+
+export function stopStatsVramPolling() {
+    if (_statsVramPollInterval) {
+        clearInterval(_statsVramPollInterval);
+        _statsVramPollInterval = null;
     }
 }
 

@@ -1,0 +1,271 @@
+/* Global Search Spotlight Modal */
+
+#globalSearchModal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 1200;
+    pointer-events: auto;
+}
+
+#globalSearchModal.hidden {
+    display: none !important;
+}
+
+.global-search-container {
+    width: 640px;
+    max-width: min(640px, 94vw);
+    max-height: 82vh;
+    pointer-events: auto;
+    background: var(--bg-surface, rgba(17, 24, 39, 0.9));
+    border: 1px solid var(--border-light, rgba(255, 255, 255, 0.14));
+    border-radius: 14px;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7), 0 0 30px rgba(var(--accent-purple-rgb, 168, 85, 247), 0.2);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: spotlightCenterIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes spotlightCenterIn {
+    from {
+        opacity: 0;
+        transform: scale(0.96) translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.global-search-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--glass-border, rgba(255, 255, 255, 0.08));
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.global-search-header .search-leading-icon {
+    font-size: 1.05rem;
+    color: var(--accent-purple, #a78bfa);
+    flex-shrink: 0;
+}
+
+.global-search-input {
+    flex: 1 1 auto;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary, #ffffff);
+    font-size: 0.95rem;
+    font-family: inherit;
+}
+
+.global-search-input::placeholder {
+    color: var(--text-muted, #94a3b8);
+    opacity: 0.8;
+}
+
+.global-search-kbd {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    font-size: 0.68rem;
+    font-family: var(--font-mono, monospace);
+    color: var(--text-muted, #94a3b8);
+    letter-spacing: 0.04em;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.global-search-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 18px;
+    background: rgba(255, 255, 255, 0.015);
+    border-bottom: 1px solid var(--glass-border, rgba(255, 255, 255, 0.05));
+    gap: 10px;
+}
+
+.search-filter-pills {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.search-filter-pill {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-muted, #94a3b8);
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.search-filter-pill:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--text-primary, #ffffff);
+}
+
+.search-filter-pill.active {
+    background: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.16);
+    border-color: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.4);
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.global-search-stats {
+    font-size: 0.72rem;
+    color: var(--text-muted, #94a3b8);
+    white-space: nowrap;
+}
+
+.global-search-results {
+    max-height: 380px;
+    overflow-y: auto;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.global-search-results::-webkit-scrollbar {
+    width: 5px;
+}
+
+.global-search-results::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+}
+
+.global-search-empty {
+    padding: 36px 20px;
+    text-align: center;
+    color: var(--text-muted, #94a3b8);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.global-search-empty i {
+    font-size: 1.8rem;
+    opacity: 0.4;
+    margin-bottom: 4px;
+}
+
+.global-search-empty p {
+    margin: 0;
+    font-size: 0.84rem;
+}
+
+.search-hint-sub {
+    font-size: 0.72rem;
+    opacity: 0.6;
+}
+
+/* Individual Search Result Item */
+.search-result-item {
+    padding: 10px 14px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    text-align: left;
+}
+
+.search-result-item:hover,
+.search-result-item.active {
+    background: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.1);
+    border-color: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.3);
+}
+
+.search-result-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.search-result-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-primary, #ffffff);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.search-result-title i {
+    font-size: 0.78rem;
+    color: var(--accent-purple, #a78bfa);
+}
+
+.search-result-badge {
+    font-size: 0.66rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted, #94a3b8);
+    white-space: nowrap;
+}
+
+.search-result-time {
+    font-size: 0.68rem;
+    color: var(--text-muted, #94a3b8);
+    flex-shrink: 0;
+}
+
+.search-result-snippet {
+    font-size: 0.76rem;
+    line-height: 1.35;
+    color: var(--text-secondary, #cbd5e1);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+}
+
+.search-highlight {
+    background: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.35);
+    color: #ffffff;
+    padding: 0 3px;
+    border-radius: 3px;
+    font-weight: 600;
+}
+
+/* Monocraft font adjustment */
+html[data-font-family="monocraft"] .global-search-container {
+    font-size: 0.88rem;
+}
+
+html[data-font-family="monocraft"] .search-result-snippet {
+    font-size: 0.72rem;
+}

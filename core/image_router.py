@@ -346,12 +346,12 @@ async def edit_image_endpoint(req: EditRequest):
     orig_filename = os.path.basename(primary_abs_path)
     orig_url = f"/uploads/{orig_filename}" if primary_abs_path.startswith(UPLOADS_DIR) else f"/images/{orig_filename}"
 
-    # Upload images to Comfy input folder
+    # Upload / stage images to Comfy input folder
     try:
-        comfy_primary_name = await upload_image_to_comfy(primary_abs_path)
+        comfy_primary_name = await upload_image_to_comfy(primary_abs_path, progress_callback=on_progress)
         all_comfy_names = [comfy_primary_name]
         for r_path in ref_paths:
-            r_uploaded = await upload_image_to_comfy(r_path)
+            r_uploaded = await upload_image_to_comfy(r_path, progress_callback=on_progress)
             all_comfy_names.append(r_uploaded)
     except Exception as up_err:
         raise HTTPException(status_code=500, detail=f"Failed to prepare input images: {up_err}")

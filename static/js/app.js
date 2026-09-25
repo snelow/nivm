@@ -4,7 +4,7 @@ import { state, themeState, saveConversations, saveUsageStats } from './state.js
 import { dom } from './dom.js';
 import { fetchApiSettings, saveApiSettings, checkBackendHealth, fetchEngineStatus, loadAvailableModels, fetchChats, fetchMemoryAPI, fetchBackendConfig } from './api.js';
 import { setupNodesCanvas, setupMatrixCanvas, setupFluidCanvas, setupFlowFieldCanvas, setupCircuitsCanvas, setupHexCanvas, setupAuroraCanvas, applyThemeState, saveThemeConfig } from './theme.js';
-import { makeDraggable, setupDynamicGreeting, renderChatHistory, renderActiveChat, switchChat, createNewChat, appendMessageToDOM, renderMemoryDrawer, renderToolsSettings, initImageStudioSettings, showAlert, showConfirm, showNotification, setupHistoryUI, setupMobileNav, setupVisionUI, setupAudioRecording, updateVisionAvailabilityUI, populateStatsModal, updateChatInputState, updateAssistantNameUI } from './ui.js';
+import { makeDraggable, setupDynamicGreeting, renderChatHistory, renderActiveChat, switchChat, createNewChat, appendMessageToDOM, renderMemoryDrawer, renderToolsSettings, initImageStudioSettings, showAlert, showConfirm, showNotification, setupHistoryUI, setupMobileNav, setupVisionUI, setupAudioRecording, updateVisionAvailabilityUI, populateStatsModal, startStatsVramPolling, stopStatsVramPolling, updateChatInputState, updateAssistantNameUI, setupGlobalSearchUI, openGlobalSearch, closeGlobalSearch } from './ui.js';
 import { setupVoiceUI, stopSpeaking } from './voice.js';
 import { initExtras } from './extras.js';
 import { sendMessage, stopGeneration, checkAndResumeActiveGeneration } from './chat/chat_stream.js';
@@ -23,6 +23,8 @@ window.stopGeneration = stopGeneration;
 window.checkAndResumeActiveGeneration = checkAndResumeActiveGeneration;
 window.handleUnloadAllModels = handleUnloadAllModels;
 window.refreshEngineStatusUI = refreshEngineStatusUI;
+window.openGlobalSearch = openGlobalSearch;
+window.closeGlobalSearch = closeGlobalSearch;
 window.updateModelAvailabilityUI = updateModelAvailabilityUI;
 window.openImageStudio = openImageStudio;
 window.switchStudioTab = switchStudioTab;
@@ -75,6 +77,7 @@ const startApp = async () => {
             setupFileBrowserUI();
             setupSentinelUI();
             setupImageStudioUI();
+            setupGlobalSearchUI();
 
             if (dom.userNameInput) {
                 dom.userNameInput.value = state.userName;
@@ -397,7 +400,17 @@ const startApp = async () => {
         if (dom.statsBtn) {
             dom.statsBtn.addEventListener('click', () => {
                 populateStatsModal();
-                dom.statsWindow.classList.toggle('hidden');
+                const isHidden = dom.statsWindow.classList.toggle('hidden');
+                if (isHidden) {
+                    stopStatsVramPolling();
+                } else {
+                    startStatsVramPolling();
+                }
+            });
+        }
+        if (dom.closeStatsBtn) {
+            dom.closeStatsBtn.addEventListener('click', () => {
+                stopStatsVramPolling();
             });
         }
         if (dom.resetStatsBtn) {
@@ -683,7 +696,7 @@ CRITICAL RULES:
                 ];
 
                 const modelToUse = state.inferenceMode === 'api'
-                    ? (state.selectedModel || dom.apiModelSelect?.value || 'llama-3.3-70b-versatile')
+                    ? (state.selectedModel || dom.apiModelInput?.value || dom.apiModelSelect?.value || 'gemini-2.5-flash')
                     : state.selectedModel;
 
                 const maxTokens = state.inferenceMode === 'api' ? 4096 : -1;

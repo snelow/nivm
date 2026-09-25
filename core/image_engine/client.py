@@ -21,6 +21,7 @@ from .config import (
     COMFY_PORT,
     IMAGES_OUTPUT_DIR,
     UPLOADS_DIR,
+    get_comfy_dir,
 )
 from .daemon import get_api_base_url, is_running, start_daemon
 
@@ -66,14 +67,60 @@ NODE_STAGE_NAMES = {
 }
 
 
-async def upload_image_to_comfy(file_path: str) -> str:
-    """Uploads an image file to ComfyUI's input directory and returns its server filename."""
+async def upload_image_to_comfy(
+    file_path: str,
+    progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+) -> str:
+    """
+    Uploads or stages an image file to ComfyUI's input directory and returns its server filename.
+    Directly copies the file to ComfyUI's input directory if local (instant and resilient),
+    ensures the ComfyUI daemon is booted/running, and falls back to HTTP upload if needed.
+    """
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"Source image not found: {file_path}")
 
-    base_url = get_api_base_url()
     filename = os.path.basename(file_path)
 
+    # 1. Direct file placement to ComfyUI's local input folder (zero network failure)
+    comfy_dir = get_comfy_dir()
+    staged_locally = False
+    if comfy_dir and os.path.isdir(comfy_dir):
+        input_dir = os.path.join(comfy_dir, "input")
+        try:
+            os.makedirs(input_dir, exist_ok=True)
+            dest_file = os.path.join(input_dir, filename)
+            if os.path.abspath(file_path) != os.path.abspath(dest_file):
+                shutil.copy2(file_path, dest_file)
+            staged_locally = True
+            logger.info(f"Directly staged image to ComfyUI input directory: {dest_file}")
+        except Exception as copy_err:
+            logger.warning(f"Direct file placement to ComfyUI input directory failed: {copy_err}")
+
+    # 2. Ensure ComfyUI daemon is healthy and running
+    if not is_running():
+        if progress_callback:
+            progress_callback({
+                "status": "booting",
+                "stage_text": "Booting headless diffusion engine (starting ComfyUI daemon)...",
+                "percentage": 2,
+            })
+        logger.info("ComfyUI daemon is not running; starting daemon for image editing...")
+        started = start_daemon()
+        if not started:
+            raise RuntimeError("Could not start headless ComfyUI diffusion daemon.")
+        if progress_callback:
+            progress_callback({
+                "status": "ready",
+                "stage_text": "Diffusion engine online, preparing input images...",
+                "percentage": 5,
+            })
+
+    # If already placed in ComfyUI/input/, ComfyUI's LoadImage node will find it directly
+    if staged_locally:
+        return filename
+
+    # 3. Fallback to HTTP upload endpoint
+    base_url = get_api_base_url()
     async with httpx.AsyncClient(timeout=30.0) as client:
         with open(file_path, "rb") as f:
             files = {"image": (filename, f, "image/png")}
@@ -313,16 +360,31 @@ async def execute_image_workflow(
     if prompt_id in _interrupted_prompt_ids:
         raise InterruptedError("Generation stopped by user.")
 
-    # Fallback to check history if WebSocket closed or images not captured
+    # Fallback to poll history until job finishes if WebSocket closed or images not yet captured
     if not output_images:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            hist_resp = await client.get(f"{base_url}/history/{prompt_id}")
-            if hist_resp.status_code == 200:
-                hist_data = hist_resp.json().get(prompt_id, {})
-                outputs = hist_data.get("outputs", {})
-                for node_id, node_out in outputs.items():
-                    if "images" in node_out:
-                        output_images.extend(node_out["images"])
+            while time.time() - start_time < timeout_seconds and not output_images:
+                try:
+                    hist_resp = await client.get(f"{base_url}/history/{prompt_id}")
+                    if hist_resp.status_code == 200:
+                        hist_data = hist_resp.json().get(prompt_id, {})
+                        outputs = hist_data.get("outputs", {})
+                        for node_id, node_out in outputs.items():
+                            if "images" in node_out:
+                                output_images.extend(node_out["images"])
+                        if output_images:
+                            break
+                        status_info = hist_data.get("status", {})
+                        if status_info.get("completed") is False and status_info.get("messages"):
+                            for msg_tuple in status_info.get("messages", []):
+                                if len(msg_tuple) > 1 and "execution_error" in str(msg_tuple[0]):
+                                    raise RuntimeError(f"ComfyUI diffusion error: {msg_tuple[1]}")
+                except Exception as poll_err:
+                    if isinstance(poll_err, RuntimeError):
+                        raise
+                if output_images:
+                    break
+                await asyncio.sleep(1.0)
 
     if not output_images:
         raise RuntimeError("Generation completed but no output images were produced.")

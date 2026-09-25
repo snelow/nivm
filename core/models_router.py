@@ -6,6 +6,7 @@ engine status, role activation, smart toggle, and aria2c model downloads.
 
 import os
 import json
+import time
 import asyncio
 import logging
 from typing import Optional
@@ -34,6 +35,13 @@ class DownloadModelRequest(BaseModel):
 class FetchRemoteModelsRequest(BaseModel):
     base_url: str
     api_key: Optional[str] = ""
+
+
+class TestApiConnectionRequest(BaseModel):
+    base_url: Optional[str] = ""
+    chat_url: Optional[str] = ""
+    api_key: Optional[str] = ""
+    model: Optional[str] = ""
 
 
 # Model enumeration endpoints
@@ -70,7 +78,20 @@ async def fetch_remote_models(req: FetchRemoteModelsRequest):
     models_url = f"{base_url}/models"
     headers = {}
     if req.api_key and req.api_key.strip():
-        headers["Authorization"] = f"Bearer {req.api_key.strip()}"
+        k = req.api_key.strip()
+        headers["Authorization"] = f"Bearer {k}"
+        if "generativelanguage.googleapis.com" in base_url.lower():
+            headers["x-goog-api-key"] = k
+
+    if any(h in base_url for h in ("localhost", "127.0.0.1", "::1")):
+        try:
+            from .auth import get_auth_data
+            auth_data = get_auth_data()
+            secret = auth_data.get("signing_secret")
+            if secret:
+                headers["X-NIVM-Internal-Key"] = secret
+        except Exception:
+            pass
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -101,6 +122,120 @@ async def fetch_remote_models(req: FetchRemoteModelsRequest):
         return {"success": False, "error": str(e), "models": []}
 
 
+@router.post("/api/external/test-connection")
+async def test_api_connection(req: TestApiConnectionRequest):
+    """
+    Test probe an external OpenAI-compatible provider with a minimal 1-token prompt.
+    Measures live round-trip latency and validates authentication/endpoint availability.
+    """
+    chat_url = (req.chat_url or "").strip()
+    base_url = (req.base_url or "").strip().rstrip("/")
+    if not chat_url:
+        if not base_url:
+            raise HTTPException(status_code=400, detail="Missing base_url or chat_url")
+        if base_url.endswith("/chat/completions"):
+            chat_url = base_url
+        else:
+            chat_url = f"{base_url}/chat/completions"
+
+    model = (req.model or "").strip()
+    if not model:
+        if "generativelanguage.googleapis.com" in chat_url.lower():
+            model = "models/gemini-2.5-flash"
+        elif "groq.com" in chat_url.lower():
+            model = "llama-3.3-70b-versatile"
+        else:
+            model = "gpt-4o-mini"
+
+    headers = {"Content-Type": "application/json"}
+    if req.api_key and req.api_key.strip():
+        k = req.api_key.strip()
+        headers["Authorization"] = f"Bearer {k}"
+        if "generativelanguage.googleapis.com" in chat_url.lower():
+            headers["x-goog-api-key"] = k
+
+    if any(h in chat_url for h in ("localhost", "127.0.0.1", "::1")):
+        try:
+            from .auth import get_auth_data
+            auth_data = get_auth_data()
+            secret = auth_data.get("signing_secret")
+            if secret:
+                headers["X-NIVM-Internal-Key"] = secret
+        except Exception:
+            pass
+
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": "ping"}],
+        "max_tokens": 1,
+        "stream": False,
+    }
+
+    t_start = time.perf_counter()
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            resp = await client.post(chat_url, headers=headers, json=payload)
+            latency_ms = round((time.perf_counter() - t_start) * 1000)
+
+            if resp.status_code == 200:
+                return {
+                    "success": True,
+                    "latency_ms": latency_ms,
+                    "status_code": 200,
+                    "model": model,
+                    "message": "Connection verified successfully"
+                }
+
+            # Non-200 response: parse error detail
+            err_msg = ""
+            try:
+                err_data = resp.json()
+                if isinstance(err_data, list) and len(err_data) > 0 and isinstance(err_data[0], dict):
+                    err_data = err_data[0]
+                if isinstance(err_data, dict):
+                    err_val = err_data.get("error")
+                    if isinstance(err_val, dict):
+                        err_msg = err_val.get("message") or str(err_val)
+                    elif isinstance(err_val, str):
+                        err_msg = err_val
+            except Exception:
+                pass
+            if not err_msg:
+                err_msg = resp.text[:200]
+            err_msg = " ".join(str(err_msg).split())
+
+            return {
+                "success": False,
+                "latency_ms": latency_ms,
+                "status_code": resp.status_code,
+                "error": f"HTTP {resp.status_code}: {err_msg}"
+            }
+    except (httpx.ConnectError, httpx.NetworkError) as e:
+        latency_ms = round((time.perf_counter() - t_start) * 1000)
+        return {
+            "success": False,
+            "latency_ms": latency_ms,
+            "status_code": 0,
+            "error": f"Connection failed: Host unreachable or DNS failed ({e})"
+        }
+    except httpx.TimeoutException:
+        latency_ms = round((time.perf_counter() - t_start) * 1000)
+        return {
+            "success": False,
+            "latency_ms": latency_ms,
+            "status_code": 0,
+            "error": "Connection timed out after 12s"
+        }
+    except Exception as e:
+        latency_ms = round((time.perf_counter() - t_start) * 1000)
+        return {
+            "success": False,
+            "latency_ms": latency_ms,
+            "status_code": 0,
+            "error": str(e)
+        }
+
+
 def get_system_memory_info() -> dict:
     info = {
         "gpu_available": False,
@@ -108,6 +243,7 @@ def get_system_memory_info() -> dict:
         "vram_total_gb": 0.0,
         "vram_free_gb": 0.0,
         "vram_used_gb": 0.0,
+        "vram_pct": 0.0,
         "ram_total_gb": 0.0,
         "ram_available_gb": 0.0,
     }
@@ -130,15 +266,25 @@ def get_system_memory_info() -> dict:
             info["vram_total_gb"] = round(total / (1024 ** 3), 2)
             info["vram_free_gb"] = round(free / (1024 ** 3), 2)
             info["vram_used_gb"] = round(used / (1024 ** 3), 2)
+            if info["vram_total_gb"] > 0:
+                info["vram_pct"] = round((info["vram_used_gb"] / info["vram_total_gb"]) * 100, 1)
         elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             info["gpu_available"] = True
             info["gpu_name"] = "Apple Silicon (Metal)"
             info["vram_total_gb"] = info["ram_total_gb"]
             info["vram_free_gb"] = info["ram_available_gb"]
             info["vram_used_gb"] = round(max(0.0, info["ram_total_gb"] - info["ram_available_gb"]), 2)
+            if info["vram_total_gb"] > 0:
+                info["vram_pct"] = round((info["vram_used_gb"] / info["vram_total_gb"]) * 100, 1)
     except Exception:
         pass
     return info
+
+
+@router.get("/api/hardware/vram")
+async def hardware_vram_telemetry():
+    """Lightweight real-time hardware VRAM/RAM telemetry endpoint for fast polling."""
+    return await asyncio.to_thread(get_system_memory_info)
 
 
 # Engine management endpoints

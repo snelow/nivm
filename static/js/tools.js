@@ -85,11 +85,14 @@ function normalizeAspectRatio(val, fallback = 'square') {
 function _trackImageTask(taskId, progressCard, defaultFilename, successDesc, originalUrl = null) {
     return new Promise((resolve) => {
         let completed = false, pollTimer = null;
-        const evtSource = window.EventSource ? new EventSource(`/api/image/progress/${taskId}`) : null;
+        const authToken = localStorage.getItem('nivm_auth_token') || '';
+        const sseUrl = authToken ? `/api/image/progress/${taskId}?token=${encodeURIComponent(authToken)}` : `/api/image/progress/${taskId}`;
+        let evtSource = window.EventSource ? new EventSource(sseUrl) : null;
 
         const cleanup = () => {
             if (pollTimer) clearInterval(pollTimer);
             if (evtSource) try { evtSource.close(); } catch (_) {}
+            document.removeEventListener('visibilitychange', onVisibilityChange);
         };
 
         const finishSuccess = (imgData, finalOrigUrl) => {
@@ -133,6 +136,27 @@ function _trackImageTask(taskId, progressCard, defaultFilename, successDesc, ori
                 finishFail(evData.error);
             }
         };
+
+        const connectSSE = () => {
+            if (evtSource) try { evtSource.close(); } catch (_) {}
+            evtSource = window.EventSource ? new EventSource(sseUrl) : null;
+            if (evtSource) evtSource.onmessage = (e) => { try { handleData(JSON.parse(e.data)); } catch (_) {} };
+        };
+
+        // Immediately poll task status on unlock / tab refocus (browser suspends
+        // timers and kills EventSource connections during laptop sleep/lock)
+        const onVisibilityChange = async () => {
+            if (document.visibilityState === 'visible' && !completed) {
+                // Reconnect SSE — the old connection is likely dead after sleep
+                connectSSE();
+                // Immediate poll so we don't wait for the next interval tick
+                try {
+                    const pRes = await fetch(`/api/image/task/${taskId}`);
+                    if (pRes.ok) handleData(await pRes.json());
+                } catch (_) {}
+            }
+        };
+        document.addEventListener('visibilitychange', onVisibilityChange);
 
         if (evtSource) evtSource.onmessage = (e) => { try { handleData(JSON.parse(e.data)); } catch (_) {} };
 

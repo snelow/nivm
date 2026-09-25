@@ -322,6 +322,7 @@ export function applyThemeState() {
         : "'Monocraft', monospace";
     document.documentElement.style.setProperty('--font-main', fontValue);
     document.documentElement.style.setProperty('--font-chat', fontValue);
+    document.documentElement.dataset.fontFamily = themeState.fontFamily;
     document.querySelectorAll('button[data-font]').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-font') === themeState.fontFamily);
     });

@@ -59,7 +59,25 @@ def prepare_vram_for_image_generation() -> Optional[Dict[str, Any]]:
 
     model_manager.unload_all()
 
-    # Flush PyTorch CUDA cache if available
+    # Multiple gc passes to break any reference cycles holding ggml contexts alive
+    for _ in range(3):
+        gc.collect()
+
+    # llama-cpp-python allocates CUDA memory through ggml's own CUDA backend
+    # (cuBLAS/cuMemAlloc), NOT through PyTorch. torch.cuda.empty_cache() has
+    # zero effect on those allocations. We need to explicitly free ggml's backend.
+    try:
+        import llama_cpp
+        if hasattr(llama_cpp, 'llama_backend_free'):
+            llama_cpp.llama_backend_free()
+            logger.info("Called llama_backend_free() to release ggml CUDA allocations.")
+            # Re-initialize the backend so it's ready when we reload later
+            if hasattr(llama_cpp, 'llama_backend_init'):
+                llama_cpp.llama_backend_init()
+    except Exception as e:
+        logger.debug(f"llama_backend_free not available or failed: {e}")
+
+    # Flush PyTorch CUDA cache (helps if any PyTorch ops were used, e.g. mmproj)
     try:
         import torch
         if torch.cuda.is_available():
@@ -70,10 +88,34 @@ def prepare_vram_for_image_generation() -> Optional[Dict[str, Any]]:
 
     gc.collect()
 
+    # Brief pause for the CUDA driver to finish reclaiming freed pages
+    import time
+    time.sleep(0.5)
+
+    # Verify VRAM was actually freed
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,nounits,noheader"],
+            capture_output=True, text=True, timeout=3
+        )
+        if result.returncode == 0:
+            used_mb = int(result.stdout.strip().split('\n')[0])
+            logger.info(f"Post-unload GPU VRAM usage: {used_mb} MiB")
+            if used_mb > 1000:
+                logger.warning(
+                    f"GPU VRAM still at {used_mb} MiB after LLM unload — "
+                    "ggml CUDA buffers may not have fully released. "
+                    "ComfyUI will attempt --lowvram mode."
+                )
+    except Exception:
+        pass
+
     return {
         "active_role": active_role,
         "custom_path": custom_path,
     }
+
 
 
 async def restore_vram_after_image_generation_async(saved_state: Optional[Dict[str, Any]]):

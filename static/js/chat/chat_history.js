@@ -218,11 +218,17 @@ export function renderChatHistory() {
 
 
 export function setupHistoryUI() {
-    // Search logic
-    if (dom.chatSearchInput) {
-        dom.chatSearchInput.addEventListener('input', () => {
-            renderChatHistory();
-        });
+    // Search logic: redirect to Global Spotlight Search
+    const searchTrigger = dom.drawerSearchBtn || dom.chatSearchInput || document.getElementById('drawerSearchBtn');
+    if (searchTrigger) {
+        const openSearch = (e) => {
+            if (e) e.preventDefault();
+            if (searchTrigger.blur) searchTrigger.blur();
+            if (typeof window.openGlobalSearch === 'function') {
+                window.openGlobalSearch();
+            }
+        };
+        searchTrigger.addEventListener('click', openSearch);
     }
 
     // Resize logic
@@ -373,4 +379,62 @@ export function setupMobileNav() {
     }
 }
 window.setupMobileNav = setupMobileNav;
+
+export function forkChatFromMessage(msg) {
+    if (!msg) return;
+    const activeChat = state.conversations.find(c => c.id === state.activeChatId);
+    if (!activeChat || !Array.isArray(activeChat.messages)) return;
+
+    const idx = activeChat.messages.indexOf(msg);
+    if (idx === -1) return;
+
+    if (state.isGenerating) {
+        if (typeof window.stopGeneration === 'function') {
+            window.stopGeneration();
+        } else if (state.abortController) {
+            state.abortController.abort();
+            state.isGenerating = false;
+        }
+        toggleSendStopButtons(false);
+    }
+
+    // Deep clone the messages up to this turn
+    const sliced = activeChat.messages.slice(0, idx + 1);
+    const clonedMessages = JSON.parse(JSON.stringify(sliced));
+
+    // Strip volatile streaming flags
+    clonedMessages.forEach(m => {
+        if (m.isStreaming) delete m.isStreaming;
+    });
+
+    const baseTitle = (activeChat.title || 'Conversation').replace(/\s*\(Branch\s*\d*\)$/i, '');
+    const newChat = {
+        id: 'chat_' + Date.now(),
+        title: `${baseTitle} (Branch)`,
+        createdAt: Date.now(),
+        messages: clonedMessages
+    };
+
+    // Insert new chat right next to the active chat
+    const activeIdx = state.conversations.indexOf(activeChat);
+    if (activeIdx !== -1) {
+        state.conversations.splice(activeIdx + 1, 0, newChat);
+    } else {
+        state.conversations.unshift(newChat);
+    }
+
+    state.activeChatId = newChat.id;
+    saveConversations();
+    renderChatHistory();
+    renderActiveChat();
+
+    if (typeof window.showNotification === 'function') {
+        window.showNotification({
+            title: 'Chat Forked',
+            message: `Branched into "${newChat.title}" at turn #${idx + 1}`,
+            type: 'success'
+        });
+    }
+}
+window.forkChatFromMessage = forkChatFromMessage;
 

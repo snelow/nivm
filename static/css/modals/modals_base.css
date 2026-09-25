@@ -53,8 +53,8 @@
 }
 
 #settingsWindow {
-    width: 460px;
-    max-width: min(460px, 94vw);
+    width: 505px;
+    max-width: min(505px, 95vw);
 }
 
 @keyframes windowIn {

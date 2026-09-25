@@ -7,7 +7,7 @@ import { normalizeThinkTags, cleanReasoningText } from '../think_tags.js';
 import { createSingleImageCard, createBeforeAfterSlider, getImageDuration, saveImageDuration } from '../image_editor.js';
 import { escapeHtml, showNotification } from '../modals/dialogs.js';
 import { openLightbox, openVideoPreview } from '../media/media_manager.js';
-import { switchChat, createNewChat, extractMediaUrlsFromChat, extractMediaUrlsFromMessage } from './chat_history.js';
+import { switchChat, createNewChat, forkChatFromMessage, extractMediaUrlsFromChat, extractMediaUrlsFromMessage } from './chat_history.js';
 
 export function setupDynamicGreeting() {
     const hour = new Date().getHours();
@@ -757,6 +757,11 @@ export function updateMessageActionIcons(actionsContainer, msg, row) {
     }
 
     if (role !== 'system') {
+        // Fork / Branch conversation up to this turn
+        actionsContainer.appendChild(makeBtn('fa-solid fa-code-branch', 'Fork chat from here', 'fork-msg-btn', () => {
+            forkChatFromMessage(msg);
+        }));
+
         actionsContainer.appendChild(makeBtn('fa-solid fa-trash', 'Delete message', '', async () => {
             const activeChat = state.conversations.find(c => c.id === state.activeChatId);
             if (activeChat) {

@@ -19,6 +19,7 @@ export function sanitizeAssistantText(text) {
     let cleaned = stripToolCallFromText(text, tools);
     cleaned = normalizeThinkTags(cleaned);
     cleaned = cleaned.replace(/<think>\s*<\/think>/gi, '');
+    cleaned = cleaned.replace(/<\|im_end\|>|<\|im_start\|>/gi, '');
     const firstOpen = cleaned.indexOf('<think>');
     const firstClose = cleaned.indexOf('</think>');
     if (firstClose !== -1 && (firstOpen === -1 || firstClose < firstOpen)) {
@@ -350,6 +351,10 @@ CRITICAL SPOKEN CONVERSATION RULES:
                             } else {
                                 responseBuffer += `\n\n**Error:** ${json.error}`;
                             }
+                            fullResponse = responseBuffer;
+                            if (assistantBubble) {
+                                updateAssistantBubble(assistantBubble, fullResponse, false);
+                            }
                         } else if (json.usage) {
                             serverUsage = json.usage;
                             if (json.model_info) modelInfo = json.model_info;
@@ -495,6 +500,8 @@ CRITICAL SPOKEN CONVERSATION RULES:
 
         if (reasoningBuffer && !fullResponse.includes('</think>')) {
             fullResponse = `<think>${reasoningBuffer}</think>${responseBuffer}`;
+        } else if (!fullResponse && responseBuffer) {
+            fullResponse = responseBuffer;
         }
 
         let cleanResponse = sanitizeAssistantText(fullResponse);

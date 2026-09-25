@@ -11,8 +11,8 @@ let isUserAuthenticated = false;
 const _nativeFetch = window.fetch.bind(window);
 window.fetch = async function(input, init = {}) {
     let url = typeof input === 'string' ? input : (input?.url || '');
-    const isProtected = url.startsWith('/api/') || url.startsWith('/uploads/') || url.startsWith('/images/') ||
-                        url.includes('/api/') || url.includes('/uploads/') || url.includes('/images/');
+    const isProtected = url.startsWith('/api/') || url.startsWith('/uploads/') || url.startsWith('/images/') || url.startsWith('/v1/') ||
+                        url.includes('/api/') || url.includes('/uploads/') || url.includes('/images/') || url.includes('/v1/');
     
     let newInit = { ...init };
     if (isProtected) {

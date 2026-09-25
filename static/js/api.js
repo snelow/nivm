@@ -97,9 +97,10 @@ export async function fetchApiSettings() {
         if (dom.apiModePanel) dom.apiModePanel.classList.toggle('hidden', inferenceMode !== 'api');
 
         const isApi = inferenceMode === 'api';
-        ['downloadModelSection', 'downloadDivider', 'memoryEstimatorCard', 'smartEngineSection'].forEach(k => {
+        ['memoryEstimatorCard', 'smartEngineSection'].forEach(k => {
             if (dom[k]) dom[k].classList.toggle('hidden', isApi);
         });
+        if (dom.downloadModelSection) dom.downloadModelSection.classList.remove('hidden');
     }
     if (window.updateVisionAvailabilityUI) window.updateVisionAvailabilityUI();
 
@@ -119,7 +120,20 @@ export async function fetchApiSettings() {
     if (dom.apiBaseUrl && data.api_base_url) dom.apiBaseUrl.value = data.api_base_url;
     if (dom.apiChatUrl && data.api_chat_url) dom.apiChatUrl.value = data.api_chat_url;
     if (dom.apiKeyInput && data.api_key !== undefined) dom.apiKeyInput.value = data.api_key;
-    if (dom.apiModelInput && data.api_model) dom.apiModelInput.value = data.api_model;
+    if (data.api_model) {
+        state.selectedModel = data.api_model;
+        if (dom.apiModelInput) dom.apiModelInput.value = data.api_model;
+        if (dom.apiModelSelect) {
+            let optExists = Array.from(dom.apiModelSelect.options).some(o => o.value === data.api_model);
+            if (!optExists) {
+                const opt = document.createElement('option');
+                opt.value = data.api_model;
+                opt.textContent = data.api_model;
+                dom.apiModelSelect.insertBefore(opt, dom.apiModelSelect.firstChild);
+            }
+            dom.apiModelSelect.value = data.api_model;
+        }
+    }
 
     const isMm = (data.api_multimodal !== undefined && data.api_multimodal !== null)
         ? Boolean(data.api_multimodal)
@@ -391,7 +405,24 @@ export async function generateChatTitle(activeChat) {
         });
 
         let title = (data.choices?.[0]?.message?.content || data.message?.content || '').trim();
-        title = title.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/^(Title|Topic):\s*/i, '').replace(/^["'`*#\-_.\s]+|["'`*#\-_.\s]+$/g, '').trim();
+        title = title.replace(/<think>[\s\S]*?<\/think>/g, '')
+                     .replace(/<think>[\s\S]*$/g, '')
+                     .replace(/<\|im_start\|>[\s\S]*?<\|im_end\|>/gi, '')
+                     .replace(/<\|im_start\|>|<\|im_end\|>/gi, '')
+                     .replace(/^(Title|Topic):\s*/i, '')
+                     .replace(/^(Here is|Here's|We need to generate|Generate)\s+(a\s+)?(short\s+)?(3\s*to\s*5\s*word\s+)?(title)?[:\s]*/i, '')
+                     .replace(/^["'`*#\-_.\s]+|["'`*#\-_.\s]+$/g, '')
+                     .trim();
+
+        if (title.toLowerCase().startsWith('we need to') || title.toLowerCase().startsWith('generate a')) {
+            title = '';
+        }
+
+        if (!title && titleContext) {
+            title = titleContext.split('\n')[0].replace(/^["'`*#\-_.\s]+|["'`*#\-_.\s]+$/g, '').trim();
+            if (title.length > 40) title = title.slice(0, 40).trim() + '...';
+        }
+
         if (title) {
             activeChat.title = title.length > 45 ? title.slice(0, 45).trim() + '...' : title;
             activeChat.titleGenerated = true;

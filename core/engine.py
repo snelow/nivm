@@ -249,6 +249,7 @@ def extract_metadata_from_dict(metadata: Dict[str, Any]) -> Dict[str, Any]:
         or "mixtral" in arch.lower()
         or "deepseek" in arch.lower() and (expert_count is not None and expert_count > 0)
     )
+    chat_template = str(metadata.get("tokenizer.chat_template") or "")
     return {
         "arch": arch,
         "layers": layers,
@@ -256,6 +257,7 @@ def extract_metadata_from_dict(metadata: Dict[str, Any]) -> Dict[str, Any]:
         "is_moe": is_moe,
         "expert_count": expert_count,
         "expert_used_count": expert_used_count,
+        "chat_template": chat_template,
     }
 
 
@@ -701,6 +703,16 @@ class ModelManager:
         for role in list(self.loaded_models.keys()):
             model = self.loaded_models.pop(role, None)
             if model is not None:
+                # Close multimodal chat handler first (may hold its own CUDA/mmproj context)
+                try:
+                    handler = getattr(model, "chat_handler", None)
+                    if handler is not None:
+                        if hasattr(handler, "close"):
+                            handler.close()
+                        model.chat_handler = None
+                        del handler
+                except Exception:
+                    pass
                 try:
                     if hasattr(model, "close"):
                         model.close()
@@ -712,6 +724,8 @@ class ModelManager:
         self.loaded_configs.clear()
         self.active_role = None
         self.active_name = ""
+        # Multiple gc passes to break reference cycles holding ggml CUDA contexts
+        gc.collect()
         gc.collect()
     
     def _create_chat_handler(self, config: Dict[str, Any], model_path: Optional[str] = None):
@@ -944,22 +958,36 @@ class ModelManager:
         # Create chat handler for multimodal models
         chat_handler = self._create_chat_handler(config, model_path=model_path)
         
+        # Determine chat format from GGUF metadata / chat template
+        chat_format = None
+        if not chat_handler:
+            meta = get_gguf_metadata(model_path)
+            tmpl = meta.get("chat_template") or ""
+            arch = (meta.get("arch") or "").lower()
+            if "<|im_start|>" in tmpl or "<|im_end|>" in tmpl or "chatml" in tmpl.lower() or arch in ("spark2_5", "chatml"):
+                chat_format = "chatml"
+            elif config.get("chat_format"):
+                chat_format = config.get("chat_format")
+
         def _try_load(path_to_load: str):
+            kwargs = {
+                "model_path": path_to_load,
+                "n_gpu_layers": config.get("n_gpu_layers", -1),
+                "n_ctx": config.get("n_ctx", 8192),
+                "n_batch": config.get("n_batch", 512),
+                "flash_attn": config.get("flash_attn", True),
+                "offload_kqv": config.get("offload_kqv", True),
+                "use_mlock": config.get("use_mlock", False),
+                "use_mmap": config.get("use_mmap", True),
+                "type_k": type_k,
+                "type_v": type_v,
+                "chat_handler": chat_handler,
+                "verbose": False,
+            }
+            if chat_format:
+                kwargs["chat_format"] = chat_format
             with suppress_c():
-                return Llama(
-                    model_path=path_to_load,
-                    n_gpu_layers=config.get("n_gpu_layers", -1),
-                    n_ctx=config.get("n_ctx", 8192),
-                    n_batch=config.get("n_batch", 512),
-                    flash_attn=config.get("flash_attn", True),
-                    offload_kqv=config.get("offload_kqv", True),
-                    use_mlock=config.get("use_mlock", False),
-                    use_mmap=config.get("use_mmap", True),
-                    type_k=type_k,
-                    type_v=type_v,
-                    chat_handler=chat_handler,
-                    verbose=False,
-                )
+                return Llama(**kwargs)
 
         try:
             model = _try_load(model_path)
@@ -1002,14 +1030,44 @@ class ModelManager:
         finally:
             self._loading = False
     
-    def generate(self, messages, max_tokens=2048, temperature=0.6, top_p=0.9, stream=True, repeat_penalty=1.1, enable_thinking=None):
+    def generate(self, messages, max_tokens=2048, temperature=0.6, top_p=0.9, stream=True, repeat_penalty=1.1, enable_thinking=None, stop=None):
         """Generate a chat completion using the currently active model."""
         if not self.active_role or self.active_role not in self.loaded_models:
             raise RuntimeError("No model is loaded. Call activate() first.")
         
         model = self.loaded_models[self.active_role]
+        
+        # Collect stop tokens from model metadata and active chat format
+        meta = get_gguf_metadata(self.loaded_paths.get(self.active_role, ""))
+        tmpl = meta.get("chat_template") or ""
+        arch = (meta.get("arch") or "").lower()
+
+        stop_tokens = ["<|endoftext|>"]
+        CANDIDATES = [
+            "<|im_end|>",
+            "<|im_start|>",
+            "<｜end▁of▁sentence｜>",
+            "<|eot_id|>",
+            "<end_of_turn>",
+            "</s>",
+            "<|end_of_text|>",
+        ]
+        for tok in CANDIDATES:
+            if tok in tmpl or (tok in ("<|im_end|>", "<|im_start|>") and (arch in ("spark2_5", "chatml") or getattr(model, "chat_format", None) == "chatml")):
+                if tok not in stop_tokens:
+                    stop_tokens.append(tok)
+
+        if stop:
+            if isinstance(stop, str):
+                if stop not in stop_tokens:
+                    stop_tokens.append(stop)
+            elif isinstance(stop, (list, tuple)):
+                for s in stop:
+                    if s and s not in stop_tokens:
+                        stop_tokens.append(s)
+
         with suppress_c():
-            handler = model.chat_handler or model._chat_handlers.get(model.chat_format)
+            handler = getattr(model, "chat_handler", None)
             if handler and enable_thinking is not None:
                 try:
                     return handler(
@@ -1039,6 +1097,7 @@ class ModelManager:
                     top_p=top_p,
                     repeat_penalty=repeat_penalty,
                     stream=stream,
+                    stop=stop_tokens,
                 )
             except ValueError as ve:
                 if "Failed to load mtmd context" in str(ve) and getattr(model, "chat_handler", None):
@@ -1051,6 +1110,7 @@ class ModelManager:
                         top_p=top_p,
                         repeat_penalty=repeat_penalty,
                         stream=stream,
+                        stop=stop_tokens,
                     )
                 raise
 

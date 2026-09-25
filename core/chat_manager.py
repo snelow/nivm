@@ -276,39 +276,48 @@ class ChatGenerationManager:
             job.broadcast_chunk(f"data: {json.dumps(meta_chunk)}\n\n")
 
             token_count = 0
-            async with httpx.AsyncClient(timeout=180.0) as client:
-                async with client.stream("POST", api_chat_url, headers=headers, json=payload) as resp:
-                    if resp.status_code != 200:
-                        err_body = await resp.aread()
-                        err_text = err_body.decode("utf-8", errors="replace")
-                        logger.error(f"External API error {resp.status_code}: {err_text}")
-                        job.broadcast_chunk(f"data: {json.dumps({'error': f'API Error {resp.status_code}: {err_text}'})}\n\n")
-                        job.finish(status="error", error=err_text)
-                        return
+            for attempt in range(3):
+                try:
+                    async with httpx.AsyncClient(timeout=180.0) as client:
+                        async with client.stream("POST", api_chat_url, headers=headers, json=payload) as resp:
+                            if resp.status_code != 200:
+                                err_body = await resp.aread()
+                                err_text = err_body.decode("utf-8", errors="replace")
+                                logger.error(f"External API error {resp.status_code}: {err_text}")
+                                job.broadcast_chunk(f"data: {json.dumps({'error': f'API Error {resp.status_code}: {err_text}'})}\n\n")
+                                job.finish(status="error", error=err_text)
+                                return
 
-                    async for line in resp.aiter_lines():
-                        if job.stop_requested:
-                            logger.info(f"Chat {job.chat_id}: API stream stopped by user request.")
-                            break
-                        if not line:
-                            continue
-                        line = line.strip()
-                        if line.startswith("data:"):
-                            data_str = line[5:].strip()
-                            if data_str == "[DONE]":
-                                break
-                            try:
-                                chunk = json.loads(data_str)
-                                job.broadcast_chunk(f"data: {json.dumps(chunk)}\n\n")
-                                if "choices" in chunk and len(chunk["choices"]) > 0:
-                                    delta = chunk["choices"][0].get("delta", {})
-                                    if "content" in delta and delta["content"]:
-                                        job.full_text += delta["content"]
-                                        token_count += 1
-                                    if "reasoning_content" in delta and delta["reasoning_content"]:
-                                        job.reasoning_text += delta["reasoning_content"]
-                            except Exception:
-                                job.broadcast_chunk(f"{line}\n\n")
+                            async for line in resp.aiter_lines():
+                                if job.stop_requested:
+                                    logger.info(f"Chat {job.chat_id}: API stream stopped by user request.")
+                                    break
+                                if not line:
+                                    continue
+                                line = line.strip()
+                                if line.startswith("data:"):
+                                    data_str = line[5:].strip()
+                                    if data_str == "[DONE]":
+                                        break
+                                    try:
+                                        chunk = json.loads(data_str)
+                                        job.broadcast_chunk(f"data: {json.dumps(chunk)}\n\n")
+                                        if "choices" in chunk and len(chunk["choices"]) > 0:
+                                            delta = chunk["choices"][0].get("delta", {})
+                                            if "content" in delta and delta["content"]:
+                                                job.full_text += delta["content"]
+                                                token_count += 1
+                                            if "reasoning_content" in delta and delta["reasoning_content"]:
+                                                job.reasoning_text += delta["reasoning_content"]
+                                    except Exception:
+                                        job.broadcast_chunk(f"{line}\n\n")
+                    break
+                except (httpx.ConnectError, httpx.NetworkError) as conn_err:
+                    if attempt < 2 and not job.stop_requested and token_count == 0:
+                        logger.warning(f"Chat {job.chat_id}: API connection failed ({conn_err}), retrying in 1.5s (attempt {attempt + 1}/3)...")
+                        await asyncio.sleep(1.5)
+                        continue
+                    raise
 
             elapsed = time.time() - start_time
             tk_s = token_count / elapsed if elapsed > 0 else 0
@@ -453,13 +462,17 @@ class ChatGenerationManager:
                         if "choices" in chunk and len(chunk["choices"]) > 0:
                             delta = chunk["choices"][0].get("delta", {})
                             if "content" in delta and delta["content"]:
-                                job.full_text += delta["content"]
+                                piece = delta["content"].replace("<|im_end|>", "").replace("<|im_start|>", "")
+                                job.full_text += piece
                             if "reasoning_content" in delta and delta["reasoning_content"]:
-                                job.reasoning_text += delta["reasoning_content"]
+                                r_piece = delta["reasoning_content"].replace("<|im_end|>", "").replace("<|im_start|>", "")
+                                job.reasoning_text += r_piece
                     except Exception:
                         pass
 
             await loop.run_in_executor(None, sync_generate)
+            job.full_text = re.sub(r'<\|im_start\|>|<\|im_end\|>', '', job.full_text).strip()
+            job.reasoning_text = re.sub(r'<\|im_start\|>|<\|im_end\|>', '', job.reasoning_text).strip()
 
             elapsed = time.time() - start_time
             raw_tokens = []

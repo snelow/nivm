@@ -839,18 +839,18 @@
 }
 
 #statsWindow {
-    width: 420px;
-    max-width: min(420px, 94vw);
+    width: 485px;
+    max-width: min(485px, 94vw);
 }
 
 #statsWindowHeader {
-    padding: 13px 16px;
-    gap: 12px;
+    padding: 12px 16px;
+    gap: 10px;
 }
 
 #statsWindowHeader .window-title {
     white-space: nowrap;
-    font-size: 0.92rem;
+    font-size: 0.88rem;
     gap: 8px;
     flex-shrink: 0;
 }
@@ -858,10 +858,10 @@
 .stats-mode-badge {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 3px 9px;
+    gap: 5px;
+    padding: 2.5px 8px;
     border-radius: 12px;
-    font-size: 0.72rem;
+    font-size: 0.70rem;
     font-weight: 600;
     letter-spacing: 0.02em;
     white-space: nowrap;
@@ -922,6 +922,153 @@
 .stats-mode-badge.mode-local .stats-mode-dot {
     background: #34d399;
     box-shadow: 0 0 6px #34d399;
+}
+
+/* Live VRAM Telemetry Mini-Pill in Stats Header */
+.stats-vram-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2.5px 8px;
+    border-radius: 12px;
+    font-size: 0.69rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-light, rgba(255, 255, 255, 0.1));
+    color: var(--text-secondary);
+    transition: all 0.25s ease;
+}
+
+.stats-vram-pill i {
+    font-size: 0.74rem;
+    opacity: 0.85;
+}
+
+.stats-vram-pill.vram-normal {
+    background: rgba(52, 211, 153, 0.1);
+    color: #34d399;
+    border-color: rgba(52, 211, 153, 0.3);
+}
+
+.stats-vram-pill.vram-normal i {
+    color: #34d399;
+}
+
+.stats-vram-pill.vram-warn {
+    background: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.35);
+}
+
+.stats-vram-pill.vram-warn i {
+    color: #fbbf24;
+}
+
+.stats-vram-pill.vram-critical {
+    background: rgba(239, 68, 68, 0.14);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.4);
+    animation: vramPulseCrit 1.5s infinite alternate;
+}
+
+.stats-vram-pill.vram-critical i {
+    color: #f87171;
+}
+
+@keyframes vramPulseCrit {
+    0% { box-shadow: 0 0 4px rgba(239, 68, 68, 0.2); }
+    100% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.5); }
+}
+
+/* API Test Connection & Ping Probe */
+.api-test-connection-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.api-test-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.api-test-btn i {
+    font-size: 0.8rem;
+    color: var(--accent-purple, #a78bfa);
+    transition: transform 0.2s ease;
+}
+
+.api-test-btn:hover:not(:disabled) i {
+    transform: scale(1.15);
+}
+
+.api-test-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.2;
+    transition: all 0.25s ease;
+    white-space: nowrap;
+}
+
+.api-test-badge.testing {
+    background: rgba(56, 189, 248, 0.1);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.api-test-badge.success {
+    background: rgba(52, 211, 153, 0.12);
+    color: #34d399;
+    border: 1px solid rgba(52, 211, 153, 0.35);
+    box-shadow: 0 0 8px rgba(52, 211, 153, 0.15);
+}
+
+.api-test-badge.error {
+    background: rgba(239, 68, 68, 0.12);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.api-test-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.api-test-badge.testing .api-test-dot {
+    background: #38bdf8;
+    animation: statsPulseDot 1s infinite alternate;
+}
+
+.api-test-badge.success .api-test-dot {
+    background: #10b981;
+    box-shadow: 0 0 6px #10b981;
+}
+
+.api-test-badge.error .api-test-dot {
+    background: #ef4444;
+    box-shadow: 0 0 6px #ef4444;
 }
 
 .stats-section {
@@ -1155,8 +1302,8 @@
 
 /* settings modal window layout */
 #settingsWindow {
-    width: 500px;
-    max-width: min(500px, 95vw);
+    width: 520px;
+    max-width: min(520px, 95vw);
     height: min(88vh, 800px);
     max-height: 88vh;
     display: flex;
@@ -1295,11 +1442,12 @@
 .settings-nav-tabs {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 6px 10px;
+    gap: 5px;
+    padding: 7px 10px;
     background: rgba(255, 255, 255, 0.015);
     border-bottom: 1px solid var(--glass-border);
     flex-shrink: 0;
+    box-sizing: border-box;
 }
 
 .settings-nav-tabs::-webkit-scrollbar {
@@ -1307,57 +1455,51 @@
 }
 
 .settings-tab-btn {
+    flex: 1 1 0;
     min-width: 0;
+    height: 32px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 4px;
-    padding: 6px 6px;
+    gap: 5px;
+    padding: 0 6px;
     border-radius: 7px;
     font-size: 0.73rem;
     font-weight: 500;
+    line-height: 1;
     color: var(--text-secondary);
-    background: transparent;
+    background: rgba(255, 255, 255, 0.02);
     border: 1px solid transparent;
     cursor: pointer;
     white-space: nowrap;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     user-select: none;
-}
-
-.settings-tab-btn[data-tab="inference"] {
-    flex: 1 1 0;
-}
-
-.settings-tab-btn[data-tab="imageStudio"] {
-    flex: 0 0 auto;
-    padding: 6px 8px;
-}
-
-.settings-tab-btn[data-tab="downloader"] {
-    flex: 1.15 1 0;
-}
-
-.settings-tab-btn[data-tab="preferences"] {
-    flex: 1.25 1 0;
+    box-sizing: border-box;
 }
 
 .settings-tab-btn span {
+    display: inline-block;
+    line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-
-
 .settings-tab-btn i {
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     font-size: 0.8rem;
+    flex-shrink: 0;
     opacity: 0.7;
     transition: all 0.2s ease;
 }
 
 .settings-tab-btn:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.08);
     color: var(--text-primary);
 }
 
@@ -1370,12 +1512,26 @@
     border-color: rgba(var(--accent-purple-rgb, 168, 85, 247), 0.34);
     color: #ffffff;
     font-weight: 600;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.25);
 }
 
 .settings-tab-btn.active i {
     color: var(--accent-purple, #a78bfa);
     opacity: 1;
+}
+
+/* Dynamic Monocraft font support: compact tabs so no text cuts off */
+html[data-font-family="monocraft"] .settings-tab-btn {
+    font-size: 0.67rem;
+    letter-spacing: -0.015em;
+    gap: 4px;
+    padding: 0 4px;
+}
+
+html[data-font-family="monocraft"] .settings-tab-btn i {
+    width: 14px;
+    height: 14px;
+    font-size: 0.72rem;
 }
 
 /* Tab Panes */
@@ -1613,8 +1769,10 @@
         gap: 8px;
     }
     .settings-tab-btn {
-        padding: 5px 9px;
-        font-size: 0.72rem;
+        height: 30px;
+        padding: 0 6px;
+        font-size: 0.70rem;
+        gap: 4px;
     }
 }
 

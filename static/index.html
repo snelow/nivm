@@ -184,9 +184,12 @@
                 <button class="icon-btn-sm" id="closeHistoryBtn" title="Close Drawer"><i
                         class="fa-solid fa-xmark"></i></button>
             </div>
-            <div class="drawer-search">
-                <i class="fa-solid fa-magnifying-glass drawer-search-icon"></i>
-                <input type="text" id="chatSearchInput" class="search-input" placeholder="Search conversations...">
+            <div class="drawer-search-wrap">
+                <button type="button" class="drawer-search-btn" id="drawerSearchBtn" title="Search chats (Ctrl+Shift+F or /)">
+                    <i class="fa-solid fa-magnifying-glass drawer-search-icon"></i>
+                    <span class="drawer-search-text">Search chats...</span>
+                    <span class="drawer-search-kbd">Ctrl+Shift+F</span>
+                </button>
             </div>
             <div class="drawer-body">
                 <div class="chat-history-list" id="chatHistoryList">
@@ -1277,12 +1280,15 @@
                                 </button>
                             </div>
                             <select id="apiModelSelect" class="modal-select">
-                                <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+                                <option value="gemini-2.5-flash">gemini-2.5-flash (Google)</option>
+                                <option value="gemini-2.0-flash">gemini-2.0-flash (Google)</option>
+                                <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile (Groq)</option>
+                                <option value="gpt-4o-mini">gpt-4o-mini (OpenAI)</option>
                                 <option value="__custom__">+ Enter Custom Model...</option>
                             </select>
                             <input type="text" id="apiModelInput" class="api-endpoint-input hidden"
-                                style="margin-top: 6px;" placeholder="Type custom model name (e.g. meta-llama/...)"
-                                value="llama-3.3-70b-versatile" autocomplete="off">
+                                style="margin-top: 6px;" placeholder="Type custom model name (e.g. gemini-2.5-flash)"
+                                value="gemini-2.5-flash" autocomplete="off">
                             <div id="fetchModelsStatus" style="font-size: 0.72rem; margin-top: 4px; display: none;">
                             </div>
                             <div class="role-flags-row" style="margin-top: 8px;">
@@ -1290,6 +1296,18 @@
                                     title="Enable multimodal support (image and document attachments) if the external model or provider supports vision">
                                     <input type="checkbox" id="apiMultimodalCheck"> Multimodal / Vision
                                 </label>
+                            </div>
+                        </div>
+
+                        <!-- API Live Connection & Ping Probe -->
+                        <div class="api-test-connection-row" style="margin: 12px 0 10px 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <button type="button" class="btn-secondary api-test-btn" id="testApiConnectionBtn" title="Send a 1-token probe to test credentials & measure live latency">
+                                <i class="fa-solid fa-bolt"></i>
+                                <span>Test Connection</span>
+                            </button>
+                            <div id="apiTestStatusBadge" class="api-test-badge hidden">
+                                <span class="api-test-dot"></span>
+                                <span id="apiTestStatusText">Testing...</span>
                             </div>
                         </div>
 
@@ -2612,11 +2630,14 @@
 
     <!-- Stats Window Modal -->
     <div class="draggable-window hidden" id="statsWindow"
-        style="width:420px; max-width:min(420px, 94vw); left:60px; top:15px; z-index:100;">
+        style="width:485px; max-width:min(485px, 94vw); left:60px; top:15px; z-index:100;">
         <div class="window-header" id="statsWindowHeader">
-            <span class="window-title"><i class="fa-solid fa-chart-pie" style="color: var(--accent-purple);"></i> Usage
-                Stats & Info</span>
+            <span class="window-title"><i class="fa-solid fa-chart-pie" style="color: var(--accent-purple);"></i> Usage Stats</span>
             <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
+                <span class="stats-vram-pill" id="statsVramPill" title="Live GPU VRAM Telemetry">
+                    <i class="fa-solid fa-microchip"></i>
+                    <span id="statsVramText">VRAM: -- / -- GB</span>
+                </span>
                 <span class="stats-mode-badge mode-api" id="statsModeBadge">
                     <span class="stats-mode-dot"></span>
                     <span id="statsModeBadgeText">API Cloud</span>
@@ -2800,6 +2821,30 @@
                 <div id="netLogContainer" class="sentinel-log-container">
                     <!-- Populated by JS -->
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Spotlight Search Modal -->
+    <div class="window-wrapper hidden" id="globalSearchModal">
+        <div class="global-search-container" id="globalSearchContainer">
+            <div class="global-search-header">
+                <i class="fa-solid fa-magnifying-glass search-leading-icon"></i>
+                <input type="text" id="globalSearchInput" class="global-search-input"
+                    placeholder="Search all conversations, messages, and memory..." autocomplete="off">
+                <span class="global-search-kbd" id="globalSearchKbd">ESC</span>
+                <button class="icon-btn-sm" id="closeGlobalSearchBtn" type="button" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="global-search-toolbar">
+                <div class="search-filter-pills" id="searchFilterPills">
+                    <button type="button" class="search-filter-pill active" data-filter="all">All</button>
+                    <button type="button" class="search-filter-pill" data-filter="chats"><i class="fa-regular fa-message"></i> Messages</button>
+                    <button type="button" class="search-filter-pill" data-filter="memory"><i class="fa-solid fa-brain"></i> Memory</button>
+                </div>
+                <span class="global-search-stats" id="globalSearchStats"></span>
+            </div>
+            <div class="global-search-results" id="globalSearchResults">
+                <!-- Dynamically populated -->
             </div>
         </div>
     </div>

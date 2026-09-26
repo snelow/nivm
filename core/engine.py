@@ -594,28 +594,31 @@ class ModelManager:
 
             try:
                 tmpl = str(m.metadata.get("tokenizer.chat_template", ""))
-                gen_section = tmpl.split("add_generation_prompt")[-1]
-                # All known model thinking-tag prefills.
-                # If the model's chat template contains any of these in its
-                # generation_prompt section, the frontend will enter THINKING
-                # phase immediately on the first chunk (no tag detection needed).
-                #
-                # HOW TO ADD A NEW MODEL:
-                #   1. Add the open-tag string here.
-                #   2. Also update static/js/think_tags.js and core/chat_manager.py.
-                #   See the HOW-TO in static/js/think_tags.js for a full example.
-                PREFILL_MARKERS = [
-                    "<think>",                    # QwQ, Qwen3, DeepSeek-R1, Phi-4
-                    "<thought>",                  # Generic
-                    "<reasoning>",                # Generic
-                    "<|channel>thought",           # Gemma 4
-                    "channel>thought",             # Gemma 4 (partial match)
-                    "[THINK]",                     # Mistral
-                    "<|thinking|>",                # Llama-style
-                    "<|start_thinking|>",          # Llama-style
-                ]
-                if any(marker in gen_section for marker in PREFILL_MARKERS):
-                    has_prefill_think = True
+                loaded_file = self.loaded_paths.get(self.active_role, "")
+                if not tmpl and loaded_file and os.path.isfile(loaded_file):
+                    tmpl = str(_read_gguf_header_fast(loaded_file).get("tokenizer.chat_template", ""))
+                if tmpl:
+                    # Test-format a turn to see if the template actually outputs an opening think tag
+                    # at the very end of the generation prompt (e.g. DeepSeek-R1, QwQ, Spark).
+                    # Models like Gemma 4, Llama 3, and Mistral do NOT prefill thinking tags;
+                    # they emit tags during generation or in tool responses, which is handled
+                    # dynamically by stream tag detection.
+                    from llama_cpp.llama_chat_format import Jinja2ChatFormatter
+                    bos = str(m.metadata.get("tokenizer.ggml.bos_token_id", "<bos>"))
+                    eos = str(m.metadata.get("tokenizer.ggml.eos_token_id", "<eos>"))
+                    try:
+                        formatter = Jinja2ChatFormatter(template=tmpl, eos_token=eos, bos_token=bos)
+                        formatted = formatter(messages=[{"role": "user", "content": "test"}])
+                        p_str = (formatted.prompt or "").rstrip()
+                        THINK_PREFILL_TAGS = ("<think>", "<thought>", "<reasoning>", "[THINK]", "<|thinking|>", "<|start_thinking|>")
+                        if any(p_str.endswith(tag) for tag in THINK_PREFILL_TAGS):
+                            has_prefill_think = True
+                    except Exception:
+                        if "add_generation_prompt" in tmpl:
+                            gen_section = tmpl.split("add_generation_prompt")[-1]
+                            # Only genuine think prefills like '<think>' (not tool responses or Gemma 4 channels)
+                            if "<think>" in gen_section and "tool_response" not in gen_section:
+                                has_prefill_think = True
             except Exception:
                 pass
 
@@ -1067,52 +1070,52 @@ class ModelManager:
                         stop_tokens.append(s)
 
         with suppress_c():
-            handler = getattr(model, "chat_handler", None)
-            if handler and enable_thinking is not None:
+            from llama_cpp import llama_chat_format
+            handler = (
+                getattr(model, "chat_handler", None)
+                or getattr(model, "_chat_handlers", {}).get(getattr(model, "chat_format", None))
+                or llama_chat_format.get_chat_completion_handler(getattr(model, "chat_format", "chat_template.default"))
+            )
+            if handler:
+                kwargs = {
+                    "llama": model,
+                    "messages": messages,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "top_p": top_p,
+                    "repeat_penalty": repeat_penalty,
+                    "stream": stream,
+                    "stop": stop_tokens,
+                }
+                if enable_thinking is not None:
+                    kwargs["enable_thinking"] = enable_thinking
                 try:
-                    return handler(
-                        llama=model,
-                        messages=messages,
-                        max_tokens=max_tokens,
-                        temperature=temperature,
-                        top_p=top_p,
-                        repeat_penalty=repeat_penalty,
-                        stream=stream,
-                        enable_thinking=enable_thinking,
-                    )
+                    return handler(**kwargs)
+                except TypeError:
+                    kwargs.pop("enable_thinking", None)
+                    return handler(**kwargs)
                 except ValueError as ve:
-                    if "Failed to load mtmd context" in str(ve):
-                        logger.warning(f"Direct chat_handler mtmd failed ({ve}). Detaching chat handler and retrying text-only...")
+                    if "Failed to load mtmd context" in str(ve) and getattr(model, "chat_handler", None):
+                        logger.warning(f"Multimodal chat handler mtmd failed ({ve}). Detaching chat handler and retrying text-only...")
                         model.chat_handler = None
-                    else:
-                        logger.warning(f"Direct chat_handler invocation failed: {ve}")
-                except Exception as e:
-                    logger.warning(f"Direct chat_handler invocation failed: {e}")
+                        handler = (
+                            getattr(model, "_chat_handlers", {}).get(getattr(model, "chat_format", None))
+                            or llama_chat_format.get_chat_completion_handler(getattr(model, "chat_format", "chat_template.default"))
+                        )
+                        if handler:
+                            kwargs["llama"] = model
+                            return handler(**kwargs)
+                    raise
 
-            try:
-                return model.create_chat_completion(
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    top_p=top_p,
-                    repeat_penalty=repeat_penalty,
-                    stream=stream,
-                    stop=stop_tokens,
-                )
-            except ValueError as ve:
-                if "Failed to load mtmd context" in str(ve) and getattr(model, "chat_handler", None):
-                    logger.warning(f"Multimodal projector context load failed ({ve}). Detaching incompatible projector and retrying text generation...")
-                    model.chat_handler = None
-                    return model.create_chat_completion(
-                        messages=messages,
-                        max_tokens=max_tokens,
-                        temperature=temperature,
-                        top_p=top_p,
-                        repeat_penalty=repeat_penalty,
-                        stream=stream,
-                        stop=stop_tokens,
-                    )
-                raise
+            return model.create_chat_completion(
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                repeat_penalty=repeat_penalty,
+                stream=stream,
+                stop=stop_tokens,
+            )
 
     def get_active_model(self):
         """Return the active Llama model instance if loaded."""

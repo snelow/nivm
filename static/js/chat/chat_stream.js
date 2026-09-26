@@ -319,7 +319,7 @@ CRITICAL SPOKEN CONVERSATION RULES:
                         const json = JSON.parse(trimmed.substring(6));
                         if (json.model_info) {
                             modelInfo = json.model_info;
-                            if (modelInfo.prefill_think && streamPhase === 'IDLE') {
+                            if (modelInfo.prefill_think && isThinkingEnabled && streamPhase === 'IDLE') {
                                 streamPhase = 'THINKING';
                                 thinkStartTime = performance.now();
                                 setVoiceOrbGeneratingState(true, 'Thinking…');
@@ -395,7 +395,7 @@ CRITICAL SPOKEN CONVERSATION RULES:
                                             setVoiceOrbGeneratingState(true, 'Thinking…');
                                             reasoningBuffer += cleanReasoningText(chunkText);
                                             idleBuffer = '';
-                                        } else if (modelInfo?.prefill_think) {
+                                        } else if (modelInfo?.prefill_think && isThinkingEnabled) {
                                             streamPhase = 'THINKING';
                                             if (!thinkStartTime) thinkStartTime = performance.now();
                                             setVoiceOrbGeneratingState(true, 'Thinking…');
@@ -499,7 +499,19 @@ CRITICAL SPOKEN CONVERSATION RULES:
         }
 
         if (reasoningBuffer && !fullResponse.includes('</think>')) {
-            fullResponse = `<think>${reasoningBuffer}</think>${responseBuffer}`;
+            const hadExplicitOpen = hasRawOpenTag(reasoningBuffer) || reasoningBuffer.includes('<think>');
+            if (!hadExplicitOpen && !responseBuffer) {
+                // If neither an open tag nor close tag was ever emitted by the model,
+                // and responseBuffer is empty, the entire generated text was a direct answer,
+                // not internal reasoning. Recover it into responseBuffer so the user sees their response.
+                responseBuffer = reasoningBuffer;
+                reasoningBuffer = '';
+                fullResponse = responseBuffer;
+                thinkStartTime = null;
+                thinkEndTime = null;
+            } else {
+                fullResponse = `<think>${reasoningBuffer}</think>${responseBuffer}`;
+            }
         } else if (!fullResponse && responseBuffer) {
             fullResponse = responseBuffer;
         }

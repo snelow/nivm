@@ -20,9 +20,10 @@
  * 2. BACKEND (core/chat_manager.py → _normalize_think_tags()):
  *    - Add re.sub() lines for both open and close tags (mirrors this file)
  * 
- * 3. ENGINE (core/engine.py → get_active_info() → PREFILL_MARKERS):
- *    - Add the open-tag string to the PREFILL_MARKERS list if the model's
- *      chat template pre-fills thinking in generation prompt.
+ * 3. ENGINE (core/engine.py → get_active_info()):
+ *    - Handled automatically via Jinja2ChatFormatter prompt ending inspection
+ *      (only models whose chat template actually ends the generation prompt with
+ *      an opening think tag like <think> are flagged as prefill_think).
  * 
  * Example — adding support for a hypothetical "FooModel" that uses
  *           <|begin_reason|> ... <|end_reason|>:

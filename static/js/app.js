@@ -80,6 +80,12 @@ const startApp = async () => {
             setupGlobalSearchUI();
 
             if (dom.userNameInput) {
+                const u = state.userName || '';
+                const uLower = u.trim().toLowerCase();
+                if (uLower.startsWith('http://') || uLower.startsWith('https://') || uLower.includes('generativelanguage') || uLower.includes('googleapis') || uLower.includes('groq.com') || uLower.includes('/v1')) {
+                    state.userName = '';
+                    localStorage.removeItem('nivm_userName');
+                }
                 dom.userNameInput.value = state.userName;
             }
             if (dom.aiNameInput) {
@@ -305,11 +311,29 @@ const startApp = async () => {
             });
         }
 
+        let _userPrefSaveTimeout = null;
+        const debouncedSaveUserPrefs = () => {
+            clearTimeout(_userPrefSaveTimeout);
+            _userPrefSaveTimeout = setTimeout(() => {
+                saveApiSettings().catch(err => console.warn('Failed to sync preferences to server:', err));
+            }, 600);
+        };
+
         if (dom.userNameInput) {
             dom.userNameInput.addEventListener('input', (e) => {
-                state.userName = e.target.value;
+                const val = e.target.value;
+                const vLower = val.trim().toLowerCase();
+                if (vLower.startsWith('http://') || vLower.startsWith('https://') || vLower.includes('generativelanguage') || vLower.includes('googleapis') || vLower.includes('groq.com') || vLower.includes('/v1')) {
+                    e.target.value = '';
+                    state.userName = '';
+                    localStorage.removeItem('nivm_userName');
+                    setupDynamicGreeting();
+                    return;
+                }
+                state.userName = val;
                 localStorage.setItem('nivm_userName', state.userName);
                 setupDynamicGreeting();
+                debouncedSaveUserPrefs();
             });
         }
 
@@ -323,6 +347,7 @@ const startApp = async () => {
                     localStorage.removeItem('nivm_ai_name');
                 }
                 updateAssistantNameUI();
+                debouncedSaveUserPrefs();
             });
         }
 

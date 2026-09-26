@@ -67,8 +67,17 @@ export let themeState = {
 };
 if (themeState.bgMotion === 'embers') themeState.bgMotion = 'hexgrid';
 
+let _themeSyncTimer = null;
 export function saveThemeConfig() {
     localStorage.setItem('nivm_theme_config', JSON.stringify(themeState));
+    clearTimeout(_themeSyncTimer);
+    _themeSyncTimer = setTimeout(() => {
+        fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ theme_state: themeState })
+        }).catch(() => {});
+    }, 500);
 }
 
 try { localStorage.removeItem('nivm_saved_chats'); } catch (_) {}
@@ -89,9 +98,19 @@ export function saveUsageStats() {
 
 export function saveEnabledTools() {
     localStorage.setItem('nivm_enabledTools', JSON.stringify(state.enabledTools));
+    fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled_tools: state.enabledTools })
+    }).catch(() => {});
 }
 
 export function saveTerminalSecurityMode(mode) {
     state.terminalSecurityMode = mode;
     localStorage.setItem('nivm_terminalSecurityMode', mode);
+    fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ terminal_security_mode: mode })
+    }).catch(() => {});
 }

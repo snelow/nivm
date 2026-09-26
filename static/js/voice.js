@@ -67,13 +67,52 @@ try {
     console.warn('Failed to load voice config:', e);
 }
 
+let _voiceSyncTimer = null;
 export function saveVoiceConfig() {
     try {
         localStorage.setItem('nivm_voice_config', JSON.stringify(voiceConfig));
+        clearTimeout(_voiceSyncTimer);
+        _voiceSyncTimer = setTimeout(() => {
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ voice_config: voiceConfig })
+            }).catch(() => {});
+        }, 500);
     } catch (e) {
         console.warn('Failed to save voice config:', e);
     }
 }
+
+export function reloadVoiceConfig() {
+    try {
+        const saved = localStorage.getItem('nivm_voice_config');
+        if (saved) {
+            voiceConfig = { ...DEFAULT_CONFIG, ...JSON.parse(saved) };
+            const currentVoiceId = voiceConfig.voiceUri || 'af_heart';
+            applyVoiceAccent(currentVoiceId);
+            const colorBtns = document.querySelectorAll('.voice-color-btn');
+            const activeBtn = document.querySelector(`.voice-color-btn[data-voice="${currentVoiceId}"]`);
+            if (activeBtn) {
+                colorBtns.forEach(b => b.classList.remove('active'));
+                activeBtn.classList.add('active');
+            }
+            if (dom.voiceWarmthSlider) {
+                const warmthPct = Math.round((parseFloat(voiceConfig.warmth ?? 0.0)) * 100);
+                dom.voiceWarmthSlider.value = warmthPct;
+                if (dom.voiceWarmthVal) dom.voiceWarmthVal.textContent = `${warmthPct}%`;
+            }
+            if (dom.voiceRateSlider) {
+                dom.voiceRateSlider.value = voiceConfig.rate || 1.00;
+                if (dom.voiceRateVal) dom.voiceRateVal.textContent = `${parseFloat(voiceConfig.rate || 1.00).toFixed(2)}x`;
+            }
+            if (dom.autoSpeakToggle) {
+                dom.autoSpeakToggle.checked = !!voiceConfig.autoSpeak;
+            }
+        }
+    } catch (_) {}
+}
+if (typeof window !== 'undefined') window.reloadVoiceConfig = reloadVoiceConfig;
 
 export const VOICE_COLORS = {
     'af_heart': { hex: '#22c55e', rgb: '34, 197, 94', num: '1' },
@@ -1092,6 +1131,11 @@ export async function setupVoiceUI() {
                 e.stopPropagation();
                 sttEngine = sttEngine === 'web' ? 'whisper' : 'web';
                 localStorage.setItem('nivm_stt_engine', sttEngine);
+                fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ stt_engine: sttEngine })
+                }).catch(() => {});
                 updateSttUIState();
                 if (window.showNotification) {
                     window.showNotification(
@@ -1108,6 +1152,11 @@ export async function setupVoiceUI() {
             webBtn.addEventListener('click', () => {
                 sttEngine = 'web';
                 localStorage.setItem('nivm_stt_engine', sttEngine);
+                fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ stt_engine: sttEngine })
+                }).catch(() => {});
                 updateSttUIState();
             });
         }
@@ -1116,6 +1165,11 @@ export async function setupVoiceUI() {
             whisperBtn.addEventListener('click', () => {
                 sttEngine = 'whisper';
                 localStorage.setItem('nivm_stt_engine', sttEngine);
+                fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ stt_engine: sttEngine })
+                }).catch(() => {});
                 updateSttUIState();
             });
         }
@@ -1124,6 +1178,11 @@ export async function setupVoiceUI() {
             modelSelect.addEventListener('change', async () => {
                 whisperModel = modelSelect.value;
                 localStorage.setItem('nivm_whisper_model', whisperModel);
+                fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ whisper_model: whisperModel })
+                }).catch(() => {});
                 updateSttUIState();
                 try {
                     await fetch('/api/stt/config', {

@@ -1226,7 +1226,7 @@
                             <label style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Base URL (Host
                                 Endpoint)</label>
                             <div class="api-endpoint-box">
-                                <input type="text" id="apiBaseUrl" class="api-endpoint-input"
+                                <input type="text" id="apiBaseUrl" name="api_host_base_url" autocomplete="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" class="api-endpoint-input"
                                     placeholder="https://api.groq.com/openai/v1" value="https://api.groq.com/openai/v1">
                                 <button type="button" class="api-copy-btn" id="copyApiBaseUrlBtn" title="Copy Base URL">
                                     <i class="fa-regular fa-copy"></i>
@@ -1239,7 +1239,7 @@
                             <label style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Chat Completions
                                 URL</label>
                             <div class="api-endpoint-box">
-                                <input type="text" id="apiChatUrl" class="api-endpoint-input"
+                                <input type="text" id="apiChatUrl" name="api_chat_endpoint_url" autocomplete="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" class="api-endpoint-input"
                                     placeholder="https://api.groq.com/openai/v1/chat/completions"
                                     value="https://api.groq.com/openai/v1/chat/completions">
                                 <button type="button" class="api-copy-btn" id="copyApiChatUrlBtn" title="Copy Chat URL">
@@ -1257,8 +1257,8 @@
                                     dependent)</span>
                             </label>
                             <div class="api-endpoint-box">
-                                <input type="password" id="apiKeyInput" class="api-endpoint-input"
-                                    placeholder="gsk_... or sk-... (leave empty for Ollama)" autocomplete="off">
+                                <input type="password" id="apiKeyInput" name="remote_provider_api_key" autocomplete="new-password" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" class="api-endpoint-input"
+                                    placeholder="gsk_... or sk-... (leave empty for Ollama)">
                                 <button type="button" class="api-copy-btn" id="toggleApiKeyVisibilityBtn"
                                     title="Toggle Visibility">
                                     <i class="fa-regular fa-eye"></i>
@@ -1602,12 +1602,12 @@
                         <div class="section-title">Identity & Preferences</div>
                         <div class="field-group" style="margin-bottom: 14px;">
                             <label for="aiNameInput" id="aiNameInputLabel">What do you want to call the AI?</label>
-                            <input type="text" id="aiNameInput" placeholder="e.g. nivm, noa, or model name (default: nivm)">
+                            <input type="text" id="aiNameInput" name="assistant_custom_display_name" autocomplete="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" placeholder="e.g. nivm, noa, or model name (default: nivm)">
                             <span class="field-helper" style="display: block; font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">Sets the assistant's name across prompts, chat placeholders, greetings, and system instructions.</span>
                         </div>
                         <div class="field-group">
                             <label for="userNameInput" id="userNameInputLabel">What should the AI call you?</label>
-                            <input type="text" id="userNameInput" placeholder="Enter your name (optional)">
+                            <input type="text" id="userNameInput" name="user_preferred_display_name" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" placeholder="Enter your name (optional)">
                             <div class="pref-quick-grid">
                                 <button type="button" class="pref-quick-btn" id="openPersonalityFromSettingsBtn"
                                     title="Customize Personality & Instructions">
@@ -3002,10 +3002,11 @@
 
             <!-- Login Form (Single-User Password Only) -->
             <form class="auth-form" id="authLoginForm" autocomplete="on">
+                <input type="text" name="username" value="Owner" autocomplete="username" style="display:none !important; position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none;" tabindex="-1" aria-hidden="true">
                 <div class="auth-input-group">
                     <div class="auth-input-wrapper">
                         <i class="fa-solid fa-lock auth-leading-icon"></i>
-                        <input type="password" id="authPasswordInput" class="auth-input" placeholder="Enter password" autocomplete="current-password" required autofocus>
+                        <input type="password" id="authPasswordInput" name="password" class="auth-input" placeholder="Enter password" autocomplete="current-password" required autofocus>
                         <button type="button" class="auth-toggle-pwd-btn" id="authTogglePwdBtn" title="Toggle password visibility">
                             <i class="fa-regular fa-eye"></i>
                         </button>
@@ -3040,7 +3041,7 @@
                     <label class="auth-label" for="authNewPasswordInput">
                         <i class="fa-solid fa-lock"></i> New Password
                     </label>
-                    <input type="password" id="authNewPasswordInput" class="auth-input" placeholder="Minimum 4 characters">
+                    <input type="password" id="authNewPasswordInput" name="new_password" class="auth-input" placeholder="Minimum 4 characters" autocomplete="new-password">
                 </div>
 
                 <button type="button" class="auth-submit-btn auth-recovery-submit-btn" id="authRecoverySubmitBtn">

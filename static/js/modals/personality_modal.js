@@ -3,6 +3,7 @@
 import { state } from '../state.js';
 import { dom } from '../dom.js';
 import { showNotification } from './dialogs.js';
+import { saveApiSettings } from '../api.js';
 
 export const PERSONALITY_PRESETS = {
     balanced: { name: "Default • Crisp, Intelligent & Adaptive", prompt: "Direct, concise, and intellectually curious. Answer questions directly without conversational filler. Provide thoughtful explanations and clean, production-ready code." },
@@ -104,6 +105,7 @@ export function setupPersonalityUI() {
             if (dom.nsfwFireIcon) {
                 dom.nsfwFireIcon.style.color = state.nsfwMode ? '#fb7185' : 'var(--text-muted)';
             }
+            saveApiSettings().catch(() => {});
         });
     }
 
@@ -280,6 +282,7 @@ export function setupPersonalityUI() {
             if (dom.customPersonaNameInput) dom.customPersonaNameInput.value = '';
 
             renderPersonalityDropdown(presetKey);
+            saveApiSettings().catch(() => {});
             showNotification({
                 title: 'Persona Saved & Active',
                 message: `"${name}" is now saved and active.`,
@@ -304,6 +307,7 @@ export function setupPersonalityUI() {
                 dom.personalityTextarea.value = PERSONALITY_PRESETS.balanced.prompt;
                 updatePersonalityCharCount();
             }
+            saveApiSettings().catch(() => {});
             showNotification({
                 title: 'Persona Deleted',
                 message: `Removed "${personaName}".`,
@@ -343,6 +347,8 @@ export function setupPersonalityUI() {
             localStorage.setItem('nivm_personality_preset', presetVal);
             dom.personalityModal.classList.add('hidden');
             if (dom.savePersonaCard) dom.savePersonaCard.classList.add('hidden');
+
+            saveApiSettings().catch(() => {});
 
             showNotification({
                 title: 'Persona Applied',

@@ -103,6 +103,24 @@ class SettingsModel(BaseModel):
     custom_use_mmap: bool = True
     custom_kv_type: str = "f16"
 
+    # Personalization & User Preferences
+    user_name: str = ""
+    ai_name: str = "nivm"
+    personality_prompt: str = ""
+    personality_preset: str = "balanced"
+    saved_personas: List[Dict[str, Any]] = []
+    nsfw_mode: bool = False
+    theme_state: Optional[Dict[str, Any]] = None
+    temperature: Optional[float] = None
+    repeat_penalty: Optional[float] = None
+    top_p: Optional[float] = None
+    enabled_tools: Optional[Dict[str, bool]] = None
+    terminal_security_mode: Optional[str] = None
+    voice_config: Optional[Dict[str, Any]] = None
+    stt_engine: Optional[str] = None
+    whisper_model: Optional[str] = None
+
+
 
 def get_user_settings() -> dict:
     """Load settings from settings.json merged with default SettingsModel."""
@@ -266,12 +284,21 @@ async def get_settings_endpoint():
 
 def save_user_settings(data: Dict[str, Any]):
     """Save settings dictionary to settings.json and apply overrides."""
-    if "remembered_model_paths" in data and isinstance(data["remembered_model_paths"], list):
-        data["remembered_model_paths"] = [
-            p for p in data["remembered_model_paths"] if p and os.path.isfile(p)
+    current = {}
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r") as f:
+                current = json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to read existing settings for merge: {e}")
+            current = {}
+    current.update(data)
+    if "remembered_model_paths" in current and isinstance(current["remembered_model_paths"], list):
+        current["remembered_model_paths"] = [
+            p for p in current["remembered_model_paths"] if p and os.path.isfile(p)
         ]
     with open(SETTINGS_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+        json.dump(current, f, indent=2)
     _apply_all_overrides()
 
 

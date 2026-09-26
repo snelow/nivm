@@ -1,4 +1,4 @@
-import { state, saveConversations } from './state.js';
+import { state, saveConversations, themeState, saveThemeConfig, saveEnabledTools, saveTerminalSecurityMode } from './state.js';
 import { dom } from './dom.js';
 
 // Unified HTTP request wrapper with automatic JSON serialization and error unwrapping
@@ -79,6 +79,12 @@ function _populateRoleDom(prefix, data, settingsPrefix) {
     if (dom[prefix + 'Mmap']) dom[prefix + 'Mmap'].checked = data[settingsPrefix + '_use_mmap'] !== false;
 }
 
+function _isUrlVal(val) {
+    if (!val || typeof val !== 'string') return false;
+    const v = val.trim().toLowerCase();
+    return v.startsWith('http://') || v.startsWith('https://') || v.includes('googleapis') || v.includes('generativelanguage') || v.includes('groq.com') || v.includes('/v1');
+}
+
 export async function fetchApiSettings() {
     const data = await apiFetchSafe('/api/settings');
     if (!data) return;
@@ -151,18 +157,139 @@ export async function fetchApiSettings() {
     _populateRoleDom('coder', data, 'coder');
     _populateRoleDom('vision', data, 'vision');
     _populateRoleDom('single', data, data.single_model_role || 'coder');
+
+    // --- Personalization & Client Preference Synchronization ---
+    let needsInitialSync = false;
+
+    // 1. User Name (Sanitize against previous autofill leaks)
+    if (_isUrlVal(state.userName)) {
+        state.userName = '';
+        localStorage.removeItem('nivm_userName');
+    }
+    if (data.user_name !== undefined && data.user_name !== null && !_isUrlVal(data.user_name)) {
+        if (data.user_name.trim()) {
+            state.userName = data.user_name.trim();
+            localStorage.setItem('nivm_userName', state.userName);
+        } else if (state.userName && !_isUrlVal(state.userName)) {
+            needsInitialSync = true;
+        }
+    } else if (state.userName && !_isUrlVal(state.userName)) {
+        needsInitialSync = true;
+    }
+    if (dom.userNameInput) dom.userNameInput.value = state.userName;
+
+    // 2. AI Name
+    if (data.ai_name && typeof data.ai_name === 'string') {
+        state.aiName = data.ai_name.trim() || 'nivm';
+        if (state.aiName !== 'nivm') {
+            localStorage.setItem('nivm_ai_name', state.aiName);
+        } else {
+            localStorage.removeItem('nivm_ai_name');
+        }
+        if (dom.aiNameInput) dom.aiNameInput.value = (state.aiName !== 'nivm') ? state.aiName : '';
+    } else if (state.aiName && state.aiName !== 'nivm') {
+        needsInitialSync = true;
+    }
+    if (window.updateAssistantNameUI) window.updateAssistantNameUI();
+
+    // 3. Personality Prompt & Preset
+    if (data.personality_prompt !== undefined && data.personality_prompt !== null) {
+        if (data.personality_prompt) {
+            state.personalityPrompt = data.personality_prompt;
+            localStorage.setItem('nivm_personality_prompt', state.personalityPrompt);
+            if (dom.personalityTextarea) dom.personalityTextarea.value = state.personalityPrompt;
+        } else if (state.personalityPrompt) {
+            needsInitialSync = true;
+        }
+    }
+    if (data.personality_preset) {
+        state.personalityPreset = data.personality_preset;
+        localStorage.setItem('nivm_personality_preset', state.personalityPreset);
+    } else if (state.personalityPreset && state.personalityPreset !== 'balanced') {
+        needsInitialSync = true;
+    }
+    if (Array.isArray(data.saved_personas) && data.saved_personas.length > 0) {
+        state.savedPersonas = data.saved_personas;
+        localStorage.setItem('nivm_saved_personas', JSON.stringify(state.savedPersonas));
+    } else if (Array.isArray(state.savedPersonas) && state.savedPersonas.length > 0) {
+        needsInitialSync = true;
+    }
+    if (window.renderPersonalityDropdown) {
+        window.renderPersonalityDropdown(state.personalityPreset || 'balanced');
+    }
+
+    // 4. NSFW Mode
+    if (data.nsfw_mode !== undefined && data.nsfw_mode !== null) {
+        state.nsfwMode = Boolean(data.nsfw_mode);
+        localStorage.setItem('nivm_nsfw_mode', state.nsfwMode);
+        if (dom.nsfwToggle) dom.nsfwToggle.checked = state.nsfwMode;
+        if (dom.nsfwFireIcon) dom.nsfwFireIcon.style.color = state.nsfwMode ? '#fb7185' : 'var(--text-muted)';
+    }
+
+    // 5. Theme State
+    if (data.theme_state && typeof data.theme_state === 'object' && Object.keys(data.theme_state).length > 0) {
+        Object.assign(themeState, data.theme_state);
+        saveThemeConfig();
+        if (window.applyThemeState) window.applyThemeState();
+    } else if (localStorage.getItem('nivm_theme_config')) {
+        needsInitialSync = true;
+    }
+
+    // 6. Voice & Speech Settings
+    if (data.voice_config && typeof data.voice_config === 'object') {
+        localStorage.setItem('nivm_voice_config', JSON.stringify(data.voice_config));
+        if (window.reloadVoiceConfig) window.reloadVoiceConfig();
+    }
+    if (data.stt_engine) localStorage.setItem('nivm_stt_engine', data.stt_engine);
+    if (data.whisper_model) localStorage.setItem('nivm_whisper_model', data.whisper_model);
+
+    // 7. Generation Sampling Parameters
+    if (data.temperature !== undefined && data.temperature !== null) {
+        state.temperature = parseFloat(data.temperature);
+        localStorage.setItem('nivm_temperature', state.temperature);
+    }
+    if (data.repeat_penalty !== undefined && data.repeat_penalty !== null) {
+        state.repeatPenalty = parseFloat(data.repeat_penalty);
+        localStorage.setItem('nivm_repeat_penalty', state.repeatPenalty);
+    }
+    if (data.top_p !== undefined && data.top_p !== null) {
+        state.topP = parseFloat(data.top_p);
+        localStorage.setItem('nivm_top_p', state.topP);
+    }
+
+    // 8. Tool Toggles & Security Mode
+    if (data.enabled_tools && typeof data.enabled_tools === 'object') {
+        state.enabledTools = { ...state.enabledTools, ...data.enabled_tools };
+        saveEnabledTools();
+    }
+    if (data.terminal_security_mode) {
+        state.terminalSecurityMode = data.terminal_security_mode;
+        saveTerminalSecurityMode(data.terminal_security_mode);
+    }
+
+    if (window.setupDynamicGreeting) window.setupDynamicGreeting();
+
+    if (needsInitialSync) {
+        saveApiSettings().catch(() => {});
+    }
 }
 
 export async function saveApiSettings() {
     const inferenceMode = state.inferenceMode || 'single';
     const singleRole = dom.singleModelRoleSelect ? dom.singleModelRoleSelect.value : 'custom';
 
+    let voiceCfg = null;
+    try {
+        const raw = localStorage.getItem('nivm_voice_config');
+        if (raw) voiceCfg = JSON.parse(raw);
+    } catch (_) {}
+
     const payload = {
         engine_mode: 'native',
         inference_mode: inferenceMode,
         single_model_role: singleRole,
-        custom_model_path: dom.customModelPathInput ? dom.customModelPathInput.value.trim() : (state.customModelPath || ''),
-        custom_mmproj_path: dom.customMmprojInput ? dom.customMmprojInput.value.trim() : (state.customMmprojPath || ''),
+        custom_model_path: (dom.customModelPathInput?.value ? dom.customModelPathInput.value.trim() : '') || (state.customModelPath || ''),
+        custom_mmproj_path: (dom.customMmprojInput?.value ? dom.customMmprojInput.value.trim() : '') || (state.customMmprojPath || ''),
         custom_mmproj_use_gpu: dom.customMmprojCpu ? !dom.customMmprojCpu.checked : true,
         vision_mmproj_use_gpu: dom.visionMmprojCpu ? !dom.visionMmprojCpu.checked : true,
         pdf_render_dpi: dom.pdfDpiSelect ? parseInt(dom.pdfDpiSelect.value) : 150,
@@ -172,6 +299,21 @@ export async function saveApiSettings() {
         api_model: dom.apiModelInput ? dom.apiModelInput.value.trim() : '',
         api_multimodal: dom.apiMultimodalCheck ? dom.apiMultimodalCheck.checked : (state.apiMultimodal ?? false),
         remembered_model_paths: state.rememberedPaths || [],
+        user_name: _isUrlVal(state.userName) ? '' : (state.userName || ''),
+        ai_name: state.aiName || 'nivm',
+        personality_prompt: state.personalityPrompt || '',
+        personality_preset: state.personalityPreset || 'balanced',
+        saved_personas: state.savedPersonas || [],
+        nsfw_mode: !!state.nsfwMode,
+        theme_state: themeState || null,
+        temperature: state.temperature ?? 0.6,
+        repeat_penalty: state.repeatPenalty ?? 1.1,
+        top_p: state.topP ?? 0.9,
+        enabled_tools: state.enabledTools || {},
+        terminal_security_mode: state.terminalSecurityMode || 'dangerous',
+        voice_config: voiceCfg,
+        stt_engine: localStorage.getItem('nivm_stt_engine') || 'web',
+        whisper_model: localStorage.getItem('nivm_whisper_model') || 'base.en',
         ..._readRoleFromDom('router'),
         ..._readRoleFromDom('coder'),
         ..._readRoleFromDom('vision'),

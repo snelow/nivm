@@ -34,9 +34,42 @@ export function createNewChat() {
     state.conversations.unshift(newChat);
     state.activeChatId = newChat.id;
     saveConversations();
-    renderChatHistory();
+
+    if (dom.chatHistoryList && dom.chatHistoryList.children.length > 0) {
+        // Deselect previous active item without rebuilding entire list
+        dom.chatHistoryList.querySelectorAll('.chat-item.active').forEach(el => el.classList.remove('active'));
+        // Create and prepend new chat item with entrance animation only for this new item
+        const newItem = createChatItemElement(newChat, {
+            isActive: true,
+            animate: true,
+            index: 0
+        });
+        dom.chatHistoryList.prepend(newItem);
+        const drawerBody = dom.historyDrawer ? dom.historyDrawer.querySelector('.drawer-body') : null;
+        if (drawerBody) drawerBody.scrollTop = 0;
+    } else {
+        renderChatHistory({ animate: true });
+    }
+
     renderActiveChat();
     setupDynamicGreeting();
+}
+
+export function updateActiveChatItem(id = state.activeChatId) {
+    if (!dom.chatHistoryList) return;
+    const items = dom.chatHistoryList.querySelectorAll('.chat-item');
+    let found = false;
+    items.forEach(item => {
+        if (item.dataset.chatId === id) {
+            item.classList.add('active');
+            found = true;
+        } else {
+            item.classList.remove('active');
+        }
+    });
+    if (!found && state.conversations.some(c => c.id === id)) {
+        renderChatHistory({ animate: false, preserveScroll: true });
+    }
 }
 
 export function switchChat(id) {
@@ -56,7 +89,8 @@ export function switchChat(id) {
         const backdrop = dom.mobileDrawerBackdrop || document.getElementById('mobileDrawerBackdrop');
         if (backdrop) backdrop.classList.remove('active');
     }
-    renderChatHistory();
+    // Update active chat indicator in-place without re-rendering or re-animating the whole list
+    updateActiveChatItem(id);
     renderActiveChat();
     if (typeof window.checkAndResumeActiveGeneration === 'function') {
         window.checkAndResumeActiveGeneration(id);
@@ -126,29 +160,163 @@ export function deleteChat(id, e) {
             window.deleteUploadedFilesAPI(urlsToDelete);
         }
     }
+
+    const wasActive = state.activeChatId === id;
     state.conversations = state.conversations.filter(c => c.id !== id);
-    if (state.activeChatId === id) {
+    if (wasActive) {
         state.activeChatId = state.conversations.length > 0 ? state.conversations[0].id : null;
     }
     saveConversations();
-    renderChatHistory();
-    renderActiveChat();
+
+    // Smooth exit animation on the deleted item without disturbing other items
+    const itemEl = dom.chatHistoryList ? dom.chatHistoryList.querySelector(`.chat-item[data-chat-id="${id}"]`) : null;
+    if (itemEl) {
+        itemEl.style.maxHeight = `${itemEl.offsetHeight}px`;
+        void itemEl.offsetHeight; // force reflow
+        itemEl.classList.add('deleting');
+        setTimeout(() => {
+            if (itemEl.parentNode) itemEl.remove();
+        }, 220);
+    } else {
+        renderChatHistory({ animate: false, preserveScroll: true });
+    }
+
+    if (wasActive) {
+        if (state.activeChatId) {
+            updateActiveChatItem(state.activeChatId);
+        }
+        renderActiveChat();
+    }
+
     if (window.showNotification) {
         window.showNotification('Conversation deleted', 'info');
     }
 }
 
-export function renderChatHistory() {
+export function createChatItemElement(chat, options = {}) {
+    const { isActive = false, highlightMatch = false, animate = false, index = 0 } = options;
+    const item = document.createElement('div');
+    item.dataset.chatId = chat.id;
+
+    let classes = 'chat-item';
+    if (isActive) classes += ' active';
+    if (highlightMatch) classes += ' highlight-match';
+    if (animate) classes += ' chat-item-entering';
+    if (chat.isEnded) classes += ' chat-item-locked';
+
+    item.className = classes;
+    if (animate) {
+        item.style.animationDelay = `${Math.min(index * 30, 350)}ms`;
+        const onEnd = () => {
+            item.classList.remove('chat-item-entering');
+            item.style.animationDelay = '';
+            item.removeEventListener('animationend', onEnd);
+        };
+        item.addEventListener('animationend', onEnd, { once: true });
+    }
+
+    item.onclick = (e) => {
+        // Do not switch or close drawer if delete button was clicked
+        if (e && e.target && (e.target.closest('.chat-action-btn') || e.target.closest('.chat-item-actions'))) {
+            return;
+        }
+        switchChat(chat.id);
+        if (window.innerWidth <= 768) {
+            if (dom.historyDrawer) dom.historyDrawer.classList.add('hidden');
+            const backdrop = dom.mobileDrawerBackdrop || document.getElementById('mobileDrawerBackdrop');
+            if (backdrop) backdrop.classList.remove('active');
+        }
+    };
+
+    const title = document.createElement('span');
+    title.className = 'chat-item-title';
+    if (chat.isEnded) {
+        title.innerHTML = `<i class="fa-solid fa-lock chat-item-lock-icon" title="Ended conversation"></i><span>${escapeHtml(chat.title || 'New Chat')}</span>`;
+    } else {
+        title.textContent = chat.title || 'New Chat';
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'chat-item-actions';
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'chat-action-btn';
+    delBtn.setAttribute('type', 'button');
+    delBtn.setAttribute('title', 'Delete conversation');
+    delBtn.setAttribute('aria-label', 'Delete conversation');
+    delBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+
+    const handleDelete = (e) => {
+        if (e) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
+        deleteChat(chat.id, e);
+    };
+    delBtn.onclick = handleDelete;
+    delBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    delBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+    delBtn.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+
+    actions.appendChild(delBtn);
+    item.appendChild(title);
+    item.appendChild(actions);
+
+    return item;
+}
+
+export function animateChatHistoryEntrance() {
     if (!dom.chatHistoryList) return;
-    dom.chatHistoryList.innerHTML = '';
-    
-    // Reset scroll to top so the latest conversation is always visible first
-    dom.chatHistoryList.scrollTop = 0;
+    const items = dom.chatHistoryList.querySelectorAll('.chat-item');
+    if (items.length === 0 && state.conversations && state.conversations.length > 0) {
+        renderChatHistory({ animate: true });
+        return;
+    }
+    items.forEach((item, index) => {
+        item.classList.remove('chat-item-entering');
+        item.style.animationDelay = `${Math.min(index * 30, 350)}ms`;
+        void item.offsetWidth; // force reflow
+        item.classList.add('chat-item-entering');
+        const onEnd = () => {
+            item.classList.remove('chat-item-entering');
+            item.style.animationDelay = '';
+            item.removeEventListener('animationend', onEnd);
+        };
+        item.addEventListener('animationend', onEnd, { once: true });
+    });
+}
+
+export function initHistoryDrawerObserver() {
+    const drawer = dom.historyDrawer || document.getElementById('historyDrawer');
+    if (!drawer || drawer._hasEntranceObserver) return;
+    drawer._hasEntranceObserver = true;
+
+    let wasHidden = drawer.classList.contains('hidden');
+
+    const observer = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+            if (m.type === 'attributes' && m.attributeName === 'class') {
+                const isHidden = drawer.classList.contains('hidden');
+                if (wasHidden && !isHidden) {
+                    animateChatHistoryEntrance();
+                }
+                wasHidden = isHidden;
+            }
+        }
+    });
+
+    observer.observe(drawer, { attributes: true, attributeFilter: ['class'] });
+}
+
+export function renderChatHistory(options = {}) {
+    if (!dom.chatHistoryList) return;
+    const { animate = false, preserveScroll = true } = options;
+
     const drawerBody = dom.historyDrawer ? dom.historyDrawer.querySelector('.drawer-body') : null;
-    if (drawerBody) drawerBody.scrollTop = 0;
-    
+    const prevScroll = (preserveScroll && drawerBody) ? drawerBody.scrollTop : 0;
+
     const query = dom.chatSearchInput ? dom.chatSearchInput.value.toLowerCase().trim() : '';
-    
+
     let filteredChats = state.conversations;
     if (query) {
         filteredChats = state.conversations.filter(chat => {
@@ -157,67 +325,90 @@ export function renderChatHistory() {
         });
     }
 
-    filteredChats.forEach((chat, index) => {
-        const item = document.createElement('div');
-        let classes = `chat-item ${chat.id === state.activeChatId ? 'active' : ''}`;
-        if (query && index === 0) {
-            classes += ' highlight-match';
+    const existingMap = new Map();
+    Array.from(dom.chatHistoryList.querySelectorAll('.chat-item')).forEach(el => {
+        if (el.dataset.chatId) {
+            existingMap.set(el.dataset.chatId, el);
         }
-        item.className = classes;
-        item.style.animationDelay = `${index * 40}ms`;
-        item.onclick = (e) => {
-            // Do not switch or close drawer if delete button was clicked
-            if (e && e.target && (e.target.closest('.chat-action-btn') || e.target.closest('.chat-item-actions'))) {
-                return;
-            }
-            switchChat(chat.id);
-            if (window.innerWidth <= 768) {
-                if (dom.historyDrawer) dom.historyDrawer.classList.add('hidden');
-                const backdrop = dom.mobileDrawerBackdrop || document.getElementById('mobileDrawerBackdrop');
-                if (backdrop) backdrop.classList.remove('active');
-            }
-        };
-
-        const title = document.createElement('span');
-        title.className = 'chat-item-title';
-        if (chat.isEnded) {
-            title.innerHTML = `<i class="fa-solid fa-lock chat-item-lock-icon" title="Ended conversation"></i><span>${escapeHtml(chat.title || 'New Chat')}</span>`;
-            item.classList.add('chat-item-locked');
-        } else {
-            title.textContent = chat.title || 'New Chat';
-        }
-
-        const actions = document.createElement('div');
-        actions.className = 'chat-item-actions';
-
-        const delBtn = document.createElement('button');
-        delBtn.className = 'chat-action-btn';
-        delBtn.setAttribute('type', 'button');
-        delBtn.setAttribute('title', 'Delete conversation');
-        delBtn.setAttribute('aria-label', 'Delete conversation');
-        delBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
-
-        const handleDelete = (e) => {
-            if (e) {
-                e.stopPropagation();
-                e.preventDefault();
-            }
-            deleteChat(chat.id, e);
-        };
-        delBtn.onclick = handleDelete;
-        delBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
-        delBtn.addEventListener('mousedown', (e) => e.stopPropagation());
-        delBtn.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
-
-        actions.appendChild(delBtn);
-        item.appendChild(title);
-        item.appendChild(actions);
-        dom.chatHistoryList.appendChild(item);
     });
+
+    const activeChatId = state.activeChatId;
+    const fragment = document.createDocumentFragment();
+    const seenIds = new Set();
+
+    filteredChats.forEach((chat, index) => {
+        seenIds.add(chat.id);
+        let item = existingMap.get(chat.id);
+
+        if (item) {
+            const isActive = chat.id === activeChatId;
+            item.classList.toggle('active', isActive);
+            item.classList.toggle('highlight-match', Boolean(query && index === 0));
+
+            const titleSpan = item.querySelector('.chat-item-title');
+            if (titleSpan) {
+                const titleText = chat.title || 'New Chat';
+                if (chat.isEnded) {
+                    if (!item.classList.contains('chat-item-locked')) {
+                        item.classList.add('chat-item-locked');
+                        titleSpan.innerHTML = `<i class="fa-solid fa-lock chat-item-lock-icon" title="Ended conversation"></i><span>${escapeHtml(titleText)}</span>`;
+                    } else {
+                        const span = titleSpan.querySelector('span');
+                        if (span && span.textContent !== titleText) {
+                            span.textContent = titleText;
+                        }
+                    }
+                } else {
+                    item.classList.remove('chat-item-locked');
+                    if (titleSpan.textContent !== titleText) {
+                        titleSpan.textContent = titleText;
+                    }
+                }
+            }
+
+            if (animate) {
+                item.classList.remove('chat-item-entering');
+                item.style.animationDelay = `${Math.min(index * 30, 350)}ms`;
+                void item.offsetWidth;
+                item.classList.add('chat-item-entering');
+                const onEnd = () => {
+                    item.classList.remove('chat-item-entering');
+                    item.style.animationDelay = '';
+                    item.removeEventListener('animationend', onEnd);
+                };
+                item.addEventListener('animationend', onEnd, { once: true });
+            }
+
+            fragment.appendChild(item);
+        } else {
+            item = createChatItemElement(chat, {
+                isActive: chat.id === activeChatId,
+                highlightMatch: Boolean(query && index === 0),
+                animate,
+                index
+            });
+            fragment.appendChild(item);
+        }
+    });
+
+    // Remove old items not present in current filteredChats
+    existingMap.forEach((el, id) => {
+        if (!seenIds.has(id)) {
+            el.remove();
+        }
+    });
+
+    dom.chatHistoryList.appendChild(fragment);
+
+    if (preserveScroll && drawerBody && prevScroll > 0) {
+        drawerBody.scrollTop = prevScroll;
+    }
 }
 
 
 export function setupHistoryUI() {
+    initHistoryDrawerObserver();
+
     // Search logic: redirect to Global Spotlight Search
     const searchTrigger = dom.drawerSearchBtn || dom.chatSearchInput || document.getElementById('drawerSearchBtn');
     if (searchTrigger) {
@@ -425,7 +616,7 @@ export function forkChatFromMessage(msg) {
 
     state.activeChatId = newChat.id;
     saveConversations();
-    renderChatHistory();
+    renderChatHistory({ animate: false, preserveScroll: true });
     renderActiveChat();
 
     if (typeof window.showNotification === 'function') {

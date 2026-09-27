@@ -6,17 +6,24 @@
         background: rgba(0, 0, 0, 0.7);
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 0.3s cubic-bezier(0.32, 0.72, 0, 1),
+                    visibility 0.3s cubic-bezier(0.32, 0.72, 0, 1),
+                    background-color 0.3s ease;
     }
 
     .window-wrapper.hidden {
         pointer-events: none !important;
         background: transparent !important;
-        display: none !important;
+        display: flex !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
     }
 
-    /* Full-screen modal sheets - no !important on display so .hidden can override */
+    /* Full-screen / bottom modal sheets */
     .draggable-window,
     #settingsWindow,
     #modelsWindow,
@@ -42,22 +49,29 @@
         border: none !important;
         margin: 0 !important;
         box-shadow: none !important;
-        transform: none !important;
         flex-direction: column;
+        transform: translateY(0) !important;
+        opacity: 1 !important;
+        transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.22s ease !important;
+        will-change: transform, opacity;
     }
 
-    /* Standalone hidden windows (stats, network monitor) must stay hidden */
-    .draggable-window.hidden {
-        display: none !important;
-    }
-
-    /* When shown, standalone windows use flex column layout */
-    .draggable-window:not(.hidden) {
-        display: flex;
-    }
-
-    .window-wrapper.hidden .draggable-window {
+    /* Standalone hidden windows or sheets inside hidden wrappers slide down off screen */
+    .window-wrapper.hidden .draggable-window,
+    .draggable-window.hidden,
+    .window-wrapper.hidden #settingsWindow,
+    .window-wrapper.hidden #modelsWindow,
+    .window-wrapper.hidden #systemPromptWindow,
+    .window-wrapper.hidden #personaWindow,
+    .window-wrapper.hidden #toolsSettingsWindow,
+    .window-wrapper.hidden #statsModal .draggable-window,
+    .window-wrapper.hidden #terminalSecurityModal .draggable-window,
+    .window-wrapper.hidden #confirmModal .draggable-window,
+    .window-wrapper.hidden #alertModal .draggable-window {
+        display: flex !important;
         transform: translateY(100%) !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
 
     .window-header,
@@ -65,6 +79,55 @@
         padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px 14px 16px;
         cursor: default;
         flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .window-header .icon-btn-sm,
+    .dialog-header .icon-btn-sm,
+    #closeStatsBtn {
+        min-width: 36px !important;
+        min-height: 36px !important;
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 1.1rem !important;
+        border-radius: 50% !important;
+        background: rgba(255, 255, 255, 0.08) !important;
+        color: var(--text-primary) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        flex-shrink: 0 !important;
+        margin-left: auto !important;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        z-index: 10;
+    }
+
+    #statsWindowHeader {
+        padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 12px 16px !important;
+        display: flex !important;
+        align-items: flex-start !important;
+        justify-content: space-between !important;
+        gap: 8px !important;
+    }
+
+    #statsWindowHeader .stats-header-left {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 8px !important;
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+    }
+
+    #statsWindowHeader .stats-header-pills {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+        min-width: 0 !important;
     }
 
     /* Window body fills remaining space without the broken calc formula */

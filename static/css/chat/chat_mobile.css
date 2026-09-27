@@ -31,6 +31,22 @@
         padding-top: calc(env(safe-area-inset-top, 0px) + 14px);
         display: flex;
         flex-direction: column;
+        transform: translateX(0);
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), 
+                    opacity 0.24s ease, 
+                    visibility 0.3s;
+        will-change: transform, opacity;
+    }
+
+    .history-drawer.hidden {
+        display: flex !important;
+        transform: translateX(-100%) !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
     }
 
     .history-drawer .drawer-body {

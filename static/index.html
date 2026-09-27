@@ -2630,20 +2630,22 @@
 
     <!-- Stats Window Modal -->
     <div class="draggable-window hidden" id="statsWindow"
-        style="width:485px; max-width:min(485px, 94vw); left:60px; top:15px; z-index:100;">
+        style="width:520px; max-width:min(520px, 94vw); left:60px; top:15px; z-index:100;">
         <div class="window-header" id="statsWindowHeader">
-            <span class="window-title"><i class="fa-solid fa-chart-pie" style="color: var(--accent-purple);"></i> Usage Stats</span>
-            <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
-                <span class="stats-vram-pill" id="statsVramPill" title="Live GPU VRAM Telemetry">
-                    <i class="fa-solid fa-microchip"></i>
-                    <span id="statsVramText">VRAM: -- / -- GB</span>
-                </span>
-                <span class="stats-mode-badge mode-api" id="statsModeBadge">
-                    <span class="stats-mode-dot"></span>
-                    <span id="statsModeBadgeText">API Cloud</span>
-                </span>
-                <button class="icon-btn-sm" id="closeStatsBtn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            <div class="stats-header-left">
+                <span class="window-title"><i class="fa-solid fa-chart-pie" style="color: var(--accent-purple);"></i> Usage Stats</span>
+                <div class="stats-header-pills" id="statsHeaderPills">
+                    <span class="stats-vram-pill" id="statsVramPill" title="Live GPU VRAM Telemetry">
+                        <i class="fa-solid fa-microchip"></i>
+                        <span id="statsVramText">VRAM: -- / -- GB</span>
+                    </span>
+                    <span class="stats-mode-badge mode-api" id="statsModeBadge">
+                        <span class="stats-mode-dot"></span>
+                        <span id="statsModeBadgeText">API Cloud</span>
+                    </span>
+                </div>
             </div>
+            <button class="icon-btn-sm" id="closeStatsBtn" title="Close"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="window-body" style="padding: 14px 16px; gap: 14px;">
             <!-- Active Model Card -->
@@ -2737,16 +2739,16 @@
     <div class="draggable-window hidden" id="networkMonitorWindow"
         style="width:460px; left:60px; top:300px; z-index:100;">
         <div class="window-header" id="networkMonitorHeader">
-            <span class="window-title">
-                <i class="fa-solid fa-network-wired" style="color: var(--accent-emerald);"></i>
-                Network & Socket Monitor
-            </span>
-            <div style="display: flex; gap: 8px; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; flex-wrap: wrap;">
+                <span class="window-title">
+                    <i class="fa-solid fa-network-wired" style="color: var(--accent-emerald);"></i>
+                    Network & Socket Monitor
+                </span>
                 <span class="sentinel-pulse-badge">
                     <span class="pulse-dot"></span> Local Only
                 </span>
-                <button class="icon-btn-sm" id="closeNetworkMonitorBtn"><i class="fa-solid fa-xmark"></i></button>
             </div>
+            <button class="icon-btn-sm" id="closeNetworkMonitorBtn" title="Close"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="window-body" style="padding: 14px 16px;">
             <!-- Top Status Strip -->

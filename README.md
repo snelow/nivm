@@ -49,6 +49,8 @@ From parsing multi-page technical PDFs and natural bidirectional voice conversat
 
 ### 2. Dual Inference Architecture & Universal VRAM Management
 - **Native GGUF Engine**: Powered by `llama.cpp` with Flash Attention, KV-cache quantization (`q4_0`, `q8_0`, `f16`), split GPU layer offloading, and autonomous intent routing.
+- **MoE (Mixture of Experts) Architecture Support**: Dynamic detection of MoE topologies (active vs. total experts, routed layers) with single-GPU memory threshold advisories.
+- **Interactive VRAM & KV Cache Memory Estimator**: Visual calculator projecting model weights and KV cache memory footprint across context lengths (4K–128K) before loading models into VRAM.
 - **External Multimodal API Mode**: Seamlessly connect to Google Gemini (e.g. `gemini-3.8-flash`, `gemini-3.1-pro`), OpenAI, Groq, Ollama, LM Studio, or OpenRouter with zero code modifications.
 - **Unified Media Pipeline**: Ingest images, multi-page PDFs, audio waveforms, and video keyframes across both local GGUF models (`mmproj`) and external multimodal API endpoints.
 - **Universal Model Unload**: One-click VRAM flush button that completely unloads active models from GPU memory into 0MB standby mode.
@@ -70,6 +72,7 @@ From parsing multi-page technical PDFs and natural bidirectional voice conversat
 - Audio text sanitization: strips escaped characters (`\n`, `/n`, markdown tags) to prevent verbal clutter in TTS playback.
 
 ### 6. Agentic Tool Dispatcher, Safety Sentinel & Conversation Locking
+- **Single-User Owner Security & Session Lock**: Local owner authentication (`core/auth.py`), encrypted session tokens, emergency recovery key, and lock screen overlay with Silk Flow canvas.
 - **Dangerous Command Safety Guard**: Static command risk analyzer inspecting dynamic shell subcommands, pipe-to-shell patterns (`| bash`), root/system redirects, and destructive binaries (`rm`, `sudo`, `dd`, `truncate`, `git reset --hard`, `systemctl`).
 - **Interactive Security Modal**: Full-screen backdrop lock (`z-index: 99999`) with focus-trapping, shake animation, and explicit user `Allow` / `Deny` controls before dangerous terminal commands execute.
 - **Two-Step Memory Protocol**: Enforced `read_memory` inspection before committing updates via `write_memory`, with automatic JSON/text fact merging (`mergeMemoryValues`) to eliminate data erasure.
@@ -179,6 +182,7 @@ flowchart TB
 ```text
 nivm/
 ├── core/
+│   ├── auth.py               # Single-user owner authentication & session token manager
 │   ├── config.py             # System defaults, LLM hyperparams & base prompts
 │   ├── engine.py             # llama.cpp ModelManager with sub-3s model hot-swapping
 │   ├── router.py             # Zero-latency local query classifier & intent router
@@ -195,7 +199,12 @@ nivm/
 │   │   ├── downloader.py     # Diffusion checkpoint download manager
 │   │   ├── model_checker.py  # Checkpoint, VAE, CLIP & LoRA weight validation
 │   │   ├── setup_helper.py   # Automated ComfyUI git cloning & environment setup
-│   │   └── workflow_builder.py # Programmatic ComfyUI execution graph builder
+│   │   ├── workflow_builder.py # Programmatic ComfyUI execution graph builder
+│   │   └── illustrious/      # Illustrious SDXL anime character generation pipeline
+│   │       ├── characters.py # Curated character presets and LoRA triggers
+│   │       ├── config.py     # Illustrious paths and model definitions
+│   │       ├── prompt_builder.py # Danbooru tag compiler & prompt enhancer
+│   │       └── workflow_builder.py # Dynamic SDXL / LCM Turbo graph generator
 │   ├── pronunciation_dict.json # Default phonetic pronunciation lexicon
 │   ├── storage.py            # Atomic JSON persistence & settings management
 │   ├── file_services.py      # In-browser filesystem navigation & drive shortcuts
@@ -206,54 +215,63 @@ nivm/
 │   └── api_v1.py             # OpenAI-compatible API routes
 ├── models/
 │   ├── tts/kokoro/           # Kokoro ONNX model weights & voice embeddings
+│   ├── image/                # Diffusion UNet, VAE, LoRAs & checkpoints
 │   └── *.gguf                # User local GGUF models & mmproj vision projectors
 ├── static/
+│   ├── sw.js                 # Service worker caching & PWA offline handling
+│   ├── offline.html          # Interactive Cyber Arcade offline fallback screen
+│   ├── manifest.json         # Progressive Web App (PWA) manifest
 │   ├── css/                  # Modular stylesheet architecture
 │   │   ├── variables.css     # Color palette, spacing & elevation tokens
-│   │   ├── base.css          # Reset, typography & core element styles
+│   │   ├── base.css          # Reset, typography, reduced motion & core styles
 │   │   ├── backgrounds.css   # Canvas layer positioning & transitions
 │   │   ├── layout.css        # App grid, sidebar, header & chat containers
-│   │   ├── modals.css        # Master modal import & layout wrapper
-│   │   ├── chat.css          # Master chat import & container rules
 │   │   ├── markdown.css      # Syntax highlighting, thinking blocks & clear text highlight
 │   │   ├── main.css          # Global entry stylesheet
+│   │   ├── chat.css          # Chat module entry stylesheet
+│   │   ├── modals.css        # Modals module entry stylesheet
 │   │   ├── chat/             # Scoped chat component styles
-│   │   │   ├── chat_layout.css, chat_messages.css, chat_input.css
-│   │   │   ├── chat_drawers.css, chat_events.css, chat_media.css
-│   │   │   └── chat_notifications.css, chat_voice.css
-│   │   └── modals/           # Scoped dialog component styles
-│   │       ├── modals_base.css, theme_modal.css, settings_modal.css
-│   │       ├── sentinel_modal.css, downloader_modal.css, voice_modal.css
-│   │       ├── extras_modal.css, modals_mobile.css
+│   │   │   ├── chat_drawers.css, chat_events.css, chat_input.css
+│   │   │   ├── chat_layout.css, chat_media.css, chat_messages.css
+│   │   │   └── chat_mobile.css, chat_notifications.css, chat_voice.css
+│   │   └── modals/           # Scoped dialog & modal component styles
+│   │       ├── auth_modal.css, downloader_modal.css, extras_modal.css
+│   │       ├── global_search_modal.css, image_studio.css, modals_base.css
+│   │       ├── modals_mobile.css, sentinel_modal.css, settings_modal.css
+│   │       └── theme_modal.css, voice_modal.css
 │   ├── js/                   # Modular ES6 JavaScript architecture
-│   │   ├── app.js            # Main orchestration & markdown renderer setup
+│   │   ├── app.js            # Main orchestration & coordinator setup
 │   │   ├── api.js            # REST & SSE streaming communications
-│   │   ├── ui.js             # DOM rendering, reasoning parser & deduplication
+│   │   ├── auth.js           # Owner authentication, session tokens & lock screen
+│   │   ├── ui.js             # UI module barrel, DOM rendering & formatting
 │   │   ├── tools.js          # Client tool declarations & execution bridges
-│   │   ├── state.js          # Centralized application reactive state
+│   │   ├── state.js          # Centralized reactive application state
 │   │   ├── theme.js          # Dynamic canvas backgrounds & color cycling
+│   │   ├── backgrounds.js    # Canvas visualizers & procedural rain/nodes
 │   │   ├── flowfield.js      # Cyber Simplex flowfield engine
-│   │   ├── dom.js            # Cached DOM element references
+│   │   ├── think_tags.js     # Reasoning tag recovery & thinking accordion logic
+│   │   ├── image_editor.js   # In-browser diffusion canvas & asset editor
+│   │   ├── dom.js            # Dynamic DOM proxy with automatic node caching
 │   │   ├── voice.js          # Voice recording, orb visualizer & Spacebar hotkeys
-│   │   ├── chat/             # Scoped chat feature modules
-│   │   │   ├── chat_history.js, chat_messages.js, chat_input.js
-│   │   │   ├── chat_events.js, chat_media.js, chat_notifications.js
+│   │   ├── extras.js         # Miscellaneous UI actions & helpers
+│   │   ├── chat/             # Scoped chat feature modules (3 core controllers)
+│   │   │   ├── chat_history.js   # History drawer, session loading & reconciliation
+│   │   │   ├── chat_messages.js  # Message rendering, action buttons & Markdown
+│   │   │   └── chat_stream.js    # Streaming response handler & SSE client
 │   │   ├── modals/           # Scoped modal controllers
-│   │   │   ├── theme_modal.js, settings_modal.js, sentinel_modal.js
-│   │   │   ├── downloader_modal.js, voice_modal.js, extras_modal.js
-│   │   │   ├── file_browser.js, tools_settings.js
-│   │   ├── media/            # Image & audio preview handlers
+│   │   │   ├── settings_modal.js, theme_modal.js, voice_modal.js
+│   │   │   ├── global_search_modal.js, image_studio_modal.js, personality_modal.js
+│   │   │   └── file_browser.js, tools_settings.js, sentinel_modal.js, dialogs.js
+│   │   ├── media/            # Media manager & interactive lightbox
+│   │   │   └── media_manager.js
 │   │   └── memory/           # Categorized memory drawer controller
-│   ├── vendor/
-│   │   ├── marked.min.js     # Fast markdown parser
-│   │   ├── highlight.min.js  # Code syntax highlighting
-│   │   ├── webgl-fluid.js    # WebGL fluid physics simulation
-│   │   └── ...               # Icons and offline fonts
+│   │       └── memory_drawer.js
+│   ├── vendor/               # Offline vendor assets (highlight.js, marked, three.js)
 │   └── index.html            # Main single-page application interface
-├── User files/               # User chats, persistent memories & custom pronunciations
+├── User files/               # User chats, persistent memories, auth & certificates
 ├── main.py                   # FastAPI application root & API route bindings
 ├── requirements.txt          # Python dependency manifest
-└── run.sh                    # One-click launch, hardware detector & venv manager
+└── run.sh                    # Interactive CLI runner, hardware detector & venv manager
 ```
 
 ---
@@ -305,10 +323,18 @@ http://127.0.0.1:8000
 ### 3. CLI Flags
 
 ```bash
-./run.sh -h, --help       # Display help menu
-./run.sh -p 8080          # Run on custom port (default: 8000)
-./run.sh --no-reload      # Run in production mode without hot-reloading
-./run.sh --kill           # Terminate any conflicting process bound to port 8000
+./run.sh --help                  # Display help menu
+./run.sh -h, --host HOST         # Set server bind address (default: 0.0.0.0)
+./run.sh -p, --port PORT         # Set server port (default: 8000)
+./run.sh --ssl                   # Enable native SSL / HTTPS (auto-generates certs if needed)
+./run.sh --ssl-cert PATH         # Path to custom SSL certificate (PEM)
+./run.sh --ssl-key PATH          # Path to custom SSL private key (PEM)
+./run.sh --no-reload             # Run in production mode without hot-reloading
+./run.sh -k, --kill              # Terminate any conflicting process bound to target port
+./run.sh -s, --setup             # Force re-installation of dependencies and assets
+./run.sh --setup-auth            # Configure or re-create Owner credentials
+./run.sh --reset-password        # Reset Owner Master Password from terminal
+./run.sh --show-key              # Display current Emergency Recovery Key
 ```
 
 ---

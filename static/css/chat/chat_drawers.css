@@ -13,13 +13,22 @@
     display: flex;
     flex-direction: column;
     box-shadow: var(--shadow-float);
-    transition: transform var(--transition-normal), opacity var(--transition-normal);
+    transform: translateX(0);
     opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), 
+                opacity 0.22s ease, 
+                visibility 0.28s;
+    will-change: transform, opacity;
 }
 
 .history-drawer.hidden {
-    transform: translateX(-100%);
-    opacity: 0;
+    display: flex !important;
+    transform: translateX(-100%) !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
 }
 
 .drawer-header {
@@ -59,11 +68,40 @@
     align-items: center;
     justify-content: space-between;
     cursor: pointer;
-    transition: color var(--transition-fast), background var(--transition-fast);
+    transition: color var(--transition-fast), background var(--transition-fast), opacity 0.2s ease, transform 0.2s ease;
     border: none;
     background: transparent;
     margin-bottom: 2px;
-    animation: chatItemSlide 0.3s ease backwards;
+}
+
+.chat-item.chat-item-entering {
+    animation: chatItemSlide 0.28s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+.chat-item.deleting {
+    opacity: 0 !important;
+    transform: translateX(-16px) scale(0.96) !important;
+    max-height: 0 !important;
+    min-height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    border-width: 0 !important;
+    pointer-events: none !important;
+    overflow: hidden !important;
+    transition: opacity 0.18s ease, transform 0.18s ease, max-height 0.22s cubic-bezier(0.4, 0, 0.2, 1), min-height 0.22s cubic-bezier(0.4, 0, 0.2, 1), padding 0.22s cubic-bezier(0.4, 0, 0.2, 1), margin 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+@keyframes chatItemSlide {
+    from {
+        opacity: 0;
+        transform: translateX(-12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
 }
 
 .chat-item:hover {

@@ -9,24 +9,15 @@
     z-index: 200;
     background: transparent;
     opacity: 1;
-    transition: opacity 0.25s ease;
+    visibility: visible;
+    transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+                visibility 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .window-wrapper.hidden {
-    display: none !important;
-    opacity: 0;
-    pointer-events: none !important;
-}
-
-.window-wrapper.hidden .draggable-window {
-    display: none !important;
-    opacity: 0;
-    pointer-events: none !important;
-}
-
-.draggable-window.hidden {
-    display: none !important;
-    opacity: 0;
+    display: flex !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
     pointer-events: none !important;
 }
 
@@ -49,7 +40,16 @@
     pointer-events: auto;
     transform: scale(1) translateY(0);
     opacity: 1;
-    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s ease;
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), 
+                opacity 0.22s ease;
+    will-change: transform, opacity;
+}
+
+.window-wrapper.hidden .draggable-window,
+.draggable-window.hidden {
+    transform: scale(0.96) translateY(12px) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
 }
 
 #settingsWindow {
@@ -263,13 +263,15 @@
     align-items: center !important;
     justify-content: center !important;
     opacity: 1 !important;
-    transition: opacity 0.2s ease !important;
+    visibility: visible !important;
+    transition: opacity 0.22s ease, visibility 0.22s ease !important;
 }
 
 #dialogOverlay.hidden {
     opacity: 0 !important;
+    visibility: hidden !important;
     pointer-events: none !important;
-    display: none !important;
+    display: flex !important;
 }
 
 .dialog-box {
@@ -285,7 +287,17 @@
     flex-direction: column;
     overflow: hidden;
     pointer-events: auto;
-    animation: scaleIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+    will-change: transform, opacity;
+}
+
+#dialogOverlay.hidden .dialog-box,
+.window-wrapper.hidden .dialog-box {
+    transform: scale(0.94) translateY(8px) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
 }
 
 .dialog-box.dialog-shake {
@@ -297,10 +309,6 @@
     20%, 80% { transform: translate3d(5px, 0, 0); }
     30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
     40%, 60% { transform: translate3d(6px, 0, 0); }
-}
-
-.window-wrapper.hidden .dialog-box {
-    pointer-events: none;
 }
 
 @keyframes scaleIn {
@@ -365,18 +373,30 @@
     justify-content: center;
     align-items: center;
     opacity: 1;
-    transition: opacity 0.2s ease;
+    visibility: visible;
+    transition: opacity 0.24s ease, visibility 0.24s ease;
 }
 
 .modal-overlay.hidden {
-    opacity: 0;
-    pointer-events: none;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    display: flex !important;
 }
 
 .lightbox-content {
     position: relative;
     max-width: 90vw;
     max-height: 90vh;
+    transform: scale(1);
+    opacity: 1;
+    transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+    will-change: transform, opacity;
+}
+
+.modal-overlay.hidden .lightbox-content {
+    transform: scale(0.95) !important;
+    opacity: 0 !important;
 }
 
 .lightbox-content img {

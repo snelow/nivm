@@ -862,11 +862,14 @@ export function stopGeneration() {
         fetch('/api/chat/stop', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: state.activeChatId })
+            body: JSON.stringify({ chat_id: state.activeChatId }),
+            keepalive: true
         }).catch(() => {});
     }
     if (state.abortController) {
-        state.abortController.abort();
+        try {
+            state.abortController.abort();
+        } catch (e) {}
     }
     state.isGenerating = false;
     toggleSendStopButtons(false);

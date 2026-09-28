@@ -425,7 +425,7 @@ echo -e "${CYAN}└────────────────────�
 echo ""
 
 # Build Uvicorn command array (handles paths with spaces safely)
-UVICORN_CMD=(python -m uvicorn main:app --host "$HOST" --port "$PORT" --log-level warning)
+UVICORN_CMD=(python -m uvicorn main:app --host "$HOST" --port "$PORT" --loop asyncio --log-level warning)
 if [ "$RELOAD" = "true" ]; then
     UVICORN_CMD+=(--reload)
 fi

@@ -41,16 +41,19 @@ VECTOR_DIM = 384
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 
 EXTRACTION_SYSTEM_PROMPT = """You are a precise, background memory extractor for an AI companion.
-Analyze the user and assistant dialogue. Extract only enduring personal facts, user preferences, background details, relationships, projects, or interests stated by the user.
-Do NOT extract:
-- Casual greetings, chit-chat, emotional filler, or pleasantries.
-- Questions, hypothetical scenarios, or requests for help.
-- Transient details or recommendations made by the assistant.
+Analyze the conversation context and current turn. Extract only enduring facts, user projects, architecture/database/tech choices, preferences, and personal details stated by the user.
+Important guidelines:
+- If the user discusses a project (e.g. project name, tech stack, goals, database, framework), always include the project name in the fact (resolve pronouns like 'it', 'the project' to the actual project name).
+- Do NOT extract casual greetings, chit-chat, emotional filler, pleasantries, or questions.
+- Do NOT extract transient details or recommendations made by the assistant.
 Return ONLY a valid JSON list of concise factual statements written in the third person.
 Examples:
-User: "I study computer science at UW and have an RTX 3050" -> ["User studies computer science at UW", "User has an NVIDIA RTX 3050 GPU"]
-User: "What's the weather today?" -> []
-If there are no enduring personal facts to remember, return [].
+Context: User: "I'm working on a project called Nexus."
+Current Turn: User: "For the database I decided to go with PostgreSQL and Prisma" -> ["User uses PostgreSQL and Prisma for the database of the Nexus project"]
+Context: None
+Current Turn: User: "I study computer science at UW and have an RTX 3050" -> ["User studies computer science at UW", "User has an NVIDIA RTX 3050 GPU"]
+Current Turn: User: "What's the weather today?" -> []
+If there are no enduring facts, return [].
 JSON output only:"""
 
 
@@ -233,10 +236,17 @@ class MemoryEngine:
             logger.error(f"Error clearing memories: {e}")
             return False
 
-    async def extract_and_store_async(self, user_text: str, assistant_text: str, user_id: str = "user"):
+    async def extract_and_store_async(
+        self,
+        user_text: str,
+        assistant_text: str,
+        recent_history: Optional[List[dict]] = None,
+        user_id: str = "user"
+    ):
         """
         Background task to extract and persist memories from a conversation turn.
         Runs fully asynchronously without slowing down user responses.
+        Uses recent dialogue context to resolve multi-turn project details and pronouns.
         """
         from core.storage import get_user_settings
         from core.engine import model_manager
@@ -252,11 +262,28 @@ class MemoryEngine:
         if "TOOL_CALL:" in user_text:
             return
 
-        dialogue = f"User: {user_text.strip()}"
+        context_turns = []
+        if recent_history:
+            for m in recent_history[-4:]:
+                role = "User" if m.get("role") == "user" else "Assistant"
+                cnt = m.get("content", "")
+                if isinstance(cnt, str) and cnt.strip():
+                    clean_c = re.sub(r'<think>[\s\S]*?</think>', '', cnt).strip()
+                    if clean_c:
+                        context_turns.append(f"{role}: {clean_c[:250]}")
+
+        dialogue_parts = []
+        if context_turns:
+            dialogue_parts.append("Recent Conversation Context:\n" + "\n".join(context_turns))
+
+        current_turn = f"Current Turn:\nUser: {user_text.strip()}"
         if assistant_text:
             clean_ast = re.sub(r'<think>[\s\S]*?</think>', '', assistant_text).strip()
             if clean_ast:
-                dialogue += f"\nAssistant: {clean_ast[:400]}"
+                current_turn += f"\nAssistant: {clean_ast[:300]}"
+        dialogue_parts.append(current_turn)
+
+        dialogue = "\n\n".join(dialogue_parts)
 
         messages = [
             {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
@@ -268,7 +295,7 @@ class MemoryEngine:
 
         try:
             if inference_mode == "api":
-                import httpx
+                from core.chat_manager import get_shared_api_client
                 api_chat_url = settings.get("api_chat_url", "").strip()
                 if not api_chat_url:
                     base_url = settings.get("api_base_url", "https://api.groq.com/openai/v1").rstrip("/")
@@ -287,11 +314,11 @@ class MemoryEngine:
                     "max_tokens": 150
                 }
 
-                async with httpx.AsyncClient(timeout=20.0) as client:
-                    resp = await client.post(api_chat_url, headers=headers, json=payload)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        raw_response = data["choices"][0]["message"]["content"]
+                client = get_shared_api_client()
+                resp = await client.post(api_chat_url, headers=headers, json=payload, timeout=20.0)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    raw_response = data["choices"][0]["message"]["content"]
             else:
                 # Local native mode
                 resp = await asyncio.to_thread(

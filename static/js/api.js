@@ -563,16 +563,25 @@ export async function saveChats(conversations) {
 }
 
 export async function fetchMemoryAPI() {
-    return (await apiFetchSafe('/api/memory', {}, {})) || {};
+    return (await apiFetchSafe('/api/memory', {}, { enabled: true, memories: [] })) || { enabled: true, memories: [] };
 }
 
-export async function saveMemoryAPI(key, value) {
-    return apiFetchSafe('/api/memory', { method: 'POST', body: { key, value } });
+export async function addMemoryAPI(text) {
+    return apiFetchSafe('/api/memory', { method: 'POST', body: { text } });
 }
 
-export async function deleteMemoryAPI(key) {
-    return apiFetchSafe('/api/memory', { method: 'DELETE', body: { key } });
+export async function deleteMemoryAPI(id) {
+    return apiFetchSafe('/api/memory', { method: 'DELETE', body: { id } });
 }
+
+export async function clearAllMemoriesAPI() {
+    return apiFetchSafe('/api/memory/clear', { method: 'POST' });
+}
+
+export async function toggleMemoryModeAPI(enabled) {
+    return apiFetchSafe('/api/memory/toggle', { method: 'POST', body: { enabled } });
+}
+
 
 export async function fetchModelDetailsAPI(modelId) {
     if (!modelId) return null;

@@ -163,10 +163,9 @@ export async function sendMessage(text, triggerAssistantOnly = false, isHiddenUs
         dynamicSystemPrompt += `\n\n[Custom Persona & Behavioral Instructions]:\n${state.personalityPrompt.trim()}`;
     }
 
-    const memoryKeys = Object.keys(state.memory || {});
-    let memoryInstruction = buildToolsInstruction(memoryKeys, state.enabledTools, Boolean(activeChat?.isPendingResume));
+    let toolsInstruction = buildToolsInstruction([], state.enabledTools, Boolean(activeChat?.isPendingResume));
+    dynamicSystemPrompt += toolsInstruction;
 
-    dynamicSystemPrompt += memoryInstruction;
 
     const now = new Date();
     const dateStr = now.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });

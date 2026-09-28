@@ -46,15 +46,16 @@ function renderInitialState() {
 
     const totalChats = (state.conversations || []).length;
     const totalMsgs = (state.conversations || []).reduce((acc, c) => acc + (c.messages?.length || 0), 0);
-    const totalMem = Object.keys(state.memory || {}).length;
+    const totalMem = Array.isArray(state.memory) ? state.memory.length : Object.keys(state.memory || {}).length;
 
     container.innerHTML = `
         <div class="global-search-empty">
             <i class="fa-solid fa-magnifying-glass"></i>
-            <p>Search across ${totalChats} chats (${totalMsgs} turns) and ${totalMem} memory notes</p>
+            <p>Search across ${totalChats} chats (${totalMsgs} turns) and ${totalMem} memory facts</p>
             <span class="search-hint-sub">Press <kbd style="padding:1px 5px;background:rgba(255,255,255,0.08);border-radius:4px;">Ctrl+Shift+F</kbd>, <kbd style="padding:1px 5px;background:rgba(255,255,255,0.08);border-radius:4px;">Ctrl+K</kbd>, or <kbd style="padding:1px 5px;background:rgba(255,255,255,0.08);border-radius:4px;">/</kbd> anytime</span>
         </div>
     `;
+
 }
 
 function highlightMatch(text, query) {
@@ -154,25 +155,43 @@ export function performGlobalSearch() {
 
     // 2. Search Memory
     if (activeFilter === 'all' || activeFilter === 'memory') {
-        const mem = state.memory || {};
-        for (const [key, val] of Object.entries(mem)) {
-            const valStr = typeof val === 'object' ? JSON.stringify(val) : String(val);
-            const keyLower = key.toLowerCase();
-            const valLower = valStr.toLowerCase();
+        const mem = state.memory || [];
+        if (Array.isArray(mem)) {
+            mem.forEach(item => {
+                const text = item.text || item.memory || '';
+                if (text.toLowerCase().includes(query)) {
+                    results.push({
+                        type: 'memory',
+                        key: item.id || '',
+                        title: 'Memory Fact',
+                        badge: 'Memory Fact',
+                        snippet: extractSnippet(text, query),
+                        timestamp: item.created_at || null,
+                        score: 75
+                    });
+                }
+            });
+        } else if (typeof mem === 'object') {
+            for (const [key, val] of Object.entries(mem)) {
+                const valStr = typeof val === 'object' ? JSON.stringify(val) : String(val);
+                const keyLower = key.toLowerCase();
+                const valLower = valStr.toLowerCase();
 
-            if (keyLower.includes(query) || valLower.includes(query)) {
-                results.push({
-                    type: 'memory',
-                    key,
-                    title: `Memory • ${key}`,
-                    badge: 'Memory Fact',
-                    snippet: extractSnippet(valStr, query),
-                    timestamp: null,
-                    score: keyLower.includes(query) ? 90 : 40
-                });
+                if (keyLower.includes(query) || valLower.includes(query)) {
+                    results.push({
+                        type: 'memory',
+                        key,
+                        title: `Memory • ${key}`,
+                        badge: 'Memory Fact',
+                        snippet: extractSnippet(valStr, query),
+                        timestamp: null,
+                        score: keyLower.includes(query) ? 90 : 40
+                    });
+                }
             }
         }
     }
+
 
     // Sort by score and recency
     results.sort((a, b) => {

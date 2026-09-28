@@ -35,9 +35,10 @@ export let state = {
     lmStudioConnected: false,
     models: [],
     usageStats: _json('nivm_usageStats', { totalTokens: 0, totalCost: 0, totalDurationSec: 0 }),
-    memory: {},
+    memory: [],
+    memoryEnabled: _json('nivm_memory_enabled', true),
     enabledTools: {
-        read_memory: true, write_memory: true, execute_terminal: false,
+        execute_terminal: false,
         end_conversation: true, generate_image: true, edit_image: true, generate_anime_image: true,
         ..._json('nivm_enabledTools', {})
     },

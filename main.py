@@ -395,6 +395,24 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
     settings = get_user_settings()
     inference_mode = settings.get("inference_mode", "single")
 
+    # RAG Memory Retrieval (Mem0 + Google TurboQuant)
+    if settings.get("memory_enabled", True) and user_text.strip():
+        try:
+            from core.memory_engine import memory_engine
+            recalled = await asyncio.to_thread(memory_engine.search, user_text.strip(), limit=5)
+            if recalled:
+                rag_block = "\n[Relevant Long-Term Memories (Retrieved via RAG)]:\n" + "\n".join(f"- {f}" for f in recalled) + "\n(These are remembered facts from prior interactions. Use them naturally when relevant.)\n"
+                injected = False
+                for msg in messages:
+                    if msg.get("role") == "system" and isinstance(msg.get("content"), str):
+                        msg["content"] = msg["content"].rstrip() + "\n\n" + rag_block
+                        injected = True
+                        break
+                if not injected:
+                    messages.insert(0, {"role": "system", "content": rag_block})
+        except Exception as e:
+            logger.debug(f"Memory RAG retrieval skipped: {e}")
+
     if inference_mode == "api":
         # API Mode: Forward request to external OpenAI-compatible endpoint
         api_chat_url = settings.get("api_chat_url", "").strip()
@@ -503,7 +521,8 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
                 headers=headers,
                 payload=payload,
                 api_model=api_model,
-                clean_messages=clean_messages
+                clean_messages=clean_messages,
+                user_text=user_text
             )
             return StreamingResponse(chat_manager.stream_job(job), media_type="text/event-stream")
         else:
@@ -515,7 +534,15 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
                             resp = await client.post(api_chat_url, headers=headers, json=payload)
                             if resp.status_code != 200:
                                 raise HTTPException(status_code=resp.status_code, detail=resp.text)
-                            return resp.json()
+                            resp_json = resp.json()
+                            if settings.get("memory_enabled", True) and user_text:
+                                try:
+                                    from core.memory_engine import memory_engine
+                                    ast_text = resp_json.get("choices", [{}])[0].get("message", {}).get("content", "")
+                                    background_tasks.add_task(memory_engine.extract_and_store_async, user_text, ast_text)
+                                except Exception:
+                                    pass
+                            return resp_json
                     except (httpx.ConnectError, httpx.NetworkError) as conn_err:
                         if attempt < 2:
                             logger.warning(f"API non-stream connection failed ({conn_err}), retrying in 1.5s...")
@@ -587,7 +614,8 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
             top_p=top_p,
             repeat_penalty=repeat_penalty,
             inference_mode=inference_mode,
-            enable_thinking=enable_thinking
+            enable_thinking=enable_thinking,
+            user_text=user_text
         )
         return StreamingResponse(chat_manager.stream_job(job), media_type="text/event-stream")
     else:
@@ -607,6 +635,12 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
                     raw_tokens = model_manager.tokenize(content, role=routed_to)
                     if "usage" in response:
                         response["usage"]["raw_tokens"] = raw_tokens[:2000]
+                    if settings.get("memory_enabled", True) and user_text:
+                        try:
+                            from core.memory_engine import memory_engine
+                            background_tasks.add_task(memory_engine.extract_and_store_async, user_text, content)
+                        except Exception:
+                            pass
             if inference_mode == "routing":
                 background_tasks.add_task(model_manager.activate, get_resident_role())
             return JSONResponse(status_code=200, content=response)

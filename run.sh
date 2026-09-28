@@ -137,6 +137,10 @@ if [ "$FORCE_SETUP" = "true" ] || [ ! -d "$VENV_DIR" ]; then
     echo -e "${GREEN}[✓] Virtual environment ready.${NC}"
 else
     source "$VENV_DIR/bin/activate"
+    if ! python3 -c "import mem0, qdrant_client, fastembed" &>/dev/null; then
+        echo -e "${YELLOW}[+] Installing neural memory packages (mem0, qdrant, fastembed)...${NC}"
+        pip install -r requirements.txt -q
+    fi
 fi
 
 # Ensure User files directory exists

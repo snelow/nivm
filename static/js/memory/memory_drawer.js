@@ -1,224 +1,259 @@
-/* memory drawer */
+/* Memory Drawer & Neural RAG Memory Management */
 
 import { state } from '../state.js';
 import { dom } from '../dom.js';
 import { escapeHtml, showNotification, showConfirm } from '../modals/dialogs.js';
+import { fetchMemoryAPI, addMemoryAPI, deleteMemoryAPI, clearAllMemoriesAPI, toggleMemoryModeAPI } from '../api.js';
 
-export function renderMemoryDrawer() {
+let isEventsBound = false;
+
+function formatMemoryDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return '';
+        const now = new Date();
+        const diffSec = Math.floor((now - d) / 1000);
+        if (diffSec < 60) return 'Just now';
+        if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+        if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    } catch (_) {
+        return '';
+    }
+}
+
+export async function renderMemoryDrawer() {
+    setupMemoryDrawerEvents();
+
+    if (!dom.memoryList) return;
+
+    // Refresh memory data from server
+    try {
+        const data = await fetchMemoryAPI();
+        if (data && typeof data === 'object') {
+            state.memory = Array.isArray(data.memories) ? data.memories : [];
+            if (typeof data.enabled === 'boolean') {
+                state.memoryEnabled = data.enabled;
+                localStorage.setItem('nivm_memory_enabled', String(data.enabled));
+            }
+        }
+    } catch (e) {
+        console.warn('Could not sync latest memories:', e);
+    }
+
+    // Update Mode Toggle UI
+    updateMemoryModeUI();
+
+    const memories = Array.isArray(state.memory) ? state.memory : [];
+    const countEl = document.getElementById('memoryFactCount');
+    if (countEl) {
+        countEl.textContent = `${memories.length} memor${memories.length === 1 ? 'y' : 'ies'} stored`;
+    }
+
     dom.memoryList.innerHTML = '';
-    const keys = Object.keys(window.__nivm_state.memory || {});
-    if (keys.length === 0) {
-        dom.memoryList.innerHTML = '<div style="padding: 16px; color: var(--text-tertiary); text-align: center;">No memories saved yet. Ask nivm to remember something!</div>';
+
+    if (memories.length === 0) {
+        dom.memoryList.innerHTML = `
+            <div style="padding: 32px 16px; text-align: center; color: var(--text-tertiary); display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(168, 85, 247, 0.08); display: flex; align-items: center; justify-content: center; color: var(--accent-purple, #a855f7); font-size: 1.25rem;">
+                    <i class="fa-solid fa-brain"></i>
+                </div>
+                <div style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">No memories stored yet</div>
+                <div style="font-size: 0.75rem; line-height: 1.45; max-width: 240px;">
+                    NIVM automatically recalls and captures key facts as you chat, or you can add one manually above!
+                </div>
+            </div>
+        `;
         return;
     }
 
-    function getCategoryMeta(key) {
-        const lower = key.toLowerCase();
-        const CATEGORY_META = {
-            user_profile: { label: 'User Profile', icon: 'fa-solid fa-user', color: '#6366f1' },
-            user_hardware: { label: 'User Hardware', icon: 'fa-solid fa-microchip', color: '#10b981' },
-            user_education: { label: 'User Education', icon: 'fa-solid fa-graduation-cap', color: '#3b82f6' },
-            user_university: { label: 'University & Academics', icon: 'fa-solid fa-graduation-cap', color: '#3b82f6' },
-            user_academics: { label: 'User Academics', icon: 'fa-solid fa-graduation-cap', color: '#3b82f6' },
-            user_projects: { label: 'User Projects', icon: 'fa-solid fa-diagram-project', color: 'var(--accent-purple, #a855f7)' },
-            user_preferences: { label: 'User Preferences', icon: 'fa-solid fa-sliders', color: '#f59e0b' },
-            user_work: { label: 'User Career & Work', icon: 'fa-solid fa-briefcase', color: '#06b6d4' },
-            user_career: { label: 'User Career', icon: 'fa-solid fa-briefcase', color: '#06b6d4' },
-            user_relationships: { label: 'User Relationships', icon: 'fa-solid fa-user-group', color: '#f43f5e' },
-            user_friends: { label: 'Friends & Social', icon: 'fa-solid fa-user-group', color: '#f43f5e' },
-            user_family: { label: 'Family & Loved Ones', icon: 'fa-solid fa-heart', color: '#f43f5e' },
-            user_social: { label: 'Social Circle', icon: 'fa-solid fa-user-group', color: '#f43f5e' },
-            user_hobbies: { label: 'User Hobbies', icon: 'fa-solid fa-gamepad', color: '#ec4899' },
-            user_gaming: { label: 'User Gaming', icon: 'fa-solid fa-gamepad', color: '#ec4899' },
-            user_health: { label: 'User Health', icon: 'fa-solid fa-heart-pulse', color: '#ef4444' }
+    memories.forEach(item => {
+        const text = item.text || item.memory || '';
+        const id = item.id;
+        const timeFormatted = formatMemoryDate(item.created_at);
+
+        const card = document.createElement('div');
+        card.className = 'memory-fact-card';
+        card.style.cssText = `
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color, rgba(255, 255, 255, 0.07));
+            border-radius: 8px;
+            padding: 10px 12px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            transition: border-color 0.2s, background 0.2s;
+        `;
+        card.onmouseover = () => {
+            card.style.borderColor = 'rgba(168, 85, 247, 0.35)';
+            card.style.background = 'rgba(255, 255, 255, 0.05)';
+        };
+        card.onmouseout = () => {
+            card.style.borderColor = 'var(--border-color, rgba(255, 255, 255, 0.07))';
+            card.style.background = 'rgba(255, 255, 255, 0.03)';
         };
 
-        if (CATEGORY_META[key]) return CATEGORY_META[key];
+        const contentBox = document.createElement('div');
+        contentBox.style.cssText = 'flex: 1; min-width: 0;';
 
-        let icon = 'fa-solid fa-bookmark';
-        let color = 'var(--accent-purple, #a855f7)';
-        if (lower.includes('friend') || lower.includes('relat') || lower.includes('social') || lower.includes('fam') || lower.includes('people') || lower.includes('contact')) {
-            icon = 'fa-solid fa-user-group';
-            color = '#f43f5e';
-        } else if (lower.includes('edu') || lower.includes('uni') || lower.includes('school') || lower.includes('college') || lower.includes('acad')) {
-            icon = 'fa-solid fa-graduation-cap';
-            color = '#3b82f6';
-        } else if (lower.includes('work') || lower.includes('job') || lower.includes('career') || lower.includes('company')) {
-            icon = 'fa-solid fa-briefcase';
-            color = '#06b6d4';
-        } else if (lower.includes('code') || lower.includes('dev') || lower.includes('stack') || lower.includes('proj')) {
-            icon = 'fa-solid fa-diagram-project';
-            color = 'var(--accent-purple, #a855f7)';
-        } else if (lower.includes('game') || lower.includes('hobby') || lower.includes('music') || lower.includes('art')) {
-            icon = 'fa-solid fa-gamepad';
-            color = '#ec4899';
-        } else if (lower.includes('health') || lower.includes('fit') || lower.includes('diet') || lower.includes('sport')) {
-            icon = 'fa-solid fa-heart-pulse';
-            color = '#ef4444';
-        } else if (lower.includes('pref') || lower.includes('set') || lower.includes('style')) {
-            icon = 'fa-solid fa-sliders';
-            color = '#f59e0b';
+        const textEl = document.createElement('div');
+        textEl.style.cssText = 'font-size: 0.84rem; color: var(--text-primary); line-height: 1.4; word-break: break-word;';
+        textEl.textContent = text;
+
+        contentBox.appendChild(textEl);
+
+        if (timeFormatted) {
+            const timeEl = document.createElement('div');
+            timeEl.style.cssText = 'font-size: 0.7rem; color: var(--text-tertiary); margin-top: 4px;';
+            timeEl.textContent = timeFormatted;
+            contentBox.appendChild(timeEl);
         }
 
-        const cleanKey = key.replace(/^user_/i, '').replace(/_/g, ' ');
-        const label = cleanKey.charAt(0).toUpperCase() + cleanKey.slice(1);
-        const fullLabel = key.toLowerCase().startsWith('user_') ? `User ${label}` : label;
-
-        return { label: fullLabel, icon, color };
-    }
-
-    keys.forEach(key => {
-        const meta = getCategoryMeta(key);
-
-        const item = document.createElement('div');
-        item.className = 'chat-history-item';
-        item.style.flexDirection = 'column';
-        item.style.alignItems = 'flex-start';
-        item.style.padding = '12px';
-        item.style.marginBottom = '8px';
-        
-        const header = document.createElement('div');
-        header.style.display = 'flex';
-        header.style.alignItems = 'center';
-        header.style.justifyContent = 'space-between';
-        header.style.width = '100%';
-        header.style.marginBottom = '8px';
-        
-        const titleSpan = document.createElement('div');
-        titleSpan.style.display = 'flex';
-        titleSpan.style.alignItems = 'center';
-        titleSpan.style.gap = '8px';
-        titleSpan.innerHTML = `
-            <span style="display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:5px; background:${meta.color}22; color:${meta.color}; font-size:0.8em;">
-                <i class="${meta.icon}"></i>
-            </span>
-            <strong style="color:var(--text-primary); font-size: 0.9em;">${meta.label}</strong>
-            <span style="font-size:0.75em; opacity:0.6; font-family:monospace;">(${key})</span>
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+        delBtn.style.cssText = `
+            background: transparent;
+            border: none;
+            color: var(--text-tertiary);
+            cursor: pointer;
+            padding: 4px 6px;
+            font-size: 0.78rem;
+            border-radius: 4px;
+            transition: color 0.15s, background 0.15s;
         `;
-        
-        const deleteBtn = document.createElement('button');
-        deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
-        deleteBtn.style.background = 'transparent';
-        deleteBtn.style.border = 'none';
-        deleteBtn.style.color = 'var(--text-tertiary)';
-        deleteBtn.style.cursor = 'pointer';
-        deleteBtn.style.padding = '2px 4px';
-        deleteBtn.title = `Delete ${key} category`;
-        deleteBtn.onmouseover = () => deleteBtn.style.color = 'var(--accent-rose)';
-        deleteBtn.onmouseout = () => deleteBtn.style.color = 'var(--text-tertiary)';
-        deleteBtn.addEventListener('click', async (e) => {
+        delBtn.title = 'Delete memory';
+        delBtn.onmouseover = () => {
+            delBtn.style.color = '#f87171';
+            delBtn.style.background = 'rgba(239, 68, 68, 0.1)';
+        };
+        delBtn.onmouseout = () => {
+            delBtn.style.color = 'var(--text-tertiary)';
+            delBtn.style.background = 'transparent';
+        };
+
+        delBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (await showConfirm('Delete Memory Category', `Are you sure you want to delete the '${key}' category?`)) {
-                await import('../api.js').then(m => m.deleteMemoryAPI(key));
-                delete window.__nivm_state.memory[key];
+            if (await showConfirm('Delete Memory', 'Are you sure you want to remove this remembered fact?')) {
+                delBtn.disabled = true;
+                await deleteMemoryAPI(id);
+                state.memory = state.memory.filter(m => m.id !== id);
                 renderMemoryDrawer();
+                showNotification('Memory removed', 'info');
             }
         });
 
-        header.appendChild(titleSpan);
-        header.appendChild(deleteBtn);
-        
-        const contentPreview = document.createElement('div');
-        contentPreview.style.fontSize = '0.85em';
-        contentPreview.style.color = 'var(--text-secondary)';
-        contentPreview.style.lineHeight = '1.5';
-        contentPreview.style.padding = '8px 10px';
-        contentPreview.style.background = 'rgba(255, 255, 255, 0.03)';
-        contentPreview.style.borderRadius = '6px';
-        contentPreview.style.border = '1px solid rgba(255, 255, 255, 0.06)';
-        contentPreview.style.width = '100%';
-        contentPreview.style.boxSizing = 'border-box';
-        contentPreview.style.whiteSpace = 'pre-wrap';
-        contentPreview.textContent = window.__nivm_state.memory[key];
-        
-        const editBox = document.createElement('div');
-        editBox.style.marginTop = '10px';
-        editBox.style.width = '100%';
-        editBox.innerHTML = `
-            <input type="text" placeholder="Ask nivm to update this category..." class="memory-edit-input" style="width: 100%; box-sizing: border-box; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: 0.85em;">
-        `;
-        
-        const inputEl = editBox.querySelector('input');
-        inputEl.addEventListener('keypress', async (e) => {
-            if (e.key === 'Enter') {
-                const text = inputEl.value.trim();
-                if (text) {
-                    inputEl.disabled = true;
-                    inputEl.value = 'Updating...';
-                    
-                    const currentValue = window.__nivm_state.memory[key];
-                    const editPrompt = `[SYSTEM INSTRUCTION] The user is using a UI shortcut to update a long-term memory category.
-Target Category: '${key}'
-Current Category Data: '${currentValue}'
-User's Update Request: '${text}'
-
-INSTRUCTIONS:
-1. Analyze the user's request and update the category '${key}'.
-2. MERGE the new facts cleanly with the existing data (e.g. using ' | ' separators or clear key-value attributes). Prior facts must NOT be erased unless the user explicitly requests to change or delete them.
-3. Ignore all conversational filler (e.g. 'can you add', 'also', 'instead'). Extract ONLY the factual details.
-4. Output EXACTLY ONE tool call: TOOL_CALL: write_memory(${key}, <new_merged_value>)
-5. DO NOT output any other text before or after the tool call.`;
-
-                    try {
-                        const payload = [
-                            { role: 'system', content: "You are an expert AI assistant designed to update memory entries accurately." },
-                            { role: 'user', content: editPrompt }
-                        ];
-                        const response = await fetch('/api/chat', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                model: window.__nivm_state.selectedModel,
-                                messages: payload,
-                                temperature: 0.1,
-                                max_tokens: 500,
-                                stream: false
-                            })
-                        });
-                        
-                        if (!response.ok) throw new Error("API Error");
-                        
-                        const data = await response.json();
-                        const resultText = data.choices[0].message.content;
-                        
-                        const match = resultText.match(/TOOL_CALL:\s*(read_memory|write_memory)\(([\s\S]*?)\)/);
-                        if (match && match[1] === 'write_memory') {
-                            const rawArgs = match[2].trim();
-                            const firstComma = rawArgs.indexOf(',');
-                            let newKey = key;
-                            let newVal = rawArgs;
-                            if (firstComma !== -1) {
-                                newKey = rawArgs.substring(0, firstComma).trim().replace(/['"]/g, '');
-                                newVal = rawArgs.substring(firstComma + 1).trim().replace(/^['"]|['"]$/g, '');
-                            }
-                            
-                            await fetch('/api/memory', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ key: newKey, value: newVal })
-                            });
-                            
-                            const { fetchMemoryAPI } = await import('../api.js');
-                            window.__nivm_state.memory = await fetchMemoryAPI();
-                            renderMemoryDrawer();
-                        } else {
-                            console.error("Failed to parse tool call from model output:", resultText);
-                            inputEl.disabled = false;
-                            inputEl.value = text;
-                        }
-                    } catch (err) {
-                        console.error("Error updating memory:", err);
-                        inputEl.disabled = false;
-                        inputEl.value = text;
-                    }
-                }
-            }
-        });
-
-        item.appendChild(header);
-        item.appendChild(contentPreview);
-        item.appendChild(editBox);
-        dom.memoryList.appendChild(item);
+        card.appendChild(contentBox);
+        card.appendChild(delBtn);
+        dom.memoryList.appendChild(card);
     });
 }
 
+function updateMemoryModeUI() {
+    const isEnabled = state.memoryEnabled !== false;
+    const dot = document.getElementById('memoryStatusDot');
+    const label = document.getElementById('memoryModeLabel');
+    const toggleBtn = document.getElementById('toggleMemoryModeBtn');
+    const prefToggleBtn = document.getElementById('prefToggleMemoryModeBtn');
+
+    if (dot) dot.style.background = isEnabled ? '#10b981' : '#71717a';
+    if (label) label.textContent = isEnabled ? 'Memory Mode: Enabled' : 'Memory Mode: Disabled';
+    if (toggleBtn) {
+        toggleBtn.textContent = isEnabled ? 'Disable' : 'Enable';
+        toggleBtn.className = isEnabled ? 'btn-secondary' : 'btn-primary';
+    }
+    if (prefToggleBtn) {
+        prefToggleBtn.textContent = isEnabled ? 'Enabled' : 'Disabled';
+        prefToggleBtn.style.color = isEnabled ? '#34d399' : 'var(--text-tertiary)';
+    }
+}
+
+function setupMemoryDrawerEvents() {
+    if (isEventsBound) return;
+    isEventsBound = true;
+
+    // Toggle Memory Mode
+    const handleToggle = async () => {
+        const nextState = !state.memoryEnabled;
+        state.memoryEnabled = nextState;
+        localStorage.setItem('nivm_memory_enabled', String(nextState));
+        updateMemoryModeUI();
+        try {
+            await toggleMemoryModeAPI(nextState);
+            showNotification(nextState ? 'Memory mode enabled' : 'Memory mode disabled', 'info');
+        } catch (e) {
+            console.error('Error toggling memory mode:', e);
+        }
+    };
+
+    const toggleBtn = document.getElementById('toggleMemoryModeBtn');
+    if (toggleBtn) toggleBtn.addEventListener('click', handleToggle);
+
+    const prefToggleBtn = document.getElementById('prefToggleMemoryModeBtn');
+    if (prefToggleBtn) prefToggleBtn.addEventListener('click', handleToggle);
+
+    // Erase All Memories
+    const eraseAllBtn = document.getElementById('eraseAllMemoriesBtn');
+    if (eraseAllBtn) {
+        eraseAllBtn.addEventListener('click', async () => {
+            const count = (state.memory || []).length;
+            if (count === 0) {
+                showNotification('No memories to erase', 'info');
+                return;
+            }
+            const confirmed = await showConfirm(
+                'Erase All Memories',
+                `Are you sure you want to permanently erase all ${count} memories? This will clear all stored vectors and cannot be undone.`
+            );
+            if (confirmed) {
+                try {
+                    await clearAllMemoriesAPI();
+                    state.memory = [];
+                    renderMemoryDrawer();
+                    showNotification('All long-term memories erased', 'success');
+                } catch (e) {
+                    console.error('Error clearing memories:', e);
+                    showNotification('Failed to erase memories', 'error');
+                }
+            }
+        });
+    }
+
+    // Manual Add Memory
+    const addBtn = document.getElementById('addMemoryBtn');
+    const manualInput = document.getElementById('manualMemoryInput');
+
+    const handleAdd = async () => {
+        if (!manualInput) return;
+        const text = manualInput.value.trim();
+        if (!text) return;
+        manualInput.disabled = true;
+        if (addBtn) addBtn.disabled = true;
+
+        try {
+            const res = await addMemoryAPI(text);
+            manualInput.value = '';
+            showNotification('Memory saved!', 'success');
+            await renderMemoryDrawer();
+        } catch (e) {
+            console.error('Error adding memory:', e);
+            showNotification('Failed to save memory', 'error');
+        } finally {
+            manualInput.disabled = false;
+            if (addBtn) addBtn.disabled = false;
+            manualInput.focus();
+        }
+    };
+
+    if (addBtn) addBtn.addEventListener('click', handleAdd);
+    if (manualInput) {
+        manualInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAdd();
+            }
+        });
+    }
+}

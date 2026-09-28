@@ -259,16 +259,53 @@
 
         <!-- Slide-out Memory Drawer -->
         <div class="history-drawer hidden" id="memoryDrawer">
-            <div class="drawer-header">
-                <h3><i class="fa-solid fa-brain"></i> Memory</h3>
+            <div class="drawer-header" style="align-items: flex-start; padding-bottom: 6px;">
+                <div>
+                    <h3 style="display: flex; align-items: center; gap: 8px; margin: 0;"><i class="fa-solid fa-brain" style="color: var(--accent-purple, #a855f7);"></i> Memory</h3>
+                    <span style="font-size: 0.72rem; color: var(--text-tertiary); display: block; margin-top: 2px;">RAG • Mem0 • Google TurboQuant (Offline)</span>
+                </div>
                 <button class="icon-btn-sm" id="closeMemoryBtn"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <div class="drawer-body">
-                <div class="memory-list" id="memoryList">
+            <div class="drawer-body" style="display: flex; flex-direction: column; gap: 12px; padding: 10px 16px 24px 16px;">
+                <!-- Memory Mode Toggle Card -->
+                <div class="memory-ctrl-card" id="memoryToggleCard" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div>
+                            <div style="font-size: 0.84rem; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                                <span id="memoryStatusDot" style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+                                <span id="memoryModeLabel">Memory Mode: Enabled</span>
+                            </div>
+                            <div style="font-size: 0.72rem; color: var(--text-tertiary); margin-top: 2px;">Automatically recalls and stores details</div>
+                        </div>
+                        <button type="button" class="btn-secondary" id="toggleMemoryModeBtn" style="padding: 4px 10px; font-size: 0.75rem; border-radius: 6px;">
+                            Disable
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Add Fact Input -->
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" id="manualMemoryInput" placeholder="Add a fact to remember..." style="flex: 1; min-width: 0; padding: 8px 12px; font-size: 0.82rem; border-radius: 8px; border: 1px solid var(--border-color, rgba(255,255,255,0.1)); background: rgba(0, 0, 0, 0.2); color: var(--text-primary);">
+                    <button type="button" class="btn-primary" id="addMemoryBtn" style="padding: 8px 14px; font-size: 0.82rem; border-radius: 8px; white-space: nowrap; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-plus"></i> Add
+                    </button>
+                </div>
+
+                <!-- Memory Count and Erase All button -->
+                <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 2px;">
+                    <span id="memoryFactCount" style="font-size: 0.75rem; color: var(--text-tertiary); font-weight: 500;">0 memories stored</span>
+                    <button type="button" class="btn-secondary" id="eraseAllMemoriesBtn" style="padding: 4px 10px; font-size: 0.72rem; border-radius: 6px; color: #f87171; border-color: rgba(239, 68, 68, 0.25); background: rgba(239, 68, 68, 0.06); cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Erase all stored memories">
+                        <i class="fa-solid fa-trash"></i> Erase All
+                    </button>
+                </div>
+
+                <!-- List of facts -->
+                <div class="memory-list" id="memoryList" style="display: flex; flex-direction: column; gap: 8px; overflow-y: auto;">
                     <!-- Memory items populated by JS -->
                 </div>
             </div>
         </div>
+
 
         <!-- Main Content Viewport -->
         <main class="main-content">
@@ -1661,6 +1698,22 @@
                                     <span>Voice Profile</span>
                                 </button>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Long-Term Memory Section -->
+                    <div class="settings-section">
+                        <div class="section-title">Long-Term Memory</div>
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;">
+                            <div>
+                                <div style="font-size: 0.86rem; font-weight: 600; color: #f4f4f5; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa-solid fa-brain" style="color: var(--accent-purple, #a855f7);"></i> Neural Memory Engine
+                                </div>
+                                <div style="font-size: 0.74rem; color: #71717a; margin-top: 2px;">RAG + Mem0 with 4-bit TurboQuant vector quantization (runs 100% locally)</div>
+                            </div>
+                            <button type="button" class="btn-secondary" id="prefToggleMemoryModeBtn" style="padding: 6px 14px; font-size: 0.8rem; border-radius: 8px;">
+                                Enabled
+                            </button>
                         </div>
                     </div>
 

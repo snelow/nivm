@@ -148,7 +148,15 @@ const startApp = async () => {
                         state.conversations = serverChats;
                     }
                     if (memory) {
-                        state.memory = memory;
+                        if (Array.isArray(memory)) {
+                            state.memory = memory;
+                        } else if (typeof memory === 'object') {
+                            state.memory = Array.isArray(memory.memories) ? memory.memories : [];
+                            if (typeof memory.enabled === 'boolean') {
+                                state.memoryEnabled = memory.enabled;
+                                localStorage.setItem('nivm_memory_enabled', String(memory.enabled));
+                            }
+                        }
                     }
                 } catch (err) {
                     console.warn('Server chats/memory sync warning:', err);

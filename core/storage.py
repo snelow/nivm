@@ -120,6 +120,7 @@ class SettingsModel(BaseModel):
     stt_engine: Optional[str] = None
     whisper_model: Optional[str] = None
     downloader_connections: int = 4
+    memory_enabled: bool = True
 
 
 
@@ -423,44 +424,78 @@ async def save_chats_endpoint(request: Request):
 
 @router.get("/api/memory")
 async def get_memory_endpoint():
-    """Returns the user's memory database."""
-    return _read_json_file(MEMORY_FILE, default={})
+    """Returns all stored memories and memory state from the vector database."""
+    from .memory_engine import memory_engine
+    settings = get_user_settings()
+    memories = memory_engine.get_all()
+    return {
+        "status": "success",
+        "enabled": settings.get("memory_enabled", True),
+        "memories": memories
+    }
 
 
 @router.post("/api/memory")
 async def save_memory_endpoint(request: Request):
-    """Updates the user's memory database."""
+    """Adds a new memory statement to the vector database."""
+    from .memory_engine import memory_engine
     try:
         body = await request.json()
-        key, value = body.get("key"), body.get("value")
-        if not key:
-            raise HTTPException(status_code=400, detail="Key is required")
-        memory_data = _read_json_file(MEMORY_FILE, default={})
-        memory_data[key] = value
-        _write_json_file(MEMORY_FILE, memory_data)
-        return {"status": "success"}
+        text = body.get("text") or body.get("value")
+        if not text and body.get("key"):
+            text = f"{body.get('key')}: {body.get('value', '')}"
+        if not text or not str(text).strip():
+            raise HTTPException(status_code=400, detail="Memory text is required")
+        mem_id = memory_engine.add(str(text).strip())
+        return {"status": "success", "id": mem_id}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error saving memory file: {e}")
+        logger.error(f"Error saving memory: {e}")
         raise HTTPException(status_code=500, detail="Failed to save memory")
 
 
 @router.delete("/api/memory")
 async def delete_memory_endpoint(request: Request):
-    """Deletes a key from the user's memory database."""
+    """Deletes a memory by its ID from the vector database."""
+    from .memory_engine import memory_engine
     try:
         body = await request.json()
-        key = body.get("key")
-        if not key:
-            raise HTTPException(status_code=400, detail="Key is required")
-        memory_data = _read_json_file(MEMORY_FILE, default={})
-        if key in memory_data:
-            del memory_data[key]
-            _write_json_file(MEMORY_FILE, memory_data)
-        return {"status": "success"}
+        mem_id = body.get("id") or body.get("key")
+        if not mem_id:
+            raise HTTPException(status_code=400, detail="Memory ID is required")
+        success = memory_engine.delete(str(mem_id))
+        return {"status": "success" if success else "not_found"}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting memory file: {e}")
+        logger.error(f"Error deleting memory: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete memory")
+
+
+@router.post("/api/memory/clear")
+async def clear_all_memories_endpoint():
+    """Erases all stored memories from the vector database."""
+    from .memory_engine import memory_engine
+    try:
+        memory_engine.clear_all()
+        return {"status": "success", "message": "All memories cleared"}
+    except Exception as e:
+        logger.error(f"Error clearing memories: {e}")
+        raise HTTPException(status_code=500, detail="Failed to clear memories")
+
+
+@router.post("/api/memory/toggle")
+async def toggle_memory_mode_endpoint(request: Request):
+    """Toggles Memory Mode (enabled/disabled) in user settings."""
+    try:
+        body = await request.json()
+        enabled = bool(body.get("enabled", True))
+        current_settings = get_user_settings()
+        current_settings["memory_enabled"] = enabled
+        save_user_settings(current_settings)
+        return {"status": "success", "enabled": enabled}
+    except Exception as e:
+        logger.error(f"Error toggling memory mode: {e}")
+        raise HTTPException(status_code=500, detail="Failed to toggle memory mode")
+

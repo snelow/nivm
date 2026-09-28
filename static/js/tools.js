@@ -188,58 +188,6 @@ function _trackImageTask(taskId, progressCard, defaultFilename, successDesc, ori
 
 export const tools = [
     {
-        name: 'read_memory',
-        description: 'MANDATORY STEP 1 when saving new facts or recalling info. Inspects existing facts in a category.',
-        instruction: 'ALWAYS call this first when the user shares any info to remember, so you can inspect existing facts before writing.',
-        usageFormat: 'TOOL_CALL: read_memory(category_name)',
-        execute: async (argsStr) => {
-            const key = argsStr.split(',')[0].trim().replace(/['"]/g, '');
-            recentlyReadKeys.add(key.toLowerCase());
-            
-            if (state.memory && state.memory[key] !== undefined && state.memory[key] !== null && String(state.memory[key]).trim() !== '') {
-                return `Value for '${key}' is: ${state.memory[key]}. [NEXT STEP: Combine this existing data with the user's new information, then call write_memory('${key}', <complete_merged_value>)]`;
-            } else {
-                return `Memory category '${key}' is currently empty. [NEXT STEP: Call write_memory('${key}', <value>) to save the information]`;
-            }
-        }
-    },
-    {
-        name: 'write_memory',
-        description: 'STEP 2 ONLY: Commit complete merged facts to a memory category AFTER calling read_memory.',
-        instruction: 'Write the complete, merged facts to a category. NEVER call this without calling read_memory first on existing categories.',
-        usageFormat: 'TOOL_CALL: write_memory(category_name, merged_value)',
-        execute: async (argsStr) => {
-            const key = argsStr.split(',')[0].trim().replace(/['"]/g, '');
-            let val = argsStr.substring(argsStr.indexOf(',') + 1).trim().replace(/^['"]|['"]$/g, '');
-            const normKey = key.toLowerCase();
-
-            const existingVal = state.memory && state.memory[key] !== undefined && state.memory[key] !== null ? String(state.memory[key]).trim() : '';
-
-            // If the category already has existing facts, verify the model inspected it first
-            if (existingVal !== '') {
-                const wasRead = recentlyReadKeys.has(normKey);
-                // If it was never read in this message turn and does not include the existing facts:
-                if (!wasRead && !val.includes(existingVal)) {
-                    return `Error: Cannot overwrite existing category '${key}'. It already contains stored facts: "${existingVal}". You MUST call read_memory('${key}') first to inspect existing facts before updating.`;
-                }
-
-                // Auto-merge safety net to guarantee prior facts are never erased
-                val = mergeMemoryValues(existingVal, val);
-            }
-
-            // Successfully processed: clear read state for this category
-            recentlyReadKeys.delete(normKey);
-
-            await saveMemoryAPI(key, val);
-            state.memory[key] = val;
-            
-            // Refresh memory UI if needed
-            if (window.renderMemoryDrawer) window.renderMemoryDrawer();
-            
-            return `Successfully updated memory category '${key}'. Current stored value: ${val}`;
-        }
-    },
-    {
         name: 'execute_terminal',
         description: 'Run non-interactive shell commands on the local machine (Linux).',
         instruction: 'Execute commands to inspect files, query system status, or check current date/time.',
@@ -739,7 +687,6 @@ export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume 
     if (activeTools.length === 0) return '';
     
     const hasTerminal = activeTools.some(t => t.name === 'execute_terminal');
-    const hasMemory = activeTools.some(t => t.name === 'read_memory' || t.name === 'write_memory');
     const hasEndConvo = activeTools.some(t => t.name === 'end_conversation');
     const hasImageTools = activeTools.some(t => t.name === 'generate_image' || t.name === 'edit_image');
     const hasAnimeTools = activeTools.some(t => t.name === 'generate_anime_image');
@@ -765,39 +712,6 @@ export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume 
         instruction += `5. Empty Output Handling: If the terminal command returns empty or no stdout, you MUST explicitly state to the user that the command ran cleanly with exit code 0 and explain why it produced no output (e.g. silent command, file/directory created, or no matching items).\n`;
     }
 
-    if (hasMemory) {
-        instruction += `\nMemory Organization & Categorization Rules:\n`;
-        instruction += `1. Long-term memory is organized strictly into cohesive, topic-based CATEGORIES. NEVER create fragmented one-off micro-keys (e.g. do NOT create 'username', 'bday', 'gpu', 'university').\n`;
-        instruction += `2. Categories are completely EXTENSIBLE—you are NOT restricted to a fixed list. Choose or create the best category for the topic:\n`;
-        instruction += `   - 'user_profile': Identity, name, birthday, age, location, personal background.\n`;
-        instruction += `   - 'user_relationships': Friends, family, partner, social circle, colleagues, people in the user's life. (CRITICAL: Always file friends or people here—NEVER put friends or people in 'user_hobbies'!).\n`;
-        instruction += `   - 'user_education': University/college, major, degree, courses, graduation year, academic goals.\n`;
-        instruction += `   - 'user_hardware': OS, CPU, GPU, RAM, display, peripherals, machine environment.\n`;
-        instruction += `   - 'user_projects': Active projects, repositories, tech stacks, current goals.\n`;
-        instruction += `   - 'user_preferences': Coding style, favorite editors/languages, formatting, workflow habits, conversational tone.\n`;
-        instruction += `   - 'user_hobbies': Pastimes, gaming, music, sports, creative arts, leisure activities (activities only, NOT people or friends!).\n`;
-        instruction += `   - Create new categories when appropriate (e.g. 'user_work' for career/employment, 'user_health', etc.).\n`;
-        instruction += `3. Currently stored categories: ${memoryKeys.length > 0 ? memoryKeys.join(', ') : 'none yet'}.\n`;
-        instruction += `4. TWO-STEP MEMORY PROTOCOL (MANDATORY - NEVER SKIP STEP 1):\n`;
-        instruction += `   - Whenever the user shares ANY information to remember ("Remember my name is...", "Also remember my username is...", "I study CS", "I have an RTX 3050"), you MUST FIRST call read_memory(<category>)!\n`;
-        instruction += `   - NEVER call write_memory directly on the user's message without reading first! Direct write_memory calls on existing categories will be REJECTED by the system to protect prior facts.\n`;
-        instruction += `   - Once you receive the read_memory result, combine existing facts with the new fact into a complete, comprehensive record, and only then call write_memory(<category>, <complete_merged_value>).\n`;
-        instruction += `5. Turn-by-Turn Memory Examples (CRITICAL: Follow this exact two-step flow):\n`;
-        instruction += `   - Turn 1: User says "Remember my name is Alex"\n`;
-        instruction += `     -> Assistant: TOOL_CALL: read_memory(user_profile)\n`;
-        instruction += `     -> System returns: Memory category 'user_profile' is currently empty.\n`;
-        instruction += `     -> Assistant: TOOL_CALL: write_memory(user_profile, {"name": "Alex"})\n`;
-        instruction += `   - Turn 2: User says "Also remember my handle/username is alex_dev"\n`;
-        instruction += `     -> Assistant: TOOL_CALL: read_memory(user_profile)\n`;
-        instruction += `     -> System returns: Value for 'user_profile' is: {"name": "Alex"}\n`;
-        instruction += `     -> Assistant: TOOL_CALL: write_memory(user_profile, {"name": "Alex", "username": "alex_dev"})\n`;
-        instruction += `   - User asks "What is my username?":\n`;
-        instruction += `     -> Assistant: TOOL_CALL: read_memory(user_profile)\n`;
-        instruction += `6. Seamless & Natural Dialogue (CRITICAL):\n`;
-        instruction += `   - NEVER mention memory mechanics, memory files, keys, categories, or technical storage to the user.\n`;
-        instruction += `   - NEVER say "I saved this to your profile memory", "stored in memory.json", or "updated category user_profile".\n`;
-        instruction += `   - Respond naturally like a human or in character (e.g. "I'll remember that!", "Got it, noted!", or seamlessly continue the conversation).\n`;
-    }
 
     if (hasEndConvo) {
         instruction += `\nConversation Closure Rules (end_conversation):\n`;
@@ -877,7 +791,7 @@ export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume 
     instruction += `\nCRITICAL TOOL SYNTAX RULES:\n`;
     instruction += `1. To call a tool, you MUST output the exact syntax:\n`;
     instruction += `   TOOL_CALL: tool_name(arguments)\n`;
-    instruction += `2. NEVER output tool names like 'read_memory(...)' alone without the 'TOOL_CALL: ' prefix.\n`;
+    instruction += `2. NEVER output tool names like 'execute_terminal(...)' alone without the 'TOOL_CALL: ' prefix.\n`;
     instruction += `3. Output only ONE tool call at a time.\n`;
     instruction += `4. Tool usage must NEVER break your persona or tone. Embody your persona consistently before, during, and after tool calls.\n`;
 

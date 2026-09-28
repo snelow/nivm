@@ -113,6 +113,7 @@ class GenerationJob:
         self.think_start_time: Optional[float] = None
         self.think_end_time: Optional[float] = None
         self.completed_at: Optional[float] = None
+        self.user_text: str = ""
         self.stop_requested: bool = False
         self.task: Optional[asyncio.Task] = None
         self.listeners: List[asyncio.Queue] = []
@@ -238,7 +239,8 @@ class ChatGenerationManager:
         headers: dict,
         payload: dict,
         api_model: str,
-        clean_messages: list
+        clean_messages: list,
+        user_text: str = ""
     ) -> GenerationJob:
         """Start an external API generation task in the background."""
         self._cleanup_old_jobs()
@@ -248,6 +250,7 @@ class ChatGenerationManager:
             existing.request_stop()
 
         job = GenerationJob(chat_id)
+        job.user_text = user_text
         job.model_info = {"role": "api", "name": f"API: {api_model}"}
         self.jobs[chat_id] = job
 
@@ -368,6 +371,17 @@ class ChatGenerationManager:
             save_assistant_message_to_chat(job.chat_id, assistant_msg)
             job.finish(status="completed", meta=assistant_msg["meta"])
 
+            # Background memory extraction
+            try:
+                from core.memory_engine import memory_engine
+                from core.storage import get_user_settings
+                if get_user_settings().get("memory_enabled", True) and job.user_text:
+                    asyncio.create_task(
+                        memory_engine.extract_and_store_async(job.user_text, assistant_msg["content"])
+                    )
+            except Exception as mem_err:
+                logger.debug(f"Memory extraction trigger error: {mem_err}")
+
         except asyncio.CancelledError:
             logger.info(f"API generation task cancelled for chat {job.chat_id}")
             job.finish(status="stopped")
@@ -390,7 +404,8 @@ class ChatGenerationManager:
         top_p: float,
         repeat_penalty: float,
         inference_mode: str,
-        enable_thinking: Optional[bool] = None
+        enable_thinking: Optional[bool] = None,
+        user_text: str = ""
     ) -> GenerationJob:
         """Start a local engine generation task in the background."""
         self._cleanup_old_jobs()
@@ -399,6 +414,7 @@ class ChatGenerationManager:
             existing.request_stop()
 
         job = GenerationJob(chat_id)
+        job.user_text = user_text
         active_info = model_manager.get_active_info()
         prefill_val = bool(active_info.get("prefill_think", False))
         if enable_thinking is False:
@@ -545,6 +561,17 @@ class ChatGenerationManager:
             }
             save_assistant_message_to_chat(job.chat_id, assistant_msg)
             job.finish(status="completed", meta=assistant_msg["meta"])
+
+            # Background memory extraction
+            try:
+                from core.memory_engine import memory_engine
+                from core.storage import get_user_settings
+                if get_user_settings().get("memory_enabled", True) and job.user_text:
+                    asyncio.create_task(
+                        memory_engine.extract_and_store_async(job.user_text, assistant_msg["content"])
+                    )
+            except Exception as mem_err:
+                logger.debug(f"Memory extraction trigger error: {mem_err}")
 
         except asyncio.CancelledError:
             logger.info(f"Local generation cancelled for chat {job.chat_id}")

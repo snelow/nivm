@@ -693,6 +693,11 @@ export async function initImageStudioSettings() {
                 }
             }
 
+            // Ensure polling continues across page refreshes if operation is active
+            if ((isComfyInstalling || isDownloading) && !_imageStudioPollInterval) {
+                _imageStudioPollInterval = setInterval(pollStatus, 1000);
+            }
+
             // Clear polling if neither operation is active
             if (!isComfyInstalling && !isDownloading && _imageStudioPollInterval) {
                 clearInterval(_imageStudioPollInterval);

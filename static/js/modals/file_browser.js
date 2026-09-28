@@ -337,14 +337,15 @@ export async function updateDownloadUI() {
         if (dom.downloadCardEta) dom.downloadCardEta.textContent = `ETA: ${status.eta_str}`;
         if (dom.downloadProgressBar) dom.downloadProgressBar.style.width = `${Math.min(status.percent, 100)}%`;
         if (dom.downloadPercentLabel) dom.downloadPercentLabel.textContent = `${status.percent}%`;
+        if (!downloadPollTimer) {
+            downloadPollTimer = setInterval(updateDownloadUI, 800);
+        }
         const activeConn = status.active_connections || status.connections;
         if (dom.downloadCardConn) {
-            dom.downloadCardConn.innerHTML = `<i class="fa-solid fa-network-wired"></i> ${activeConn || 4} conn`;
+            dom.downloadCardConn.innerHTML = `<i class="fa-solid fa-network-wired"></i> ${activeConn ? `${activeConn} streams` : '4 streams'}`;
         }
         if (dom.downloadEngineLabel) {
-            dom.downloadEngineLabel.textContent = activeConn
-                ? `Engine: ${status.engine} (${activeConn} streams)`
-                : `Engine: ${status.engine}`;
+            dom.downloadEngineLabel.textContent = activeConn ? `${activeConn} streams` : '';
         }
     } else if (status.status === 'completed') {
         if (downloadPollTimer) {
@@ -513,4 +514,7 @@ export function setupFileBrowserUI() {
             });
         });
     }
+
+    // Immediately restore and track any ongoing download across page refreshes
+    updateDownloadUI().catch(() => {});
 }

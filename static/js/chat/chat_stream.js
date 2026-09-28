@@ -882,13 +882,30 @@ export async function checkAndResumeActiveGeneration(chatId) {
         const res = await fetch(`/api/chat/status?chat_id=${encodeURIComponent(chatId)}`, { cache: 'no-store' });
         if (!res.ok) return;
         const statusData = await res.json();
-        if (statusData.status !== 'generating') return;
 
-        console.log(`[Auto-Resume] Found background generation in progress for chat ${chatId}. Reconnecting...`);
         const activeChat = state.conversations.find(c => c.id === chatId);
         if (!activeChat) return;
 
         let assistantMsg = activeChat.messages[activeChat.messages.length - 1];
+
+        // If generation finished while client was disconnected/reloading
+        if (statusData.status === 'completed') {
+            if (statusData.text && assistantMsg && assistantMsg.role === 'assistant') {
+                if (!assistantMsg.content || assistantMsg.content.length < statusData.text.length) {
+                    assistantMsg.content = sanitizeAssistantText(statusData.text);
+                    saveConversations();
+                    if (state.activeChatId === chatId && window.renderActiveChat) {
+                        window.renderActiveChat();
+                    }
+                }
+            }
+            return;
+        }
+
+        if (statusData.status !== 'generating') return;
+
+        console.log(`[Auto-Resume] Found background generation in progress for chat ${chatId}. Reconnecting...`);
+
         if (!assistantMsg || assistantMsg.role !== 'assistant') {
             assistantMsg = { role: 'assistant', content: '' };
             activeChat.messages.push(assistantMsg);
@@ -911,7 +928,9 @@ export async function checkAndResumeActiveGeneration(chatId) {
         const reader = streamRes.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let buffer = '';
-        let fullResponse = assistantMsg.content || '';
+        let fullResponse = '';
+        let reasoningBuffer = '';
+        let responseBuffer = '';
         let pendingUpdate = false;
         let thinkStartTime = null;
 
@@ -932,15 +951,19 @@ export async function checkAndResumeActiveGeneration(chatId) {
                         const delta = json.choices && json.choices[0] ? json.choices[0].delta : null;
                         if (delta) {
                             if (delta.reasoning_content) {
-                                fullResponse += delta.reasoning_content;
+                                reasoningBuffer += delta.reasoning_content;
                             }
                             if (delta.content) {
-                                fullResponse += delta.content;
+                                responseBuffer += delta.content;
                             }
                         }
                     } catch (e) { }
                 }
             }
+
+            fullResponse = reasoningBuffer
+                ? (`<think>${reasoningBuffer}</think>\n\n${responseBuffer}`)
+                : responseBuffer;
 
             if (!pendingUpdate) {
                 pendingUpdate = requestAnimationFrame(() => {
@@ -965,8 +988,46 @@ export async function checkAndResumeActiveGeneration(chatId) {
         state.isGenerating = false;
         toggleSendStopButtons(false);
         setVoiceOrbGeneratingState(false);
-        saveConversations();
-        renderChatHistory();
+
+        // Check if resumed generation completed with a tool call (agentic loop)
+        const detectedTool = parseToolCall(responseBuffer || cleanResponse, tools);
+        if (detectedTool) {
+            saveConversations();
+            renderChatHistory();
+            const matchedTool = tools.find(t => t.name === detectedTool.command);
+            if (matchedTool && state.enabledTools[detectedTool.command] !== false) {
+                matchedTool.execute(detectedTool.argsStr).then((resultStr) => {
+                    assistantMsg.toolExecution = {
+                        command: detectedTool.command,
+                        argsStr: detectedTool.argsStr,
+                        resultStr: resultStr
+                    };
+                    const isImageTool = ['generate_image', 'edit_image', 'generate_anime_image'].includes(detectedTool.command);
+                    if (isImageTool) {
+                        const imgMatch = resultStr.match(/(?:\/images\/|\/uploads\/)[^\s,)"';:]+/i);
+                        if (imgMatch) {
+                            assistantMsg.toolExecution.imageUrl = imgMatch[0].replace(/[.,:;]+$/, '');
+                            const fn = assistantMsg.toolExecution.imageUrl.split('/').pop();
+                            if (fn) {
+                                state.lastGeneratedImage = fn;
+                                assistantMsg.toolExecution.imageFilename = fn;
+                            }
+                        }
+                    }
+                    const sysMsg = { role: 'user', content: `[SYSTEM NOTIFICATION] Tool executed. Result: ${resultStr}` };
+                    activeChat.messages.push(sysMsg);
+                    saveConversations();
+                    if (state.activeChatId === chatId) {
+                        setTimeout(() => sendMessage(null, true), 100);
+                    }
+                }).catch(err => {
+                    console.warn('[Auto-Resume] Tool execution error:', err);
+                });
+            }
+        } else {
+            saveConversations();
+            renderChatHistory();
+        }
 
     } catch (err) {
         if (err.name !== 'AbortError') {

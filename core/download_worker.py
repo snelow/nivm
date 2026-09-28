@@ -140,18 +140,19 @@ class WorkerDownloader:
         sys.exit(0)
 
     def _cleanup(self):
-        """Clean up partial aria2 metadata or partial file on cancel."""
-        aria2_ctrl = self.dest_path + ".aria2"
-        if os.path.exists(aria2_ctrl):
-            try:
-                os.remove(aria2_ctrl)
-            except Exception:
-                pass
-        if self.cancelled and os.path.exists(self.dest_path):
-            try:
-                os.remove(self.dest_path)
-            except Exception:
-                pass
+        """Clean up partial aria2 metadata or partial file ONLY if explicitly cancelled."""
+        if self.cancelled:
+            aria2_ctrl = self.dest_path + ".aria2"
+            if os.path.exists(aria2_ctrl):
+                try:
+                    os.remove(aria2_ctrl)
+                except Exception:
+                    pass
+            if os.path.exists(self.dest_path):
+                try:
+                    os.remove(self.dest_path)
+                except Exception:
+                    pass
 
     def run(self):
         set_process_priority()
@@ -187,6 +188,8 @@ class WorkerDownloader:
         
         cmd = [
             self.aria2_bin,
+            "-c",
+            "--continue=true",
             "-x", str(self.connections),
             "-s", str(self.connections),
             "-k", "1M",
@@ -196,6 +199,11 @@ class WorkerDownloader:
             "--console-log-level=notice",
             "--allow-overwrite=true",
             "--auto-file-renaming=false",
+            "--max-tries=0",
+            "--retry-wait=2",
+            "--connect-timeout=10",
+            "--timeout=15",
+            "--lowest-speed-limit=50K",
             "-d", self.dest_dir,
             "-o", self.filename,
             self.url

@@ -132,6 +132,8 @@ def _run_downloads(category: str = "standard", connections: Optional[int] = None
 
         cmd = [
             aria2c_bin,
+            "-c",
+            "--continue=true",
             "-x", str(connections),
             "-s", str(connections),
             "-j", "4",
@@ -139,6 +141,11 @@ def _run_downloads(category: str = "standard", connections: Optional[int] = None
             "--file-allocation=none",
             "--summary-interval=1",
             "--console-log-level=warn",
+            "--max-tries=0",
+            "--retry-wait=2",
+            "--connect-timeout=10",
+            "--timeout=15",
+            "--lowest-speed-limit=50K",
             "--dir", target_dir,
             "-o", target_filename,
             url,

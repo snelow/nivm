@@ -123,7 +123,7 @@ export function resolveAspectConfig(aspectStr) {
     return map.portrait;
 }
 
-export function createImageProgressCard(promptText, isEdit = false, requestedAspect = null) {
+export function createImageProgressCard(promptText, isEdit = false, requestedAspect = null, initialStartTime = null) {
     const cardId = 'progress_card_' + Math.random().toString(36).substring(2, 9);
     const card = document.createElement('div');
     card.id = cardId;
@@ -299,7 +299,7 @@ export function createImageProgressCard(promptText, isEdit = false, requestedAsp
         }
     }
 
-    const startTime = Date.now();
+    const startTime = (typeof initialStartTime === 'number' && initialStartTime > 0) ? initialStartTime : Date.now();
     const timerInterval = setInterval(() => {
         const elapsedSec = (Date.now() - startTime) / 1000;
         const elapsed = elapsedSec.toFixed(1);

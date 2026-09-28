@@ -623,6 +623,7 @@ async def get_chat_status(chat_id: str):
 
 
 @app.get("/api/chat/stream")
+@app.get("/api/chat/resume")
 async def reconnect_chat_stream(chat_id: str):
     """Reconnect to an active or buffered background stream."""
     job = chat_manager.get_job(chat_id)

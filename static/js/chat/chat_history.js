@@ -95,6 +95,9 @@ export function switchChat(id) {
     if (typeof window.checkAndResumeActiveGeneration === 'function') {
         window.checkAndResumeActiveGeneration(id);
     }
+    if (typeof window.checkAndResumeActiveImageTask === 'function') {
+        window.checkAndResumeActiveImageTask(id);
+    }
 }
 window.switchChat = switchChat;
 

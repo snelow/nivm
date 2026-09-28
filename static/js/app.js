@@ -8,6 +8,7 @@ import { makeDraggable, setupDynamicGreeting, renderChatHistory, renderActiveCha
 import { setupVoiceUI, stopSpeaking } from './voice.js';
 import { initExtras } from './extras.js';
 import { sendMessage, stopGeneration, checkAndResumeActiveGeneration } from './chat/chat_stream.js';
+import { checkAndResumeActiveImageTask } from './tools.js';
 import { setupSettingsUI, refreshEngineStatusUI, refreshScannedModelsList, updateModelAvailabilityUI, handleUnloadAllModels } from './modals/settings_modal.js';
 import { setupPersonalityUI } from './modals/personality_modal.js';
 import { setupFileBrowserUI } from './modals/file_browser.js';
@@ -21,6 +22,7 @@ window.renderMemoryDrawer = renderMemoryDrawer;
 window.sendMessage = sendMessage;
 window.stopGeneration = stopGeneration;
 window.checkAndResumeActiveGeneration = checkAndResumeActiveGeneration;
+window.checkAndResumeActiveImageTask = checkAndResumeActiveImageTask;
 window.handleUnloadAllModels = handleUnloadAllModels;
 window.refreshEngineStatusUI = refreshEngineStatusUI;
 window.openGlobalSearch = openGlobalSearch;
@@ -159,6 +161,7 @@ const startApp = async () => {
                     }
                     renderChatHistory();
                     checkAndResumeActiveGeneration(state.activeChatId);
+                    checkAndResumeActiveImageTask(state.activeChatId);
                 } else {
                     renderChatHistory();
                 }

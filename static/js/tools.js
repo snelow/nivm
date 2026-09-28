@@ -1,16 +1,26 @@
-import { state } from './state.js';
+import { state, saveConversations } from './state.js';
 import { saveMemoryAPI, executeTerminalAPI } from './api.js';
-import { createImageProgressCard } from './image_editor.js';
+import { createImageProgressCard, saveImageDuration } from './image_editor.js';
 import { normalizeThinkTags } from './think_tags.js';
 
 function mountImageProgressCard(cardElement) {
     const container = document.getElementById('messagesContainer');
     if (!container) return;
+    if (container.querySelector('.image-gen-progress-card')) return;
 
     // Attach card directly to active assistant message wrapper below thinking bubble
     const lastAssistantRow = container.querySelector('.message-row.assistant-row:last-of-type');
     const assistantWrapper = lastAssistantRow ? lastAssistantRow.querySelector('.message-wrapper') : null;
     const assistantBubble = assistantWrapper ? assistantWrapper.querySelector('.message-bubble') : null;
+
+    if (lastAssistantRow) {
+        const existingTrace = lastAssistantRow.querySelector('.tool-trace-block');
+        if (existingTrace) {
+            existingTrace.replaceWith(cardElement);
+            container.scrollTop = container.scrollHeight;
+            return;
+        }
+    }
 
     if (assistantWrapper && assistantBubble) {
         const actions = assistantWrapper.querySelector('.message-actions');
@@ -93,6 +103,12 @@ function _trackImageTask(taskId, progressCard, defaultFilename, successDesc, ori
             if (pollTimer) clearInterval(pollTimer);
             if (evtSource) try { evtSource.close(); } catch (_) {}
             document.removeEventListener('visibilitychange', onVisibilityChange);
+            try {
+                const stored = JSON.parse(localStorage.getItem('nivm_pending_image_task') || 'null');
+                if (stored && stored.taskId === taskId) {
+                    localStorage.removeItem('nivm_pending_image_task');
+                }
+            } catch (_) {}
         };
 
         const finishSuccess = (imgData, finalOrigUrl) => {
@@ -355,8 +371,27 @@ export const tools = [
                     progressCard.update({ max_steps: data.max_steps || data.steps });
                 }
 
+                localStorage.setItem('nivm_pending_image_task', JSON.stringify({
+                    taskId,
+                    chatId: state.activeChatId,
+                    command: 'generate_anime_image',
+                    promptText: `${titlePrefix} ${userPrompt}`.trim(),
+                    isEdit: false,
+                    aspectRatio: resolution,
+                    defaultFilename: 'anime_generated.png',
+                    successDesc: 'Anime illustration synthesized successfully',
+                    originalUrl: null,
+                    startTime: Date.now()
+                }));
+
                 return await _trackImageTask(taskId, progressCard, 'anime_generated.png', 'Anime illustration synthesized successfully');
             } catch (err) {
+                try {
+                    const stored = JSON.parse(localStorage.getItem('nivm_pending_image_task') || 'null');
+                    if (stored && stored.command === 'generate_anime_image') {
+                        localStorage.removeItem('nivm_pending_image_task');
+                    }
+                } catch (_) {}
                 progressCard.fail(err.message);
                 return `[GENERATION FAILED] Anime generation failed: ${err.message}. No image was produced.`;
             }
@@ -412,8 +447,27 @@ export const tools = [
                     progressCard.update({ max_steps: data.max_steps || data.steps });
                 }
 
+                localStorage.setItem('nivm_pending_image_task', JSON.stringify({
+                    taskId,
+                    chatId: state.activeChatId,
+                    command: 'generate_image',
+                    promptText: prompt,
+                    isEdit: false,
+                    aspectRatio: aspectRatio,
+                    defaultFilename: 'generated.png',
+                    successDesc: 'Image synthesized successfully',
+                    originalUrl: null,
+                    startTime: Date.now()
+                }));
+
                 return await _trackImageTask(taskId, progressCard, 'generated.png', 'Image synthesized successfully');
             } catch (err) {
+                try {
+                    const stored = JSON.parse(localStorage.getItem('nivm_pending_image_task') || 'null');
+                    if (stored && stored.command === 'generate_image') {
+                        localStorage.removeItem('nivm_pending_image_task');
+                    }
+                } catch (_) {}
                 progressCard.fail(err.message);
                 return `[GENERATION FAILED] Image generation failed: ${err.message}. No image was produced.`;
             }
@@ -522,8 +576,27 @@ export const tools = [
                     progressCard.update({ max_steps: data.max_steps || data.steps });
                 }
 
+                localStorage.setItem('nivm_pending_image_task', JSON.stringify({
+                    taskId,
+                    chatId: state.activeChatId,
+                    command: 'edit_image',
+                    promptText: prompt,
+                    isEdit: true,
+                    aspectRatio: aspectRatio,
+                    defaultFilename: 'edited.png',
+                    successDesc: 'Image edited successfully',
+                    originalUrl: origUrl,
+                    startTime: Date.now()
+                }));
+
                 return await _trackImageTask(taskId, progressCard, 'edited.png', 'Image edited successfully', origUrl);
             } catch (err) {
+                try {
+                    const stored = JSON.parse(localStorage.getItem('nivm_pending_image_task') || 'null');
+                    if (stored && stored.command === 'edit_image') {
+                        localStorage.removeItem('nivm_pending_image_task');
+                    }
+                } catch (_) {}
                 progressCard.fail(err.message);
                 return `[GENERATION FAILED] Image editing failed: ${err.message}. No edited image was produced.`;
             }
@@ -936,3 +1009,247 @@ export function stripToolCallFromText(text, activeTools = tools) {
 
     return (thinkPart + (thinkPart && bodyPart.trim() ? '\n\n' : '') + bodyPart.trim()).trim();
 }
+
+let _resumedTrackingTaskId = null;
+
+export async function checkAndResumeActiveImageTask(targetChatId = null) {
+    let pendingRaw = null;
+    try {
+        pendingRaw = localStorage.getItem('nivm_pending_image_task');
+    } catch (_) {}
+    if (!pendingRaw) return;
+
+    let pending = null;
+    try {
+        pending = JSON.parse(pendingRaw);
+    } catch (_) {
+        localStorage.removeItem('nivm_pending_image_task');
+        return;
+    }
+
+    if (!pending || !pending.taskId) {
+        localStorage.removeItem('nivm_pending_image_task');
+        return;
+    }
+
+    // Stale check (e.g. older than 2 hours)
+    if (pending.startTime && (Date.now() - pending.startTime > 7200000)) {
+        localStorage.removeItem('nivm_pending_image_task');
+        return;
+    }
+
+    const currentChatId = targetChatId || state.activeChatId;
+
+    // If currently tracking and progress card is already in DOM, do not re-mount
+    if (_resumedTrackingTaskId === pending.taskId && document.querySelector('.image-gen-progress-card')) {
+        return;
+    }
+
+    // Query backend for task status
+    let taskData = null;
+    try {
+        const resp = await fetch(`/api/image/task/${pending.taskId}`, { cache: 'no-store' });
+        if (resp.status === 404) {
+            localStorage.removeItem('nivm_pending_image_task');
+            return;
+        }
+        if (resp.ok) {
+            taskData = await resp.json();
+        }
+    } catch (err) {
+        console.warn('[Image-Resume] Error checking task status:', err);
+        return;
+    }
+
+    if (!taskData) return;
+
+    const chat = state.conversations?.find(c => c.id === (pending.chatId || currentChatId));
+    if (!chat) {
+        localStorage.removeItem('nivm_pending_image_task');
+        return;
+    }
+
+    const status = taskData.status;
+
+    const findAssistantMsg = () => {
+        if (!chat.messages || chat.messages.length === 0) return null;
+        for (let i = chat.messages.length - 1; i >= 0; i--) {
+            const m = chat.messages[i];
+            if (m.role === 'assistant') return m;
+        }
+        return null;
+    };
+
+    if (status === 'complete') {
+        _resumedTrackingTaskId = null;
+        localStorage.removeItem('nivm_pending_image_task');
+
+        const imgData = taskData.result || taskData.image || { url: taskData.url, filename: taskData.filename };
+        const imageUrl = imgData?.url || (imgData?.filename ? `/images/${imgData.filename}` : null);
+        const filename = imgData?.filename || (imageUrl ? imageUrl.split('/').pop() : pending.defaultFilename);
+        const durationSec = taskData.time_elapsed ? Number(taskData.time_elapsed).toFixed(1) : null;
+        if (filename) state.lastGeneratedImage = filename;
+        if (imageUrl && durationSec) saveImageDuration(imageUrl, durationSec);
+
+        const durStr = durationSec ? ` (Duration: ${durationSec}s)` : '';
+        const srcUrl = taskData.original_url || pending.originalUrl;
+        const srcStr = srcUrl ? ` (original: ${srcUrl})` : '';
+        const resultStr = `[GENERATION SUCCESSFUL: ${filename}]${durStr} ${pending.successDesc}: ${imageUrl}${srcStr} - Display this image to the user, note filename "${filename}", and describe the scene.`;
+
+        const assistantMsg = findAssistantMsg();
+        if (assistantMsg) {
+            assistantMsg.toolExecution = {
+                command: pending.command,
+                argsStr: pending.promptText,
+                resultStr: resultStr,
+                imageUrl: imageUrl,
+                imageFilename: filename,
+                duration: durationSec ? parseFloat(durationSec) : null
+            };
+        }
+
+        const hasSysMsg = chat.messages.some(m => typeof m.content === 'string' && m.content.startsWith('[SYSTEM NOTIFICATION]') && m.content.includes(filename || pending.command));
+        if (!hasSysMsg) {
+            const sysNotificationHeader = "[SYSTEM NOTIFICATION] Image generated successfully.";
+            const toolAdvice = `IMPORTANT: Image processing succeeded. The image filename is "${filename}". The rendered image is already displayed in the UI. Describe the visual scene warmly in your active persona/character without mentioning technical file paths or markdown image tags. Note this filename: if the user later asks to edit, alter, or transform this image, call edit_image("${filename}", "<edit instruction>", "original").`;
+            chat.messages.push({
+                role: 'user',
+                content: `${sysNotificationHeader} Result: ${resultStr}\n\n${toolAdvice}`
+            });
+        }
+
+        saveConversations();
+
+        if (state.activeChatId === (pending.chatId || currentChatId)) {
+            if (window.renderActiveChat) window.renderActiveChat();
+            const lastMsg = chat.messages[chat.messages.length - 1];
+            if (lastMsg && typeof lastMsg.content === 'string' && lastMsg.content.startsWith('[SYSTEM NOTIFICATION]')) {
+                if (typeof window.sendMessage === 'function') {
+                    setTimeout(() => window.sendMessage(null, true), 150);
+                }
+            }
+        }
+        return;
+    }
+
+    if (status === 'interrupted' || status === 'error') {
+        _resumedTrackingTaskId = null;
+        localStorage.removeItem('nivm_pending_image_task');
+
+        const isInterrupted = status === 'interrupted';
+        const resultStr = isInterrupted
+            ? `[GENERATION INTERRUPTED] Image processing was explicitly stopped/cancelled by the user. No image was generated.`
+            : `[GENERATION FAILED] Image processing failed: ${taskData.error || 'Unknown error'}. No image was produced.`;
+
+        const assistantMsg = findAssistantMsg();
+        if (assistantMsg) {
+            assistantMsg.toolExecution = {
+                command: pending.command,
+                argsStr: pending.promptText,
+                resultStr: resultStr
+            };
+        }
+
+        const hasSysMsg = chat.messages.some(m => typeof m.content === 'string' && m.content.startsWith('[SYSTEM NOTIFICATION]') && m.content.includes(pending.command));
+        if (!hasSysMsg) {
+            const sysNotificationHeader = isInterrupted
+                ? "[SYSTEM NOTIFICATION] Image generation was CANCELLED / STOPPED by the user."
+                : "[SYSTEM NOTIFICATION] Image generation FAILED.";
+            const toolAdvice = isInterrupted
+                ? "IMPORTANT: The user explicitly clicked STOP to cancel this image generation while it was running. No completed image was generated. Acknowledge that the generation was stopped as requested in your active persona/character. Do NOT describe or pretend an image was generated."
+                : `IMPORTANT: Image generation failed due to an error. Inform the user in character that generation could not complete. Error details: ${resultStr}`;
+            chat.messages.push({
+                role: 'user',
+                content: `${sysNotificationHeader} Result: ${resultStr}\n\n${toolAdvice}`
+            });
+        }
+
+        saveConversations();
+        if (state.activeChatId === (pending.chatId || currentChatId)) {
+            if (window.renderActiveChat) window.renderActiveChat();
+        }
+        return;
+    }
+
+    // Actively running
+    _resumedTrackingTaskId = pending.taskId;
+
+    // Only mount progress card if currently viewing the target chat
+    if (state.activeChatId === (pending.chatId || currentChatId)) {
+        if (!document.querySelector('.image-gen-progress-card')) {
+            const progressCard = createImageProgressCard(
+                pending.promptText,
+                pending.isEdit,
+                pending.aspectRatio,
+                pending.startTime
+            );
+            progressCard.setTaskId(pending.taskId);
+            if (taskData.max_steps) {
+                progressCard.update({ max_steps: taskData.max_steps });
+            }
+            mountImageProgressCard(progressCard.element);
+            progressCard.update(taskData);
+
+            _trackImageTask(
+                pending.taskId,
+                progressCard,
+                pending.defaultFilename,
+                pending.successDesc,
+                pending.originalUrl
+            ).then((resultStr) => {
+                _resumedTrackingTaskId = null;
+                localStorage.removeItem('nivm_pending_image_task');
+
+                const imgMatch = resultStr.match(/(?:\/images\/|\/uploads\/)[^\s,)"';:]+/i);
+                const imageUrl = imgMatch ? imgMatch[0].replace(/[.,:;]+$/, '') : null;
+                const filename = imageUrl ? imageUrl.split('/').pop() : pending.defaultFilename;
+                if (filename) state.lastGeneratedImage = filename;
+
+                const durMatch = resultStr.match(/Duration:\s*([0-9.]+)\s*s/i);
+                const durationSec = durMatch ? parseFloat(durMatch[1]) : null;
+
+                const assistantMsg = findAssistantMsg();
+                if (assistantMsg) {
+                    assistantMsg.toolExecution = {
+                        command: pending.command,
+                        argsStr: pending.promptText,
+                        resultStr: resultStr,
+                        imageUrl: imageUrl,
+                        imageFilename: filename,
+                        duration: durationSec
+                    };
+                }
+
+                const isSuccess = !resultStr.includes('[GENERATION INTERRUPTED]') && !resultStr.includes('[GENERATION FAILED]');
+                const hasSysMsg = chat.messages.some(m => typeof m.content === 'string' && m.content.startsWith('[SYSTEM NOTIFICATION]') && m.content.includes(filename || pending.command));
+                if (!hasSysMsg) {
+                    let sysNotificationHeader = "[SYSTEM NOTIFICATION] Image generated successfully.";
+                    let toolAdvice = `IMPORTANT: Image processing succeeded. The image filename is "${filename}". The rendered image is already displayed in the UI. Describe the visual scene warmly in your active persona/character without mentioning technical file paths or markdown image tags. Note this filename: if the user later asks to edit, alter, or transform this image, call edit_image("${filename}", "<edit instruction>", "original").`;
+
+                    if (resultStr.includes('[GENERATION INTERRUPTED]')) {
+                        sysNotificationHeader = "[SYSTEM NOTIFICATION] Image generation was CANCELLED / STOPPED by the user.";
+                        toolAdvice = "IMPORTANT: The user explicitly clicked STOP to cancel this image generation while it was running. No completed image was generated. Acknowledge that the generation was stopped as requested in your active persona/character. Do NOT describe or pretend an image was generated.";
+                    } else if (resultStr.includes('[GENERATION FAILED]')) {
+                        sysNotificationHeader = "[SYSTEM NOTIFICATION] Image generation FAILED.";
+                        toolAdvice = `IMPORTANT: Image generation failed due to an error. Inform the user in character that generation could not complete. Error details: ${resultStr}`;
+                    }
+
+                    chat.messages.push({
+                        role: 'user',
+                        content: `${sysNotificationHeader} Result: ${resultStr}\n\n${toolAdvice}`
+                    });
+                }
+
+                saveConversations();
+
+                if (isSuccess && state.activeChatId === (pending.chatId || currentChatId)) {
+                    if (typeof window.sendMessage === 'function') {
+                        setTimeout(() => window.sendMessage(null, true), 100);
+                    }
+                }
+            });
+        }
+    }
+}
+window.checkAndResumeActiveImageTask = checkAndResumeActiveImageTask;
+

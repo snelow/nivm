@@ -321,6 +321,7 @@ export function renderActiveChat() {
     updateChatInputState(activeChat);
     scrollToBottom();
 }
+window.renderActiveChat = renderActiveChat;
 
 export function toggleSendStopButtons(isGenerating) {
     if (isGenerating) {

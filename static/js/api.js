@@ -570,6 +570,12 @@ export async function addMemoryAPI(text) {
     return apiFetchSafe('/api/memory', { method: 'POST', body: { text } });
 }
 
+export async function saveMemoryAPI(key, value) {
+    const text = value !== undefined ? (key ? `${key}: ${value}` : value) : key;
+    return addMemoryAPI(text);
+}
+
+
 export async function deleteMemoryAPI(id) {
     return apiFetchSafe('/api/memory', { method: 'DELETE', body: { id } });
 }

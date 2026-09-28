@@ -1,5 +1,5 @@
 import { state, saveConversations } from './state.js';
-import { saveMemoryAPI, executeTerminalAPI } from './api.js';
+import { executeTerminalAPI } from './api.js';
 import { createImageProgressCard, saveImageDuration } from './image_editor.js';
 import { normalizeThinkTags } from './think_tags.js';
 

@@ -55,13 +55,13 @@ export async function renderMemoryDrawer() {
 
     if (memories.length === 0) {
         dom.memoryList.innerHTML = `
-            <div style="padding: 32px 16px; text-align: center; color: var(--text-tertiary); display: flex; flex-direction: column; align-items: center; gap: 10px;">
-                <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(168, 85, 247, 0.08); display: flex; align-items: center; justify-content: center; color: var(--accent-purple, #a855f7); font-size: 1.25rem;">
+            <div style="padding: 36px 16px; text-align: center; color: var(--text-tertiary); display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(168, 85, 247, 0.08); display: flex; align-items: center; justify-content: center; color: var(--accent-purple, #a855f7); font-size: 1.1rem;">
                     <i class="fa-solid fa-brain"></i>
                 </div>
-                <div style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">No memories stored yet</div>
-                <div style="font-size: 0.75rem; line-height: 1.45; max-width: 240px;">
-                    NIVM automatically recalls and captures key facts as you chat, or you can add one manually above!
+                <div style="font-size: 0.84rem; font-weight: 500; color: var(--text-secondary);">No memories yet</div>
+                <div style="font-size: 0.73rem; color: var(--text-tertiary); max-width: 200px;">
+                    Key facts are automatically remembered as you chat.
                 </div>
             </div>
         `;
@@ -159,16 +159,16 @@ function updateMemoryModeUI() {
     const prefToggleBtn = document.getElementById('prefToggleMemoryModeBtn');
 
     if (dot) dot.style.background = isEnabled ? '#10b981' : '#71717a';
-    if (label) label.textContent = isEnabled ? 'Memory Mode: Enabled' : 'Memory Mode: Disabled';
+    if (label) label.textContent = isEnabled ? 'Enabled' : 'Disabled';
     if (toggleBtn) {
-        toggleBtn.textContent = isEnabled ? 'Disable' : 'Enable';
-        toggleBtn.className = isEnabled ? 'btn-secondary' : 'btn-primary';
+        toggleBtn.style.color = isEnabled ? '#10b981' : 'var(--text-tertiary)';
     }
     if (prefToggleBtn) {
         prefToggleBtn.textContent = isEnabled ? 'Enabled' : 'Disabled';
         prefToggleBtn.style.color = isEnabled ? '#34d399' : 'var(--text-tertiary)';
     }
 }
+
 
 function setupMemoryDrawerEvents() {
     if (isEventsBound) return;

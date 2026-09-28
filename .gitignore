@@ -1,5 +1,6 @@
 # Project specific
 User files/
+scripts/
 benchmark.py
 user_settings.json
 chats.json

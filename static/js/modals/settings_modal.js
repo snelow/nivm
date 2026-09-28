@@ -16,6 +16,7 @@ let fetchModelsDebounce = null;
 
 export function setInferenceMode(mode) {
     state.inferenceMode = mode;
+    try { localStorage.setItem('nivm_inference_mode', mode); } catch (_) {}
     ['routing', 'single', 'api'].forEach(m => {
         dom[`${m}ModeBtn`]?.classList.toggle('active', mode === m);
         dom[`${m}ModePanel`]?.classList.toggle('hidden', mode !== m);
@@ -41,9 +42,22 @@ export function setInferenceMode(mode) {
     if (dom.smartEngineSection) dom.smartEngineSection.classList.toggle('hidden', isApi);
 
     if (isApi) {
+        const apiModel = (dom.apiModelSelect && dom.apiModelSelect.value && dom.apiModelSelect.value !== '__custom__')
+            ? dom.apiModelSelect.value
+            : (dom.apiModelInput?.value.trim() || state.selectedModel || 'llama-3.3-70b-versatile');
+        state.selectedModel = apiModel;
+        try { localStorage.setItem('nivm_lastModel', apiModel); } catch (_) {}
+        state.isModelLoaded = true;
+        if (dom.engineStatusText) {
+            dom.engineStatusText.textContent = `API: ${apiModel}`;
+            dom.engineStatusText.style.color = "var(--accent-cyan, #06b6d4)";
+        }
         updateModelAvailabilityUI(true);
         fetchRemoteModels(true);
     } else {
+        const localModel = state.singleModelRole || 'coder';
+        state.selectedModel = localModel;
+        try { localStorage.setItem('nivm_lastModel', localModel); } catch (_) {}
         refreshEngineStatusUI();
         updateMemoryEstimator();
     }

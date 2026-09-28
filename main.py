@@ -404,6 +404,9 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
 
         api_key = settings.get("api_key", "").strip()
         api_model = settings.get("api_model", "llama-3.3-70b-versatile").strip() or "llama-3.3-70b-versatile"
+        req_model = body.get("model")
+        if req_model and req_model not in ("coder", "router", "vision", "single", ""):
+            api_model = req_model
 
         # Determine if external provider/model supports multimodal images
         is_api_multimodal = settings.get("api_multimodal")

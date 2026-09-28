@@ -170,14 +170,20 @@
 
     .gemini-hero {
         padding: 30px 16px 20px 16px;
+        max-width: 100%;
     }
 
     .hero-greeting h1 {
-        font-size: 2rem;
+        font-size: 1.85rem;
+        line-height: 1.25;
+        margin-bottom: 12px;
+        text-wrap: balance;
     }
 
     .hero-subtitle {
         font-size: 0.95rem;
+        line-height: 1.5;
+        text-wrap: balance;
     }
 
     .messages-container {
@@ -568,14 +574,18 @@
 }
 
 .drawer-tool-item.tool-unload:hover,
-.drawer-tool-item.tool-unload:active {
+.drawer-tool-item.tool-unload:active,
+.drawer-tool-item.tool-logout:hover,
+.drawer-tool-item.tool-logout:active {
     color: #fca5a5;
     background: rgba(239, 68, 68, 0.12);
     border-color: rgba(239, 68, 68, 0.25);
 }
 
 .drawer-tool-item.tool-unload:hover i,
-.drawer-tool-item.tool-unload:active i {
+.drawer-tool-item.tool-unload:active i,
+.drawer-tool-item.tool-logout:hover i,
+.drawer-tool-item.tool-logout:active i {
     color: #ef4444;
 }
 

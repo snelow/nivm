@@ -125,12 +125,13 @@ const startApp = async () => {
 
             // Single-User Gatekeeper Data Loader
             const loadAuthenticatedData = async () => {
+                await fetchApiSettings();
                 await Promise.all([
-                    fetchApiSettings(),
                     fetchBackendConfig(),
                     checkBackendHealth(),
                     fetchEngineStatus(),
-                    loadAvailableModels()
+                    loadAvailableModels(),
+                    refreshScannedModelsList()
                 ]);
                 updateVisionAvailabilityUI();
                 initImageStudioSettings();
@@ -468,9 +469,9 @@ const startApp = async () => {
         [
             ['bgTonePicker', 'bgTone', () => { if (themeState.cycleBg) { themeState.cycleBg = false; if (dom.cycleBgToggle) dom.cycleBgToggle.checked = false; } }],
             ['sidebarTonePicker', 'sidebarTone'],
-            ['accentColorPicker', 'accentColor', () => { if (themeState.cycleAccent) { themeState.cycleAccent = false; if (dom.cycleAccentToggle) dom.cycleAccentToggle.checked = false; } }],
+            ['accentColorPicker', 'accentColor', () => { if (themeState.cycleMainText) { themeState.cycleMainText = false; if (dom.cycleMainTextToggle) dom.cycleMainTextToggle.checked = false; } }],
             ['mutedColorPicker', 'mutedColor'],
-            ['brandColorPicker', 'brandColor'],
+            ['brandColorPicker', 'brandColor', () => { if (themeState.cycleAccent) { themeState.cycleAccent = false; if (dom.cycleAccentToggle) dom.cycleAccentToggle.checked = false; } }],
         ].forEach(([pickerId, key, onPick]) => {
             if (dom[pickerId]) {
                 dom[pickerId].addEventListener('input', (e) => {
@@ -486,6 +487,7 @@ const startApp = async () => {
         [
             ['clearTextToggle', 'clearText'],
             ['cycleAccentToggle', 'cycleAccent'],
+            ['cycleMainTextToggle', 'cycleMainText'],
             ['cycleBgToggle', 'cycleBg'],
         ].forEach(([toggleId, key]) => {
             if (dom[toggleId]) {
@@ -560,6 +562,7 @@ const startApp = async () => {
                     brandColor: '#a855f7',
                     mutedColor: null,
                     cycleAccent: false,
+                    cycleMainText: false,
                     cycleBg: false,
                     cycleSpeed: 50,
                     chatWidth: 'default',

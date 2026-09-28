@@ -11,28 +11,223 @@ import { switchChat, createNewChat, forkChatFromMessage, extractMediaUrlsFromCha
 
 export function setupDynamicGreeting() {
     const hour = new Date().getHours();
-    const timeGreetings = hour < 12 && hour >= 5
-        ? ['Good morning', 'Start fresh', 'Ready when you are', 'Bright and early', 'What’s on your mind?', 'A brand new day']
-        : hour < 17
-        ? ['Good afternoon', 'How can I help?', 'Here to help', 'Ready when you are', 'Let’s get things done', 'Take a breath']
-        : hour < 22
-        ? ['Good evening', 'Evening thoughts', 'Here with you', 'Still curious?', 'What are we working on?', 'Unwinding']
-        : ['Late night inspiration', 'Quiet hours', 'Midnight thoughts', 'Still awake?', 'Here when you need me', 'Into the night'];
-
-    const subtitles = [
-        'How can I help you today?', 'Ask anything, brainstorm an idea, or draft something new.',
-        'Explore a topic, polish your writing, or solve a problem.', 'Ready to help you write, learn, think, and create.',
-        'Got a question, an idea, or just curious? Let’s chat.', 'What would you like to explore today?',
-        'From quick answers to deep conversations, I’m here.', 'Share a thought, plan your day, or learn something new.'
-    ];
+    const name = state.userName ? state.userName.trim() : '';
+    const safeName = name ? `<span class="gradient-text">${escapeHtml(name)}</span>` : '';
 
     const pick = arr => arr[Math.floor(Math.random() * arr.length)];
-    if (dom.heroGreeting) {
-        const name = state.userName ? state.userName.trim() : '';
-        dom.heroGreeting.innerHTML = name
-            ? `${pick(timeGreetings)}, <span class="gradient-text">${escapeHtml(name)}</span>`
-            : `<span class="gradient-text">${pick(timeGreetings)}</span>`;
+
+    if (name) {
+        let timeNamed = [];
+        if (hour >= 5 && hour < 12) {
+            timeNamed = [
+                // Start
+                `${safeName}, ready to create?`,
+                `${safeName}, what are we building today?`,
+                `${safeName}, start fresh`,
+                `${safeName}, what's on your mind this morning?`,
+                `${safeName}, let's make some progress`,
+                `${safeName}, ready when you are`,
+                // Middle
+                `Morning ${safeName}, ready to build?`,
+                `Hey ${safeName}, what's on your radar today?`,
+                `Good to see you, ${safeName}. What's next?`,
+                `Hey ${safeName}, let's get things done`,
+                `Fresh day, ${safeName}. Where should we begin?`,
+                `Glad you're here, ${safeName}`,
+                // End
+                `Good morning, ${safeName}`,
+                `Bright and early, ${safeName}`,
+                `Rise and shine, ${safeName}`,
+                `Morning focus, ${safeName}`
+            ];
+        } else if (hour >= 12 && hour < 17) {
+            timeNamed = [
+                // Start
+                `${safeName}, what are we working on?`,
+                `${safeName}, what's on your radar?`,
+                `${safeName}, ready to tackle the next task?`,
+                `${safeName}, let's solve something interesting`,
+                `${safeName}, ready when you are`,
+                `${safeName}, let's keep the momentum going`,
+                // Middle
+                `Hey ${safeName}, what are we creating?`,
+                `Good to see you, ${safeName}. What's next?`,
+                `Midday session, ${safeName}. Ready?`,
+                `Hey ${safeName}, got a new challenge?`,
+                `Powering through, ${safeName}? Let's dive in`,
+                `All systems ready, ${safeName}`,
+                // End
+                `Good afternoon, ${safeName}`,
+                `Afternoon momentum, ${safeName}`,
+                `Midday check-in, ${safeName}`,
+                `Ready for the afternoon, ${safeName}?`
+            ];
+        } else if (hour >= 17 && hour < 22) {
+            timeNamed = [
+                // Start
+                `${safeName}, what are we diving into tonight?`,
+                `${safeName}, still curious?`,
+                `${safeName}, what's on your mind?`,
+                `${safeName}, ready to build?`,
+                `${safeName}, winding down or building up?`,
+                `${safeName}, let's explore an idea`,
+                // Middle
+                `Evening session, ${safeName}. Where to start?`,
+                `Hey ${safeName}, what are we working on tonight?`,
+                `Good to have you here, ${safeName}`,
+                `Hey ${safeName}, let's unpack a thought`,
+                `Unwinding with new ideas, ${safeName}?`,
+                `Great to see you this evening, ${safeName}`,
+                // End
+                `Good evening, ${safeName}`,
+                `Evening thoughts, ${safeName}`,
+                `Still curious, ${safeName}?`,
+                `Evening focus, ${safeName}`
+            ];
+        } else {
+            timeNamed = [
+                // Start
+                `${safeName}, what's keeping you up?`,
+                `${safeName}, burning the midnight oil?`,
+                `${safeName}, into the night`,
+                `${safeName}, still awake?`,
+                `${safeName}, late night inspiration?`,
+                `${safeName}, deep focus hours`,
+                // Middle
+                `Midnight thoughts with ${safeName}`,
+                `Hey ${safeName}, quiet hours are the best hours`,
+                `Late night coding, ${safeName}?`,
+                `Quiet night, sharp mind, ${safeName}`,
+                `Hey ${safeName}, let's build in the dark`,
+                // End
+                `Late night inspiration, ${safeName}`,
+                `Still awake, ${safeName}?`,
+                `Midnight thoughts, ${safeName}`,
+                `Quiet hours, ${safeName}`,
+                `Here when you need me, ${safeName}`
+            ];
+        }
+
+        const universalNamed = [
+            `${safeName}, what should we explore next?`,
+            `${safeName}, let's build something great`,
+            `${safeName}, welcome back`,
+            `${safeName}, what are we tackling today?`,
+            `Welcome back, ${safeName}. Ready?`,
+            `Hey ${safeName}, what's the plan?`,
+            `Glad you're here, ${safeName}. Let's dive in`,
+            `Hello ${safeName} — let's get into it`,
+            `Take a breath, ${safeName}. Where should we start?`,
+            `Ready when you are, ${safeName}`,
+            `Always a pleasure, ${safeName}. What's next?`
+        ];
+
+        if (dom.heroGreeting) {
+            dom.heroGreeting.innerHTML = pick([...timeNamed, ...universalNamed]);
+        }
+    } else {
+        let timeAnon = [];
+        if (hour >= 5 && hour < 12) {
+            timeAnon = [
+                'Good <span class="gradient-text">morning</span>',
+                'Start <span class="gradient-text">fresh</span>',
+                'Bright and <span class="gradient-text">early</span>',
+                'A brand <span class="gradient-text">new day</span>',
+                'Morning <span class="gradient-text">clarity</span>',
+                'Ready to <span class="gradient-text">create?</span>',
+                'Rise and <span class="gradient-text">shine</span>',
+                'Fresh day, <span class="gradient-text">clear mind</span>',
+                'What’s on your mind this <span class="gradient-text">morning?</span>',
+                'Let’s make some <span class="gradient-text">progress</span>',
+                'Coffee poured, ready to <span class="gradient-text">build</span>',
+                'New ideas, <span class="gradient-text">fresh start</span>'
+            ];
+        } else if (hour >= 12 && hour < 17) {
+            timeAnon = [
+                'Good <span class="gradient-text">afternoon</span>',
+                'How can I <span class="gradient-text">help?</span>',
+                'Ready when <span class="gradient-text">you are</span>',
+                'Let’s get <span class="gradient-text">things done</span>',
+                'What are we <span class="gradient-text">working on?</span>',
+                'Midday <span class="gradient-text">momentum</span>',
+                'What’s on your <span class="gradient-text">radar?</span>',
+                'Powering through <span class="gradient-text">the day</span>',
+                'Ready for the <span class="gradient-text">next challenge?</span>',
+                'Let’s solve something <span class="gradient-text">interesting</span>',
+                'All systems <span class="gradient-text">ready</span>',
+                'What are we <span class="gradient-text">architecting today?</span>'
+            ];
+        } else if (hour >= 17 && hour < 22) {
+            timeAnon = [
+                'Good <span class="gradient-text">evening</span>',
+                'Evening <span class="gradient-text">thoughts</span>',
+                'Still <span class="gradient-text">curious?</span>',
+                'What are we diving into <span class="gradient-text">tonight?</span>',
+                'Unwinding with <span class="gradient-text">new ideas</span>',
+                'Deep <span class="gradient-text">focus hours</span>',
+                'Evening session: <span class="gradient-text">ready</span>',
+                'Winding down or <span class="gradient-text">building up?</span>',
+                'Let’s explore an <span class="gradient-text">idea</span>',
+                'Where should we begin <span class="gradient-text">tonight?</span>',
+                'Reflect and <span class="gradient-text">create</span>',
+                'Quiet evening, <span class="gradient-text">active mind</span>'
+            ];
+        } else {
+            timeAnon = [
+                'Late night <span class="gradient-text">inspiration</span>',
+                'Quiet hours, <span class="gradient-text">sharp focus</span>',
+                'Midnight <span class="gradient-text">thoughts</span>',
+                'Still <span class="gradient-text">awake?</span>',
+                'Into the <span class="gradient-text">night</span>',
+                'Here when you <span class="gradient-text">need me</span>',
+                'Burning the <span class="gradient-text">midnight oil?</span>',
+                'Quiet night, <span class="gradient-text">sharp mind</span>',
+                'Late night <span class="gradient-text">coding session</span>',
+                'Deep focus in the <span class="gradient-text">dark</span>',
+                'Night owl mode: <span class="gradient-text">active</span>',
+                'What’s keeping you <span class="gradient-text">inspired?</span>'
+            ];
+        }
+
+        const universalAnon = [
+            'What’s on your <span class="gradient-text">mind?</span>',
+            'Ready when <span class="gradient-text">you are</span>',
+            'Let’s build <span class="gradient-text">something great</span>',
+            'Clean slate, <span class="gradient-text">infinite possibilities</span>',
+            'Curiosity <span class="gradient-text">unlocked</span>',
+            'Every idea starts <span class="gradient-text">here</span>',
+            'What are we <span class="gradient-text">exploring today?</span>',
+            'Ask anything, <span class="gradient-text">create everything</span>',
+            'Private intelligence at your <span class="gradient-text">command</span>',
+            'Where curiosity meets <span class="gradient-text">code</span>',
+            'Let’s turn thoughts into <span class="gradient-text">reality</span>',
+            'Start with a <span class="gradient-text">question</span>'
+        ];
+
+        if (dom.heroGreeting) {
+            dom.heroGreeting.innerHTML = pick([...timeAnon, ...universalAnon]);
+        }
     }
+
+    const subtitles = [
+        'How can I help you today?',
+        'Ask anything, brainstorm an idea, or draft something new.',
+        'Explore a topic, polish your writing, or solve a technical problem.',
+        'Ready to help you write, learn, think, and create.',
+        'Got a question, an idea, or just curious? Let’s chat.',
+        'What would you like to explore today?',
+        'From quick answers to deep technical reasoning, I’m here.',
+        'Share a thought, plan a project, or learn something new.',
+        'Private local intelligence, ready whenever you are.',
+        'Turn complex ideas into code, prose, or visual concepts.',
+        'Whether debugging code or exploring ideas, let’s dive in.',
+        'Drop in a prompt, attach a file, or tap Space to speak.',
+        'Your personal workbench for thinking, writing, and building.',
+        'Zero cloud leakage, infinite curiosity.',
+        'Start with a question, finish with a solution.',
+        'What are we creating today?'
+    ];
+
     if (dom.heroSubtitle) dom.heroSubtitle.textContent = pick(subtitles);
 }
 

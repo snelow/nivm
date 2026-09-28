@@ -20,9 +20,14 @@ export {
     setupAuroraCanvas
 };
 
-let currentAccentHue = 0;
+let currentBrandHue = 0;
+let currentTextHue = 0;
 let currentBgHue = 0;
 let cyclingAnimationFrame = null;
+let lastPickerUpdate = 0;
+let lastCycleTime = 0;
+let lastRenderTime = 0;
+const MIN_RENDER_INTERVAL = 30; // ~33 FPS max style recalculation interval for smooth, lag-free cycling
 
 function hexToRgb(hex) {
     let r = 0, g = 0, b = 0;
@@ -111,20 +116,18 @@ function hexToHue(hex) {
     return h;
 }
 
-let lastPickerUpdate = 0;
-let lastCycleTime = 0;
-
 export function stopColorCycleLoop() {
     if (cyclingAnimationFrame) {
         cancelAnimationFrame(cyclingAnimationFrame);
         cyclingAnimationFrame = null;
     }
     lastCycleTime = 0;
+    lastRenderTime = 0;
     document.body.classList.remove('theme-cycling');
 }
 
 export function colorCycleLoop() {
-    if (!themeState.cycleAccent && !themeState.cycleBg) {
+    if (!themeState.cycleAccent && !themeState.cycleMainText && !themeState.cycleBg) {
         stopColorCycleLoop();
         return;
     }
@@ -136,8 +139,11 @@ export function colorCycleLoop() {
 
     document.body.classList.add('theme-cycling');
 
-    if (!currentAccentHue && themeState.accentColor) {
-        currentAccentHue = hexToHue(themeState.accentColor);
+    if (!currentBrandHue && themeState.brandColor) {
+        currentBrandHue = hexToHue(themeState.brandColor);
+    }
+    if (!currentTextHue && themeState.accentColor) {
+        currentTextHue = hexToHue(themeState.accentColor);
     }
     if (!currentBgHue && themeState.bgTone) {
         currentBgHue = hexToHue(themeState.bgTone);
@@ -148,11 +154,12 @@ export function colorCycleLoop() {
     }
 
     lastCycleTime = performance.now();
+    lastRenderTime = 0;
     cyclingAnimationFrame = requestAnimationFrame(colorCycleStep);
 }
 
 function colorCycleStep(timestamp) {
-    if (!themeState.cycleAccent && !themeState.cycleBg) {
+    if (!themeState.cycleAccent && !themeState.cycleMainText && !themeState.cycleBg) {
         stopColorCycleLoop();
         return;
     }
@@ -163,42 +170,72 @@ function colorCycleStep(timestamp) {
 
     const speed = ((themeState.cycleSpeed || 50) / 100) * 80 + 15; // deg per sec
 
+    // Advance hues accurately on every animation frame based on elapsed time dt
     if (themeState.cycleAccent) {
-        currentAccentHue = (currentAccentHue + speed * dt) % 360;
-        themeState.accentColor = hslToHex(currentAccentHue, 80, 65);
-        document.documentElement.style.setProperty('--text-primary', themeState.accentColor);
-        document.documentElement.style.setProperty('--theme-heart-color', themeState.accentColor);
+        currentBrandHue = (currentBrandHue + speed * dt) % 360;
     }
-
+    if (themeState.cycleMainText) {
+        currentTextHue = (currentTextHue + speed * dt) % 360;
+    }
     if (themeState.cycleBg) {
         currentBgHue = (currentBgHue + (speed * 0.4) * dt) % 360;
-        themeState.bgTone = hslToHex(currentBgHue, 50, 10);
-        document.documentElement.style.setProperty('--bg-black', themeState.bgTone);
-
-        const bgRgb = hexToRgb(themeState.bgTone);
-        const luminance = getLuminance(bgRgb.r, bgRgb.g, bgRgb.b);
-        document.documentElement.style.setProperty('--glass-border', luminance > 0.5 ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.06)');
-
-        if (window.fluidConfig) {
-            window.fluidConfig.BACK_COLOR = { r: bgRgb.r, g: bgRgb.g, b: bgRgb.b };
-        }
-
-        const cycleMuted = (themeState.mutedColor && typeof themeState.mutedColor === 'string' && themeState.mutedColor.startsWith('#'))
-            ? themeState.mutedColor
-            : calculateHarmonizedMutedColor(themeState.bgTone, themeState.accentColor, themeState.brandColor);
-        const cycleSec = calculateHarmonizedSecondaryColor(cycleMuted, themeState.accentColor);
-        document.documentElement.style.setProperty('--text-muted', cycleMuted);
-        document.documentElement.style.setProperty('--text-secondary', cycleSec);
     }
 
-    // Throttle color picker DOM updates to at most 4x/sec and ONLY if theme window is visible
-    if (timestamp - lastPickerUpdate > 250) {
-        lastPickerUpdate = timestamp;
-        if (dom.themeWindow && dom.themeWindow.style.display !== 'none') {
-            if (themeState.cycleAccent && dom.accentColorPicker) dom.accentColorPicker.value = themeState.accentColor;
-            if (themeState.cycleBg && dom.bgTonePicker) dom.bgTonePicker.value = themeState.bgTone;
-            if (dom.mutedColorPicker && !themeState.mutedColor) {
-                dom.mutedColorPicker.value = calculateHarmonizedMutedColor(themeState.bgTone, themeState.accentColor, themeState.brandColor);
+    // Performance Optimization: Throttle DOM style recalculations to ~33 FPS (every ~30ms).
+    // This prevents main thread overload and eliminates frame drops, especially on 120Hz/144Hz displays.
+    if (timestamp - lastRenderTime >= MIN_RENDER_INTERVAL) {
+        lastRenderTime = timestamp;
+
+        if (themeState.cycleAccent) {
+            themeState.brandColor = hslToHex(currentBrandHue, 88, 62);
+            const brandRgb = hexToRgb(themeState.brandColor);
+            document.documentElement.style.setProperty('--accent-purple', themeState.brandColor);
+            document.documentElement.style.setProperty('--accent-purple-rgb', brandRgb.str);
+            document.documentElement.style.setProperty('--accent-purple-glow', `rgba(${brandRgb.str}, 0.35)`);
+
+            // If main text is not cycling or set to custom, heart color can follow accent
+            if (!themeState.cycleMainText && (!themeState.accentColor || themeState.accentColor === '#f4f4f5')) {
+                document.documentElement.style.setProperty('--theme-heart-color', themeState.brandColor);
+            }
+        }
+
+        if (themeState.cycleMainText) {
+            themeState.accentColor = hslToHex(currentTextHue, 80, 68);
+            document.documentElement.style.setProperty('--text-primary', themeState.accentColor);
+            document.documentElement.style.setProperty('--theme-heart-color', themeState.accentColor);
+        }
+
+        if (themeState.cycleBg) {
+            themeState.bgTone = hslToHex(currentBgHue, 45, 8);
+            document.documentElement.style.setProperty('--bg-black', themeState.bgTone);
+
+            const bgRgb = hexToRgb(themeState.bgTone);
+            const luminance = getLuminance(bgRgb.r, bgRgb.g, bgRgb.b);
+            document.documentElement.style.setProperty('--glass-border', luminance > 0.5 ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.06)');
+
+            if (window.fluidConfig) {
+                window.fluidConfig.BACK_COLOR = { r: bgRgb.r, g: bgRgb.g, b: bgRgb.b };
+            }
+
+            const cycleMuted = (themeState.mutedColor && typeof themeState.mutedColor === 'string' && themeState.mutedColor.startsWith('#'))
+                ? themeState.mutedColor
+                : calculateHarmonizedMutedColor(themeState.bgTone, themeState.accentColor, themeState.brandColor);
+            const cycleSec = calculateHarmonizedSecondaryColor(cycleMuted, themeState.accentColor);
+            document.documentElement.style.setProperty('--text-muted', cycleMuted);
+            document.documentElement.style.setProperty('--text-secondary', cycleSec);
+        }
+
+        // Throttle color picker DOM updates to at most 4x/sec and ONLY if theme modal is open
+        if (timestamp - lastPickerUpdate > 250) {
+            lastPickerUpdate = timestamp;
+            const isModalOpen = dom.themeModal && !dom.themeModal.classList.contains('hidden');
+            if (isModalOpen) {
+                if (themeState.cycleAccent && dom.brandColorPicker) dom.brandColorPicker.value = themeState.brandColor;
+                if (themeState.cycleMainText && dom.accentColorPicker) dom.accentColorPicker.value = themeState.accentColor;
+                if (themeState.cycleBg && dom.bgTonePicker) dom.bgTonePicker.value = themeState.bgTone;
+                if (dom.mutedColorPicker && !themeState.mutedColor) {
+                    dom.mutedColorPicker.value = calculateHarmonizedMutedColor(themeState.bgTone, themeState.accentColor, themeState.brandColor);
+                }
             }
         }
     }
@@ -216,6 +253,7 @@ export function applyThemeState() {
     if (!isValidHex(themeState.brandColor)) themeState.brandColor = '#a855f7';
     if (themeState.mutedColor !== null && !isValidHex(themeState.mutedColor)) themeState.mutedColor = null;
     if (themeState.cycleAccent === undefined) themeState.cycleAccent = false;
+    if (themeState.cycleMainText === undefined) themeState.cycleMainText = false;
     if (themeState.cycleBg === undefined) themeState.cycleBg = false;
     if (themeState.cycleSpeed === undefined) themeState.cycleSpeed = 50;
     if (themeState.chatWidth === undefined) themeState.chatWidth = 'default';
@@ -362,6 +400,7 @@ export function applyThemeState() {
     document.documentElement.style.setProperty('--theme-heart-color', heartColor);
 
     if (dom.cycleAccentToggle) dom.cycleAccentToggle.checked = themeState.cycleAccent || false;
+    if (dom.cycleMainTextToggle) dom.cycleMainTextToggle.checked = themeState.cycleMainText || false;
     if (dom.cycleBgToggle) dom.cycleBgToggle.checked = themeState.cycleBg || false;
     if (dom.clearTextToggle) dom.clearTextToggle.checked = themeState.clearText || false;
     document.body.classList.toggle('clear-text-active', !!themeState.clearText);
@@ -396,7 +435,7 @@ export function applyThemeState() {
         if (dom.auroraSpeedVal) dom.auroraSpeedVal.textContent = (themeState.auroraSpeed || 1.0) + 'x';
     }
 
-    if (themeState.cycleAccent || themeState.cycleBg) {
+    if (themeState.cycleAccent || themeState.cycleMainText || themeState.cycleBg) {
         if (!cyclingAnimationFrame) {
             colorCycleLoop();
         }

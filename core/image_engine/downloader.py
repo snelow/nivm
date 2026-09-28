@@ -57,7 +57,7 @@ def get_download_status() -> Dict[str, Any]:
     return status_copy
 
 
-def _run_downloads(category: str = "standard"):
+def _run_downloads(category: str = "standard", connections: Optional[int] = None):
     global _download_state, _current_proc
 
     aria2c_bin = find_aria2c()
@@ -66,6 +66,19 @@ def _run_downloads(category: str = "standard"):
         _download_state["error"] = "aria2c executable not found on host machine."
         return
 
+    # Resolve parallel connections from parameter or user settings
+    if connections is None:
+        try:
+            from ..storage import get_user_settings
+            connections = get_user_settings().get("downloader_connections", 4)
+        except Exception:
+            connections = 4
+    try:
+        connections = max(1, min(16, int(connections)))
+    except (ValueError, TypeError):
+        connections = 4
+
+    _download_state["connections"] = connections
     _download_state["category"] = category
 
     # Check which models are missing
@@ -119,8 +132,8 @@ def _run_downloads(category: str = "standard"):
 
         cmd = [
             aria2c_bin,
-            "-x", "16",
-            "-s", "16",
+            "-x", str(connections),
+            "-s", str(connections),
             "-j", "4",
             "-k", "1M",
             "--file-allocation=none",
@@ -180,11 +193,11 @@ def _run_downloads(category: str = "standard"):
     _download_state["eta_str"] = "0s"
 
 
-def start_models_download(category: str = "standard") -> Dict[str, Any]:
+def start_models_download(category: str = "standard", connections: Optional[int] = None) -> Dict[str, Any]:
     global _download_thread
     if _download_state.get("status") == "downloading":
         return get_download_status()
 
-    _download_thread = threading.Thread(target=_run_downloads, args=(category,), daemon=True)
+    _download_thread = threading.Thread(target=_run_downloads, args=(category, connections), daemon=True)
     _download_thread.start()
     return get_download_status()

@@ -116,7 +116,11 @@
             <!-- Mobile Drawer Header -->
             <div class="sidebar-mobile-header">
                 <div class="sidebar-mobile-brand">
-                    <img src="/static/icons/favicon.png" alt="nivm" class="drawer-brand-img">
+                    <div class="brand-orb brand-orb-sm">
+                        <div class="brand-orb-glow"></div>
+                        <div class="brand-orb-rings"></div>
+                        <div class="brand-orb-core"></div>
+                    </div>
                     <span>nivm</span>
                 </div>
                 <button class="icon-btn-sm" id="closeSidebarBtn" title="Close Menu" type="button">
@@ -126,7 +130,11 @@
 
             <div class="sidebar-top">
                 <div class="ai-brand-icon" id="statsBtn" title="Stats & Info">
-                    <img src="/static/icons/favicon.png" alt="nivm" class="ai-brand-img">
+                    <div class="brand-orb">
+                        <div class="brand-orb-glow"></div>
+                        <div class="brand-orb-rings"></div>
+                        <div class="brand-orb-core"></div>
+                    </div>
                 </div>
                 <div class="nav-divider"></div>
                 <button class="nav-icon-btn" id="newChatBtn" title="New Chat">
@@ -178,7 +186,11 @@
         <div class="history-drawer hidden" id="historyDrawer">
             <div class="drawer-header">
                 <div class="drawer-brand">
-                    <img src="/static/icons/favicon.png" alt="nivm" class="drawer-brand-img">
+                    <div class="brand-orb brand-orb-sm">
+                        <div class="brand-orb-glow"></div>
+                        <div class="brand-orb-rings"></div>
+                        <div class="brand-orb-core"></div>
+                    </div>
                     <span>nivm</span>
                 </div>
                 <button class="icon-btn-sm" id="closeHistoryBtn" title="Close Drawer"><i
@@ -203,7 +215,7 @@
                     <span>Voice</span>
                 </button>
                 <button class="drawer-tool-item" id="drawerImageStudioBtn" title="Image Studio" type="button">
-                    <i class="fa-solid fa-paintbrush" style="color: var(--accent-purple);"></i>
+                    <i class="fa-solid fa-paintbrush"></i>
                     <span>Studio</span>
                 </button>
                 <button class="drawer-tool-item" id="drawerThemeBtn" title="Themes & Colors" type="button">
@@ -234,10 +246,10 @@
                 <button class="drawer-tool-item tool-unload" id="drawerUnloadBtn" title="Unload All Models & Free Memory"
                     type="button">
                     <i class="fa-solid fa-broom"></i>
-                    <span>Unload All</span>
+                    <span>Unload</span>
                 </button>
                 <button class="drawer-tool-item tool-logout" id="drawerLockBtn" title="Log Out / Lock Session"
-                    type="button" style="color: #f87171;">
+                    type="button">
                     <i class="fa-solid fa-arrow-right-from-bracket"></i>
                     <span>Log Out</span>
                 </button>
@@ -1565,8 +1577,36 @@
                             </div>
                         </div>
 
+                        <!-- Aria2 Parallel Connections Configuration -->
+                        <div class="role-config-card" style="margin-top: 14px; background: rgba(0, 0, 0, 0.25);">
+                            <div style="padding: 12px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <label style="font-size: 0.82rem; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 6px; color: var(--text-primary);">
+                                        <i class="fa-solid fa-network-wired" style="color: var(--accent-purple, #a855f7);"></i>
+                                        <span>aria2 Parallel Connections</span>
+                                    </label>
+                                    <span id="aria2ConnectionsVal" class="role-card-badge" style="background: rgba(168, 85, 247, 0.15); color: var(--accent-purple, #c084fc); border: 1px solid rgba(168, 85, 247, 0.3); font-weight: 600; padding: 2px 8px; border-radius: 4px;">4 connections</span>
+                                </div>
+                                <div style="font-size: 0.74rem; color: var(--text-tertiary); margin-bottom: 12px; line-height: 1.4;">
+                                    Sets simultaneous split streams (<code style="color: var(--accent-purple, #c084fc);">-s / -x</code>) for aria2. Applies across all downloads: GGUF models and Image Studio diffusion models.
+                                </div>
+                                <div class="color-picker-item" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 0; background: transparent; border: none;">
+                                    <input type="range" id="aria2ConnectionsSlider" class="custom-slider" min="1" max="16" step="1" value="4">
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 6px; flex-wrap: wrap;">
+                                    <div class="api-presets-chips" id="aria2PresetChips" style="display: flex; gap: 6px; margin: 0;">
+                                        <button type="button" class="api-preset-chip conn-preset-chip" data-conn="1" title="1 stream - single socket connection">1 Stream</button>
+                                        <button type="button" class="api-preset-chip conn-preset-chip active" data-conn="4" title="4 connections - balanced speed and low RAM/socket overhead">4 (Balanced)</button>
+                                        <button type="button" class="api-preset-chip conn-preset-chip" data-conn="8" title="8 connections - fast multi-stream">8 (Fast)</button>
+                                        <button type="button" class="api-preset-chip conn-preset-chip" data-conn="16" title="16 connections - maximum parallel throughput">16 (Max Turbo)</button>
+                                    </div>
+                                    <span style="font-size: 0.72rem; color: var(--text-muted);"><i class="fa-solid fa-bolt" style="color: #eab308; margin-right: 4px;"></i>Turbo Multi-Stream</span>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Live Download Progress Card -->
-                        <div id="downloadProgressCard" class="download-progress-card hidden">
+                        <div id="downloadProgressCard" class="download-progress-card hidden" style="margin-top: 14px;">
                             <div class="download-card-header">
                                 <div class="download-card-info">
                                     <div class="download-card-title" id="downloadCardFilename">Downloading...</div>
@@ -1576,6 +1616,8 @@
                                         <span id="downloadCardSpeed">0 MB/s</span>
                                         <span class="meta-sep">&bull;</span>
                                         <span id="downloadCardEta">ETA: --</span>
+                                        <span class="meta-sep">&bull;</span>
+                                        <span id="downloadCardConn"><i class="fa-solid fa-network-wired"></i> 4 conn</span>
                                     </div>
                                 </div>
                                 <button id="cancelDownloadBtn" class="download-cancel-btn" type="button"
@@ -1587,8 +1629,8 @@
                                 <div id="downloadProgressBar" class="download-progress-bar" style="width: 0%;"></div>
                             </div>
                             <div
-                                style="display: flex; justify-content: flex-end; font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">
-                                <span id="downloadEngineLabel" class="hidden"></span>
+                                style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">
+                                <span id="downloadEngineLabel"></span>
                                 <span id="downloadPercentLabel">0%</span>
                             </div>
                         </div>
@@ -2235,6 +2277,10 @@
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <label for="cycleAccentToggle">Cycle Accent Color</label>
                             <input type="checkbox" id="cycleAccentToggle" class="custom-toggle">
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <label for="cycleMainTextToggle">Cycle Main Text Color</label>
+                            <input type="checkbox" id="cycleMainTextToggle" class="custom-toggle">
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <label for="cycleBgToggle">Cycle Background Color</label>

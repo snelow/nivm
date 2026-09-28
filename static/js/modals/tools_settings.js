@@ -763,9 +763,14 @@ export async function initImageStudioSettings() {
                 downloadBtn.disabled = true;
                 downloadBtn.textContent = 'Initializing aria2...';
                 try {
-                    const res = await fetch('/api/image/models/download?category=standard', { method: 'POST' });
+                    const dlConn = dom.aria2ConnectionsSlider ? parseInt(dom.aria2ConnectionsSlider.value, 10) : parseInt(localStorage.getItem('nivm_downloader_connections') || '4', 10);
+                    const res = await fetch('/api/image/models/download', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ category: 'standard', connections: dlConn })
+                    });
                     const data = await res.json();
-                    showNotification('Image models background download started with aria2c', 'info');
+                    showNotification(`Image models background download started with aria2c (${dlConn} streams)`, 'info');
                     if (!_imageStudioPollInterval) {
                         _imageStudioPollInterval = setInterval(pollStatus, 1000);
                     }
@@ -782,13 +787,14 @@ export async function initImageStudioSettings() {
                 downloadAnimeBtn.disabled = true;
                 downloadAnimeBtn.textContent = 'Initializing aria2...';
                 try {
-                    const res = await fetch('/api/image/models/download?category=anime', {
+                    const dlConn = dom.aria2ConnectionsSlider ? parseInt(dom.aria2ConnectionsSlider.value, 10) : parseInt(localStorage.getItem('nivm_downloader_connections') || '4', 10);
+                    const res = await fetch('/api/image/models/download', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ category: 'anime' })
+                        body: JSON.stringify({ category: 'anime', connections: dlConn })
                     });
                     const data = await res.json();
-                    showNotification('Anime engine models download started with aria2c', 'info');
+                    showNotification(`Anime engine models download started with aria2c (${dlConn} streams)`, 'info');
                     if (!_imageStudioPollInterval) {
                         _imageStudioPollInterval = setInterval(pollStatus, 1000);
                     }

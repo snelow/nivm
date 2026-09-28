@@ -103,17 +103,22 @@ async def get_models_status():
 
 class ModelDownloadRequest(BaseModel):
     category: str = "standard"
+    connections: Optional[int] = None
 
 
 @router.post("/models/download")
 async def trigger_models_download(category: Optional[str] = "standard", req: Optional[ModelDownloadRequest] = None):
     """Starts background aria2c download for missing image models (standard, anime, or all)."""
     cat = "standard"
-    if req and req.category:
-        cat = req.category.strip().lower()
+    conn = None
+    if req:
+        if req.category:
+            cat = req.category.strip().lower()
+        if req.connections:
+            conn = req.connections
     elif category:
         cat = category.strip().lower()
-    status = start_models_download(category=cat)
+    status = start_models_download(category=cat, connections=conn)
     return status
 
 

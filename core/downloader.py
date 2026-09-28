@@ -100,6 +100,8 @@ class ModelDownloader:
             "eta_str": "--",
             "error": "",
             "aria2_available": bool(find_aria2c()),
+            "connections": 4,
+            "active_connections": 0,
         }
 
     def _read_status_file(self) -> Optional[Dict[str, Any]]:
@@ -139,7 +141,7 @@ class ModelDownloader:
         self._last_known_status["aria2_available"] = bool(find_aria2c())
         return self._last_known_status
 
-    def start_download(self, url: str, custom_filename: Optional[str] = None) -> Dict[str, Any]:
+    def start_download(self, url: str, custom_filename: Optional[str] = None, connections: Optional[int] = None) -> Dict[str, Any]:
         """Start downloading in an isolated, detached OS process."""
         current = self.get_status()
         if current.get("status") == "downloading" and self._proc and self._proc.poll() is None:
@@ -151,6 +153,18 @@ class ModelDownloader:
             filename += ".gguf"
 
         dest_path = os.path.join(self.download_dir, filename)
+
+        # Resolve parallel connection count
+        if connections is None:
+            try:
+                from .storage import get_user_settings
+                connections = get_user_settings().get("downloader_connections", 4)
+            except Exception:
+                connections = 4
+        try:
+            connections = max(1, min(16, int(connections)))
+        except (ValueError, TypeError):
+            connections = 4
 
         # Clean up any leftover status file
         try:
@@ -174,6 +188,8 @@ class ModelDownloader:
             "eta_str": "--",
             "error": "",
             "aria2_available": bool(find_aria2c()),
+            "connections": connections,
+            "active_connections": connections,
         }
 
         # Spawn isolated background OS process in its own session group
@@ -184,6 +200,7 @@ class ModelDownloader:
             "--dest-dir", self.download_dir,
             "--filename", filename,
             "--status-file", self.status_file,
+            "--connections", str(connections),
         ]
 
         logger.info(f"Spawning out-of-process downloader: {' '.join(cmd)}")

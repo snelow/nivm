@@ -30,6 +30,7 @@ router = APIRouter(tags=["Engine & Models"])
 class DownloadModelRequest(BaseModel):
     url: str
     filename: Optional[str] = None
+    connections: Optional[int] = None
 
 
 class FetchRemoteModelsRequest(BaseModel):
@@ -432,7 +433,7 @@ async def download_model_endpoint(req: DownloadModelRequest):
     if not req.url or not req.url.strip():
         raise HTTPException(status_code=400, detail="A download URL is required")
     try:
-        status = downloader.start_download(req.url, req.filename)
+        status = downloader.start_download(req.url, req.filename, connections=req.connections)
         return status
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

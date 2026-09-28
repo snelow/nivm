@@ -90,23 +90,34 @@ export async function fetchApiSettings() {
     if (!data) return;
 
     state.engineMode = 'native';
-    const inferenceMode = data.inference_mode || 'single';
+    const inferenceMode = data.inference_mode || localStorage.getItem('nivm_inference_mode') || 'single';
     state.inferenceMode = inferenceMode;
+    try { localStorage.setItem('nivm_inference_mode', inferenceMode); } catch (_) {}
+
+    const isApi = inferenceMode === 'api';
 
     if (dom.routingModeBtn && dom.singleModeBtn) {
         dom.routingModeBtn.classList.toggle('active', inferenceMode === 'routing');
         dom.singleModeBtn.classList.toggle('active', inferenceMode === 'single');
-        if (dom.apiModeBtn) dom.apiModeBtn.classList.toggle('active', inferenceMode === 'api');
+        if (dom.apiModeBtn) dom.apiModeBtn.classList.toggle('active', isApi);
 
         if (dom.routingModePanel) dom.routingModePanel.classList.toggle('hidden', inferenceMode !== 'routing');
         if (dom.singleModePanel) dom.singleModePanel.classList.toggle('hidden', inferenceMode !== 'single');
-        if (dom.apiModePanel) dom.apiModePanel.classList.toggle('hidden', inferenceMode !== 'api');
+        if (dom.apiModePanel) dom.apiModePanel.classList.toggle('hidden', !isApi);
 
-        const isApi = inferenceMode === 'api';
         ['memoryEstimatorCard', 'smartEngineSection'].forEach(k => {
             if (dom[k]) dom[k].classList.toggle('hidden', isApi);
         });
         if (dom.downloadModelSection) dom.downloadModelSection.classList.remove('hidden');
+    }
+
+    if (isApi) {
+        state.isModelLoaded = true;
+        if (dom.engineStatusText) {
+            dom.engineStatusText.textContent = `API: ${data.api_model || state.selectedModel || 'Connected'}`;
+            dom.engineStatusText.style.color = "var(--accent-cyan, #06b6d4)";
+        }
+        if (window.updateModelAvailabilityUI) window.updateModelAvailabilityUI(true);
     }
     if (window.updateVisionAvailabilityUI) window.updateVisionAvailabilityUI();
 
@@ -123,11 +134,16 @@ export async function fetchApiSettings() {
     if (dom.visionMmprojCpu) dom.visionMmprojCpu.checked = data.vision_mmproj_use_gpu === false;
     if (dom.pdfDpiSelect) dom.pdfDpiSelect.value = String(data.pdf_render_dpi || 150);
 
+    // Verify and prefill status pills for saved custom model and projector
+    if (window.verifyPathStatus) {
+        if (dom.customModelPathStatus) window.verifyPathStatus(state.customModelPath, dom.customModelPathStatus);
+        if (dom.customMmprojStatus) window.verifyPathStatus(state.customMmprojPath, dom.customMmprojStatus, true);
+    }
+
     if (dom.apiBaseUrl && data.api_base_url) dom.apiBaseUrl.value = data.api_base_url;
     if (dom.apiChatUrl && data.api_chat_url) dom.apiChatUrl.value = data.api_chat_url;
     if (dom.apiKeyInput && data.api_key !== undefined) dom.apiKeyInput.value = data.api_key;
     if (data.api_model) {
-        state.selectedModel = data.api_model;
         if (dom.apiModelInput) dom.apiModelInput.value = data.api_model;
         if (dom.apiModelSelect) {
             let optExists = Array.from(dom.apiModelSelect.options).some(o => o.value === data.api_model);
@@ -138,6 +154,10 @@ export async function fetchApiSettings() {
                 dom.apiModelSelect.insertBefore(opt, dom.apiModelSelect.firstChild);
             }
             dom.apiModelSelect.value = data.api_model;
+        }
+        if (isApi) {
+            state.selectedModel = data.api_model;
+            localStorage.setItem('nivm_lastModel', data.api_model);
         }
     }
 
@@ -267,6 +287,24 @@ export async function fetchApiSettings() {
         saveTerminalSecurityMode(data.terminal_security_mode);
     }
 
+    // 9. Downloader Parallel Connections
+    const savedConn = data.downloader_connections !== undefined && data.downloader_connections !== null
+        ? parseInt(data.downloader_connections, 10)
+        : parseInt(localStorage.getItem('nivm_downloader_connections') || '4', 10);
+    state.downloaderConnections = savedConn;
+    localStorage.setItem('nivm_downloader_connections', savedConn);
+    if (dom.aria2ConnectionsSlider) {
+        dom.aria2ConnectionsSlider.value = savedConn;
+    }
+    if (dom.aria2ConnectionsVal) {
+        dom.aria2ConnectionsVal.textContent = `${savedConn} connection${savedConn > 1 ? 's' : ''}`;
+    }
+    if (dom.aria2PresetChips) {
+        dom.aria2PresetChips.querySelectorAll('.conn-preset-chip').forEach(chip => {
+            chip.classList.toggle('active', parseInt(chip.dataset.conn, 10) === savedConn);
+        });
+    }
+
     if (window.setupDynamicGreeting) window.setupDynamicGreeting();
 
     if (needsInitialSync) {
@@ -277,6 +315,15 @@ export async function fetchApiSettings() {
 export async function saveApiSettings() {
     const inferenceMode = state.inferenceMode || 'single';
     const singleRole = dom.singleModelRoleSelect ? dom.singleModelRoleSelect.value : 'custom';
+    const activeApiModel = (dom.apiModelSelect && dom.apiModelSelect.value && dom.apiModelSelect.value !== '__custom__')
+        ? dom.apiModelSelect.value
+        : (dom.apiModelInput?.value.trim() || state.selectedModel || 'llama-3.3-70b-versatile');
+
+    try { localStorage.setItem('nivm_inference_mode', inferenceMode); } catch (_) {}
+    if (inferenceMode === 'api') {
+        state.selectedModel = activeApiModel;
+        try { localStorage.setItem('nivm_lastModel', activeApiModel); } catch (_) {}
+    }
 
     let voiceCfg = null;
     try {
@@ -296,7 +343,7 @@ export async function saveApiSettings() {
         api_base_url: dom.apiBaseUrl ? dom.apiBaseUrl.value.trim() : '',
         api_chat_url: dom.apiChatUrl ? dom.apiChatUrl.value.trim() : '',
         api_key: dom.apiKeyInput ? dom.apiKeyInput.value.trim() : '',
-        api_model: dom.apiModelInput ? dom.apiModelInput.value.trim() : '',
+        api_model: activeApiModel,
         api_multimodal: dom.apiMultimodalCheck ? dom.apiMultimodalCheck.checked : (state.apiMultimodal ?? false),
         remembered_model_paths: state.rememberedPaths || [],
         user_name: _isUrlVal(state.userName) ? '' : (state.userName || ''),
@@ -314,10 +361,16 @@ export async function saveApiSettings() {
         voice_config: voiceCfg,
         stt_engine: localStorage.getItem('nivm_stt_engine') || 'web',
         whisper_model: localStorage.getItem('nivm_whisper_model') || 'base.en',
+        downloader_connections: dom.aria2ConnectionsSlider
+            ? parseInt(dom.aria2ConnectionsSlider.value, 10)
+            : (state.downloaderConnections || parseInt(localStorage.getItem('nivm_downloader_connections') || '4', 10)),
         ..._readRoleFromDom('router'),
         ..._readRoleFromDom('coder'),
         ..._readRoleFromDom('vision'),
     };
+
+    state.downloaderConnections = payload.downloader_connections;
+    try { localStorage.setItem('nivm_downloader_connections', payload.downloader_connections); } catch (_) {}
 
     if (inferenceMode === 'single') {
         const singleSettings = _readRoleFromDom('single');
@@ -356,8 +409,11 @@ export async function locateFile(filename, size = null) {
     return (await apiFetchSafe(url)) || { found: false };
 }
 
-export async function startModelDownload(url, filename) {
-    return apiFetch('/api/models/download', { method: 'POST', body: { url, filename } });
+export async function startModelDownload(url, filename = null, connections = null) {
+    const conn = connections !== null && connections !== undefined
+        ? connections
+        : (dom.aria2ConnectionsSlider ? parseInt(dom.aria2ConnectionsSlider.value, 10) : (state.downloaderConnections || 4));
+    return apiFetch('/api/models/download', { method: 'POST', body: { url, filename, connections: conn } });
 }
 
 export async function pollDownloadStatus() {
@@ -418,8 +474,20 @@ export async function fetchEngineStatus() {
     const data = await apiFetchSafe('/api/engine/status');
     if (!data) return;
 
+    if (state.inferenceMode === 'api') {
+        state.isModelLoaded = true;
+        if (dom.engineStatusText) {
+            dom.engineStatusText.textContent = `API: ${state.selectedModel || 'Connected'}`;
+            dom.engineStatusText.style.color = "var(--accent-cyan, #06b6d4)";
+        }
+        if (dom.smartToggleBtn) dom.smartToggleBtn.classList.remove('is-loaded');
+        if (dom.smartToggleLabel) dom.smartToggleLabel.textContent = 'API Mode';
+        if (window.updateModelAvailabilityUI) window.updateModelAvailabilityUI(true);
+        return data;
+    }
+
     const isLoaded = !!(data.active && data.active.loaded);
-    state.isModelLoaded = state.inferenceMode !== 'api' ? isLoaded : true;
+    state.isModelLoaded = isLoaded;
 
     if (dom.engineStatusText) {
         if (isLoaded) {
@@ -447,6 +515,10 @@ export async function loadAvailableModels() {
     const data = await apiFetchSafe('/api/models');
     if (!data?.data) return;
     state.models = data.data;
+
+    if (state.inferenceMode === 'api') {
+        return;
+    }
 
     if (dom.modelSelect) {
         dom.modelSelect.innerHTML = '';

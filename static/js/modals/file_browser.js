@@ -337,7 +337,15 @@ export async function updateDownloadUI() {
         if (dom.downloadCardEta) dom.downloadCardEta.textContent = `ETA: ${status.eta_str}`;
         if (dom.downloadProgressBar) dom.downloadProgressBar.style.width = `${Math.min(status.percent, 100)}%`;
         if (dom.downloadPercentLabel) dom.downloadPercentLabel.textContent = `${status.percent}%`;
-        if (dom.downloadEngineLabel) dom.downloadEngineLabel.textContent = `Engine: ${status.engine}`;
+        const activeConn = status.active_connections || status.connections;
+        if (dom.downloadCardConn) {
+            dom.downloadCardConn.innerHTML = `<i class="fa-solid fa-network-wired"></i> ${activeConn || 4} conn`;
+        }
+        if (dom.downloadEngineLabel) {
+            dom.downloadEngineLabel.textContent = activeConn
+                ? `Engine: ${status.engine} (${activeConn} streams)`
+                : `Engine: ${status.engine}`;
+        }
     } else if (status.status === 'completed') {
         if (downloadPollTimer) {
             clearInterval(downloadPollTimer);
@@ -430,6 +438,37 @@ export function setupFileBrowserUI() {
         dom.fileBrowserNativeBtn.addEventListener('click', () => handleBrowseFile(fileBrowserTarget));
     }
 
+    // Aria2 connections slider and preset chips
+    const updateConnectionsUI = (conn, save = false) => {
+        conn = Math.max(1, Math.min(16, parseInt(conn, 10) || 4));
+        if (dom.aria2ConnectionsSlider) dom.aria2ConnectionsSlider.value = conn;
+        if (dom.aria2ConnectionsVal) dom.aria2ConnectionsVal.textContent = `${conn} connection${conn > 1 ? 's' : ''}`;
+        const chips = document.querySelectorAll('.conn-preset-chip');
+        chips.forEach(chip => {
+            chip.classList.toggle('active', parseInt(chip.dataset.conn, 10) === conn);
+        });
+        if (save) {
+            saveApiSettings().catch(() => {});
+        }
+    };
+
+    if (dom.aria2ConnectionsSlider) {
+        dom.aria2ConnectionsSlider.addEventListener('input', (e) => {
+            updateConnectionsUI(e.target.value, false);
+        });
+        dom.aria2ConnectionsSlider.addEventListener('change', (e) => {
+            updateConnectionsUI(e.target.value, true);
+        });
+    }
+
+    const presetChips = document.querySelectorAll('.conn-preset-chip');
+    presetChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            const conn = parseInt(chip.dataset.conn, 10);
+            updateConnectionsUI(conn, true);
+        });
+    });
+
     if (dom.startDownloadBtn) {
         dom.startDownloadBtn.addEventListener('click', async () => {
             const url = dom.modelDownloadUrlInput ? dom.modelDownloadUrlInput.value.trim() : '';
@@ -437,16 +476,17 @@ export function setupFileBrowserUI() {
                 showAlert("Download", "Please enter a Hugging Face or direct GGUF URL.");
                 return;
             }
+            const connections = dom.aria2ConnectionsSlider ? parseInt(dom.aria2ConnectionsSlider.value, 10) : 4;
             try {
                 dom.startDownloadBtn.disabled = true;
-                await startModelDownload(url);
+                await startModelDownload(url, null, connections);
                 if (dom.downloadProgressCard) dom.downloadProgressCard.classList.remove('hidden');
                 if (downloadPollTimer) clearInterval(downloadPollTimer);
                 downloadPollTimer = setInterval(updateDownloadUI, 800);
                 updateDownloadUI();
                 showNotification({
                     title: 'Download Started',
-                    message: 'Downloading model in background...',
+                    message: `Downloading model with ${connections} parallel connections...`,
                     type: 'info',
                     icon: 'fa-cloud-arrow-down'
                 });

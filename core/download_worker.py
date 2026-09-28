@@ -83,7 +83,7 @@ def atomic_write_status(status_file: str, data: Dict[str, Any]):
 
 
 class WorkerDownloader:
-    def __init__(self, url: str, dest_dir: str, filename: str, status_file: str):
+    def __init__(self, url: str, dest_dir: str, filename: str, status_file: str, connections: int = 4):
         self.url = url
         self.dest_dir = dest_dir
         self.filename = filename
@@ -91,6 +91,10 @@ class WorkerDownloader:
         self.dest_path = os.path.join(dest_dir, filename)
         self.aria2_bin = find_aria2c()
         self.engine = "aria2 (isolated)" if self.aria2_bin else "streaming (isolated)"
+        try:
+            self.connections = max(1, min(16, int(connections)))
+        except (ValueError, TypeError):
+            self.connections = 4
 
         self.cancelled = False
         self.subproc: Optional[subprocess.Popen] = None
@@ -111,6 +115,8 @@ class WorkerDownloader:
             "eta_str": "--",
             "error": "",
             "aria2_available": bool(self.aria2_bin),
+            "connections": self.connections,
+            "active_connections": self.connections,
         }
 
         # Register termination signal handlers
@@ -177,12 +183,12 @@ class WorkerDownloader:
         - --file-allocation=falloc to instantly allocate blocks without dirty-page RAM bloat
         - --disk-cache=16M to strictly bound memory usage
         """
-        logger.info(f"Launching aria2c worker: {self.url} -> {self.dest_path}")
+        logger.info(f"Launching aria2c worker ({self.connections} connections): {self.url} -> {self.dest_path}")
         
         cmd = [
             self.aria2_bin,
-            "-x", "4",
-            "-s", "4",
+            "-x", str(self.connections),
+            "-s", str(self.connections),
             "-k", "1M",
             "--file-allocation=falloc",
             "--disk-cache=16M",
@@ -206,7 +212,7 @@ class WorkerDownloader:
             )
 
             progress_regex = re.compile(
-                r'\[#\w+\s+([\d\.]+\w+)/([\d\.]+\w+)\((\d+)%\)\s+CN:\d+\s+DL:([\d\.]+\w+)(?:\s+ETA:([\w\d]+))?'
+                r'\[#\w+\s+([\d\.]+\w+)/([\d\.]+\w+)\((\d+)%\)\s+CN:(\d+)\s+DL:([\d\.]+\w+)(?:\s+ETA:([\w\d]+))?'
             )
 
             last_write = 0
@@ -219,12 +225,14 @@ class WorkerDownloader:
 
                 match = progress_regex.search(line)
                 if match:
-                    dl_str, tot_str, pct_str, spd_str, eta_str = match.groups()
+                    dl_str, tot_str, pct_str, cn_str, spd_str, eta_str = match.groups()
                     self.status_data["downloaded_str"] = dl_str
                     self.status_data["total_str"] = tot_str
                     self.status_data["percent"] = float(pct_str)
                     self.status_data["speed_str"] = spd_str + "/s"
                     self.status_data["eta_str"] = eta_str if eta_str else "--"
+                    if cn_str and cn_str.isdigit():
+                        self.status_data["active_connections"] = int(cn_str)
 
                     now = time.time()
                     if now - last_write >= 0.5:
@@ -346,13 +354,15 @@ def main():
     parser.add_argument("--dest-dir", required=True, help="Destination directory")
     parser.add_argument("--filename", required=True, help="Target filename")
     parser.add_argument("--status-file", required=True, help="Path to status JSON file")
+    parser.add_argument("--connections", type=int, default=4, help="Max parallel connections (1-16)")
 
     args = parser.parse_args()
     worker = WorkerDownloader(
         url=args.url,
         dest_dir=args.dest_dir,
         filename=args.filename,
-        status_file=args.status_file
+        status_file=args.status_file,
+        connections=args.connections
     )
     worker.run()
 

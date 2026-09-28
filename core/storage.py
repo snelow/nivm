@@ -119,6 +119,7 @@ class SettingsModel(BaseModel):
     voice_config: Optional[Dict[str, Any]] = None
     stt_engine: Optional[str] = None
     whisper_model: Optional[str] = None
+    downloader_connections: int = 4
 
 
 
@@ -303,8 +304,14 @@ def save_user_settings(data: Dict[str, Any]):
 
 
 @router.post("/api/settings")
-async def save_settings_endpoint(settings: SettingsModel):
-    save_user_settings(settings.model_dump())
+async def save_settings_endpoint(request: Request):
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Expected a JSON object")
+    save_user_settings(data)
     return {"status": "success"}
 
 

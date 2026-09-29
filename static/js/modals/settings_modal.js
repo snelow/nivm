@@ -555,6 +555,24 @@ export async function verifyPathStatus(path, statusEl, isOptional = false) {
 
 export async function handleUnloadAllModels(triggerBtn) {
     if (triggerBtn) triggerBtn.disabled = true;
+
+    // If generation is actively running, abort stream and notify backend to stop first
+    if (state.isGenerating) {
+        try {
+            if (state.abortController) {
+                state.abortController.abort();
+            }
+            if (state.activeChatId) {
+                fetch('/api/chat/stop', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: state.activeChatId })
+                }).catch(() => {});
+            }
+            state.isGenerating = false;
+        } catch (_) {}
+    }
+
     if (dom.engineStatusText) {
         dom.engineStatusText.textContent = 'Freeing VRAM & memory...';
         dom.engineStatusText.style.color = 'var(--text-secondary)';

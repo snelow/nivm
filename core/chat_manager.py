@@ -243,6 +243,15 @@ class ChatGenerationManager:
             return {"status": "stopped", "chat_id": chat_id}
         return {"status": "idle", "chat_id": chat_id}
 
+    def stop_all_active_jobs(self):
+        """Immediately stop all in-progress local and API generation jobs."""
+        for cid, job in list(self.jobs.items()):
+            if job.status == "generating":
+                try:
+                    self.stop_chat(cid)
+                except Exception as e:
+                    logger.warning(f"Error stopping chat job {cid}: {e}")
+
     async def stream_job(self, job: GenerationJob):
         """Async generator yielding chunks to an HTTP SSE response."""
         q = job.add_listener()

@@ -15,6 +15,7 @@ import logging
 import gc
 import os
 import time
+import threading
 import contextlib
 import struct
 import json
@@ -560,6 +561,9 @@ class ModelManager:
         self.active_role: Optional[str] = None
         self.active_name: str = ""
         self._loading = False
+        self._lock = threading.RLock()
+        self._active_generations = 0
+        self._unload_requested = False
     
     def is_loaded(self, role: Optional[str] = None) -> bool:
         """Check if a model (or specific role) is loaded."""
@@ -719,35 +723,52 @@ class ModelManager:
 
     def unload_all(self):
         """Unload all models and free memory safely."""
-        logger.warning(f"Unloading all {len(self.loaded_models)} models...")
-        for role in list(self.loaded_models.keys()):
-            model = self.loaded_models.pop(role, None)
-            if model is not None:
-                # 1. Close model exit stack first (cleanly executes registered mtmd_free while handler is still attached)
-                try:
-                    if hasattr(model, "close"):
-                        model.close()
-                except Exception as ce:
-                    logger.warning(f"Error closing model {role}: {ce}")
-                # 2. Release chat handler
-                try:
-                    handler = getattr(model, "chat_handler", None)
-                    if handler is not None:
-                        if hasattr(handler, "close"):
-                            handler.close()
-                        model.chat_handler = None
-                        del handler
-                except Exception:
-                    pass
-                del model
-        self.loaded_models.clear()
-        self.loaded_paths.clear()
-        self.loaded_configs.clear()
-        self.active_role = None
-        self.active_name = ""
-        # Multiple gc passes to break reference cycles holding ggml CUDA contexts
-        gc.collect()
-        gc.collect()
+        self._unload_requested = True
+        try:
+            from core.chat_manager import chat_manager
+            chat_manager.stop_all_active_jobs()
+        except Exception:
+            pass
+
+        # Wait briefly (up to 1.5s) for any running decode loops to exit cleanly
+        for _ in range(15):
+            if self._active_generations <= 0:
+                break
+            time.sleep(0.1)
+
+        with self._lock:
+            try:
+                logger.warning(f"Unloading all {len(self.loaded_models)} models...")
+                for role in list(self.loaded_models.keys()):
+                    model = self.loaded_models.pop(role, None)
+                    if model is not None:
+                        # 1. Close model exit stack first (cleanly executes registered mtmd_free while handler is still attached)
+                        try:
+                            if hasattr(model, "close"):
+                                model.close()
+                        except Exception as ce:
+                            logger.warning(f"Error closing model {role}: {ce}")
+                        # 2. Release chat handler
+                        try:
+                            handler = getattr(model, "chat_handler", None)
+                            if handler is not None:
+                                if hasattr(handler, "close"):
+                                    handler.close()
+                                model.chat_handler = None
+                                del handler
+                        except Exception:
+                            pass
+                        del model
+                self.loaded_models.clear()
+                self.loaded_paths.clear()
+                self.loaded_configs.clear()
+                self.active_role = None
+                self.active_name = ""
+                # Multiple gc passes to break reference cycles holding ggml CUDA contexts
+                gc.collect()
+                gc.collect()
+            finally:
+                self._unload_requested = False
     
     def _create_chat_handler(self, config: Dict[str, Any], model_path: Optional[str] = None):
         """Create a multimodal chat handler if needed."""
@@ -1107,33 +1128,59 @@ class ModelManager:
                 }
                 if enable_thinking is not None:
                     kwargs["enable_thinking"] = enable_thinking
-                try:
-                    return handler(**kwargs)
-                except TypeError:
-                    kwargs.pop("enable_thinking", None)
-                    return handler(**kwargs)
-                except ValueError as ve:
-                    if "Failed to load mtmd context" in str(ve) and getattr(model, "chat_handler", None):
-                        logger.warning(f"Multimodal chat handler mtmd failed ({ve}). Detaching chat handler and retrying text-only...")
-                        model.chat_handler = None
-                        handler = (
-                            getattr(model, "_chat_handlers", {}).get(getattr(model, "chat_format", None))
-                            or llama_chat_format.get_chat_completion_handler(getattr(model, "chat_format", "chat_template.default"))
-                        )
-                        if handler:
-                            kwargs["llama"] = model
-                            return handler(**kwargs)
-                    raise
 
-            return model.create_chat_completion(
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                repeat_penalty=repeat_penalty,
-                stream=stream,
-                stop=stop_tokens,
-            )
+                def _execute_handler():
+                    try:
+                        return handler(**kwargs)
+                    except TypeError:
+                        kwargs.pop("enable_thinking", None)
+                        return handler(**kwargs)
+                    except ValueError as ve:
+                        if "Failed to load mtmd context" in str(ve) and getattr(model, "chat_handler", None):
+                            logger.warning(f"Multimodal chat handler mtmd failed ({ve}). Detaching chat handler and retrying text-only...")
+                            model.chat_handler = None
+                            fallback_handler = (
+                                getattr(model, "_chat_handlers", {}).get(getattr(model, "chat_format", None))
+                                or llama_chat_format.get_chat_completion_handler(getattr(model, "chat_format", "chat_template.default"))
+                            )
+                            if fallback_handler:
+                                kwargs["llama"] = model
+                                return fallback_handler(**kwargs)
+                        raise
+
+                result = _execute_handler()
+            else:
+                result = model.create_chat_completion(
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    top_p=top_p,
+                    repeat_penalty=repeat_penalty,
+                    stream=stream,
+                    stop=stop_tokens,
+                )
+
+        if stream:
+            def _stream_guard():
+                with self._lock:
+                    self._active_generations += 1
+                try:
+                    for chunk in result:
+                        if self._unload_requested:
+                            break
+                        yield chunk
+                finally:
+                    with self._lock:
+                        self._active_generations = max(0, self._active_generations - 1)
+            return _stream_guard()
+        else:
+            with self._lock:
+                self._active_generations += 1
+            try:
+                return result
+            finally:
+                with self._lock:
+                    self._active_generations = max(0, self._active_generations - 1)
 
     def get_active_model(self):
         """Return the active Llama model instance if loaded."""

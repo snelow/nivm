@@ -280,8 +280,9 @@ export const tools = [
                 charKey = 'none';
             }
 
-            if (!useLcm && /\b(fast|faster|quick|turbo|lcm)\b/i.test(userPrompt)) {
-                useLcm = true;
+            // Default to fast LCM mode (6-8 steps, ~15s) on 4GB GPU unless high-quality/slow mode is explicitly requested
+            if (useLcm === undefined || useLcm === null) {
+                useLcm = !/\b(high quality|quality mode|slow|28 steps|full steps|masterpiece mode)\b/i.test(userPrompt);
             }
 
             const titlePrefix = charKey && charKey !== 'none' ? `Anime (${charKey}):` : 'Anime:';

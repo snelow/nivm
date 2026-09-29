@@ -163,15 +163,7 @@ export async function sendMessage(text, triggerAssistantOnly = false, isHiddenUs
         dynamicSystemPrompt += `\n\n[Custom Persona & Behavioral Instructions]:\n${state.personalityPrompt.trim()}`;
     }
 
-    // Extract last user message to detect relevant skill
-    let lastUserQuery = '';
-    const lastUserTurn = activeChat?.messages ? [...activeChat.messages].reverse().find(m => m.role === 'user') : null;
-    if (lastUserTurn) {
-        lastUserQuery = typeof lastUserTurn.content === 'string' ? lastUserTurn.content : (Array.isArray(lastUserTurn.content) ? lastUserTurn.content.find(c => c.type === 'text')?.text || '' : '');
-    }
-
-    const toolsInstruction = buildToolsInstruction([], state.enabledTools, Boolean(activeChat?.isPendingResume), lastUserQuery);
-    const activeSkillsForTurn = Array.isArray(toolsInstruction.mountedSkills) ? [...toolsInstruction.mountedSkills] : [];
+    const toolsInstruction = buildToolsInstruction([], state.enabledTools, Boolean(activeChat?.isPendingResume));
     dynamicSystemPrompt += toolsInstruction;
 
 
@@ -461,7 +453,16 @@ CRITICAL SPOKEN CONVERSATION RULES:
                             if (!activeChat.isPendingResume && responseBuffer) {
                                 const detectedTool = parseToolCall(responseBuffer, tools);
                                 if (detectedTool) {
-                                    const skillName = TOOL_SKILL_MAP[detectedTool.command];
+                                    let skillName = TOOL_SKILL_MAP[detectedTool.command];
+                                    if (detectedTool.command === 'read_skill' && detectedTool.argsStr) {
+                                        const cleanArg = detectedTool.argsStr.toLowerCase().replace(/[^a-z_]/g, '');
+                                        const argMap = {
+                                            'anime_generation': 'Anime Generation',
+                                            'image_studio': 'Image Studio',
+                                            'terminal': 'Terminal'
+                                        };
+                                        if (argMap[cleanArg]) skillName = argMap[cleanArg];
+                                    }
                                     if (skillName && !assistantMsg.skillsUsed?.includes(skillName)) {
                                         assistantMsg.skillsUsed = [...(assistantMsg.skillsUsed || []), skillName];
                                     }

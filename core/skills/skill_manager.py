@@ -84,7 +84,23 @@ def get_skill_content(skill_id: str) -> Optional[str]:
     if os.path.isfile(file_path):
         try:
             with open(file_path, "r", encoding="utf-8") as f:
-                return f.read().strip()
+                content = f.read().strip()
+            if skill_id == "anime_generation":
+                try:
+                    from core.image_engine.illustrious.characters import get_characters
+                    chars = get_characters(nsfw_enabled=True)
+                    if chars:
+                        char_lines = ["\n\n## Live Registered Characters (Active LoRAs):"]
+                        for k, c in chars.items():
+                            outfits = list(c.get("outfits", {}).keys())
+                            line = f"- **{c.get('display_name', k)}** (key: `{k}`)"
+                            if outfits:
+                                line += f" | outfits: `{', '.join(outfits)}`"
+                            char_lines.append(line)
+                        content += "\n" + "\n".join(char_lines)
+                except Exception:
+                    pass
+            return content
         except Exception as e:
             logger.error(f"Failed to read skill file {file_path}: {e}")
             return None

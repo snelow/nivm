@@ -783,7 +783,16 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
         }
 
         if (toolCommand) {
-            const mappedSkill = TOOL_SKILL_MAP[toolCommand];
+            let mappedSkill = TOOL_SKILL_MAP[toolCommand];
+            if (toolCommand === 'read_skill' && argsStr) {
+                const cleanArg = argsStr.toLowerCase().replace(/[^a-z_]/g, '');
+                const argMap = {
+                    'anime_generation': 'Anime Generation',
+                    'image_studio': 'Image Studio',
+                    'terminal': 'Terminal'
+                };
+                if (argMap[cleanArg]) mappedSkill = argMap[cleanArg];
+            }
             if (mappedSkill) {
                 if (!msg.skillsUsed) msg.skillsUsed = [];
                 if (!msg.skillsUsed.includes(mappedSkill)) {

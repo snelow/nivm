@@ -827,36 +827,16 @@ export function detectSkillsForPrompt(userPromptText) {
     return matched;
 }
 
-export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume = false, userPromptText = '') {
+export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume = false) {
     let activeTools = tools.filter(t => enabledTools[t.name] !== false);
     if (isPendingResume) {
         activeTools = activeTools.filter(t => t.name !== 'end_conversation');
     }
     if (activeTools.length === 0) {
-        const empty = new String('');
-        empty.mountedSkills = [];
-        return empty;
-    }
-    
-    const matchedSkillIds = detectSkillsForPrompt(userPromptText);
-    const mountedSkills = [];
-
-    // Isolate active tools based on matched skills for this turn
-    if (matchedSkillIds.length > 0) {
-        activeTools = activeTools.filter(t => {
-            if (t.name === 'end_conversation' || t.name === 'read_skill') return true;
-            if (t.name === 'execute_terminal') return matchedSkillIds.includes('terminal');
-            if (t.name === 'generate_anime_image') return matchedSkillIds.includes('anime_generation');
-            if (t.name === 'generate_image') return matchedSkillIds.includes('image_studio');
-            if (t.name === 'edit_image') return matchedSkillIds.includes('image_studio');
-            return true;
-        });
+        return '';
     }
 
-    const hasTerminal = activeTools.some(t => t.name === 'execute_terminal');
     const hasEndConvo = activeTools.some(t => t.name === 'end_conversation');
-    const hasImageTools = activeTools.some(t => t.name === 'generate_image' || t.name === 'edit_image');
-    const hasAnimeTools = activeTools.some(t => t.name === 'generate_anime_image');
 
     let instruction = `\n\n[TOOLS & ACTIONS SYSTEM]\n`;
     instruction += `To call a tool, your entire message must output EXACTLY:\n`;
@@ -873,84 +853,20 @@ export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume 
         instruction += `2. Output: TOOL_CALL: end_conversation(reason)\n`;
     }
 
-    // Dynamic Skill Mounting: Only inject full documentation for skills active in this turn
-    let anySkillMounted = false;
+    instruction += `\n[AVAILABLE SKILLS SYSTEM]\n`;
+    instruction += `Skills are modular on-demand capabilities. When you need parameter schemas, registered character keys (e.g. Orihime, Makima, Reze), or detailed instructions for any capability, call: TOOL_CALL: read_skill("skill_name")\n`;
+    instruction += `Skills Catalog:\n`;
+    instruction += `- anime_generation: Illustrious SDXL anime character & scene synthesis (supports registered anime characters, custom outfits, hairstyles, expressions, poses) [tool: generate_anime_image]\n`;
+    instruction += `- image_studio: Qwen-Rapid photorealistic image generation (NON-ANIME) & universal image editing (realistic & anime) [tools: generate_image, edit_image]\n`;
+    instruction += `- terminal: Host Linux shell command execution [tool: execute_terminal]\n`;
 
-    if (hasAnimeTools && matchedSkillIds.includes('anime_generation')) {
-        anySkillMounted = true;
-        mountedSkills.push('Anime Generation');
-        instruction += `\n[MOUNTED SKILL: Anime Generation]\n`;
-        instruction += `1. Engine: Illustrious SDXL with dynamic character LoRAs.\n`;
+    instruction += `\nCRITICAL WORKFLOW & SELECTION RULES:\n`;
+    instruction += `1. Anime Requests: For any anime character (e.g. Orihime, Makima) or anime-style artwork, call read_skill("anime_generation") first to read the character keys and parameter rules, then output TOOL_CALL: generate_anime_image(...). NEVER use generate_image for anime characters.\n`;
+    instruction += `2. Real-World / Photorealistic Requests: For realistic photos or real-world scenes, use generate_image (or read_skill("image_studio")).\n`;
+    instruction += `3. Universal Image Editing: To edit ANY existing image (realistic OR anime), use edit_image.\n`;
+    instruction += `4. Single Turn Execution: Output only ONE tool call at a time. Do NOT describe the tool result before it is produced.\n`;
 
-        const characters = _animeRegistryCache?.characters || {};
-        const charKeys = Object.keys(characters);
-        if (charKeys.length > 0) {
-            instruction += `2. Available Registered Characters:\n`;
-            charKeys.forEach(k => {
-                const c = characters[k];
-                const outfits = Object.keys(c.outfits || {});
-                const hairstyles = c.hairstyles ? Object.keys(c.hairstyles) : [];
-                let details = `   * ${c.display_name} (key: "${k}")`;
-                if (outfits.length > 0) details += ` | outfits: [${outfits.join(', ')}]`;
-                if (hairstyles.length > 0) details += ` | hairstyles: [${hairstyles.join(', ')}]`;
-                instruction += `${details}\n`;
-            });
-        }
-
-        instruction += `3. Usage Syntax:\n`;
-        instruction += `   TOOL_CALL: generate_anime_image({"character": "character_key", "outfit": "outfit_key", "expression": "smile", "prompt": "a vivid description of the scene"})\n`;
-        instruction += `4. Prompt Field: Describe the actual scene, setting, and action. NEVER copy placeholder words.\n`;
-        instruction += `5. Fast Mode: Set "use_lcm": true ONLY if the user specifically requested fast, turbo, or quick mode (8 steps).\n`;
-        instruction += `6. Single Turn: Output ONLY the TOOL_CALL. Do NOT describe the image before it renders.\n`;
-    }
-
-    if (hasImageTools && matchedSkillIds.includes('image_studio')) {
-        anySkillMounted = true;
-        mountedSkills.push('Image Studio');
-        instruction += `\n[MOUNTED SKILL: Image Studio (Qwen-Rapid)]\n`;
-        instruction += `1. IMPORTANT: edit_image can edit ANY image in conversation—both realistic photos AND anime illustrations!\n`;
-        if (state.lastGeneratedImage) {
-            instruction += `   - ACTIVE CONVERSATION IMAGE: "${state.lastGeneratedImage}". Pass this as first argument to edit_image to modify it.\n`;
-        }
-        instruction += `2. Generating New Images (generate_image):\n`;
-        instruction += `   - Expand prompt with lighting, camera angle, atmosphere, and environment.\n`;
-        instruction += `   - Ratios: "1:1", "16:9", "9:16", "4:3".\n`;
-        instruction += `   - Output: TOOL_CALL: generate_image("detailed expanded prompt", "aspect_ratio")\n`;
-        instruction += `3. Editing Existing Images (edit_image):\n`;
-        instruction += `   - Transform, alter outfits, tweak lighting, or modify characters (including anime).\n`;
-        instruction += `   - Output: TOOL_CALL: edit_image("image_filename", "clear instruction of changes", "original")\n`;
-        instruction += `4. Single Turn: Output ONLY the TOOL_CALL. Do NOT describe the image before it renders.\n`;
-    }
-
-    if (hasTerminal && matchedSkillIds.includes('terminal')) {
-        anySkillMounted = true;
-        mountedSkills.push('Terminal');
-        instruction += `\n[MOUNTED SKILL: Terminal Execution]\n`;
-        instruction += `1. You are running on the local host Linux machine. Real-time access is ENABLED.\n`;
-        instruction += `2. Output: TOOL_CALL: execute_terminal(command)\n`;
-        instruction += `3. User Visibility: Always explain/summarize the terminal findings in your response.\n`;
-        instruction += `4. If output is silent (exit code 0), explain to the user that it executed cleanly with no output.\n`;
-    }
-
-    // Token-Saving Catalog: If no skill was triggered, provide lightweight index (~80 tokens)
-    if (!anySkillMounted) {
-        instruction += `\n[AVAILABLE SKILLS SYSTEM]\n`;
-        instruction += `Skills are modular capabilities. To inspect complete rules for any skill, output: TOOL_CALL: read_skill("skill_name")\n`;
-        instruction += `Catalog:\n`;
-        instruction += `- anime_generation: Illustrious SDXL anime character & scene synthesis [generate_anime_image]\n`;
-        instruction += `- image_studio: Qwen-Rapid photorealistic image generation & universal image editing (realistic & anime) [generate_image, edit_image]\n`;
-        instruction += `- terminal: Host Linux shell command execution [execute_terminal]\n`;
-    }
-
-    instruction += `\nCRITICAL TOOL SYNTAX RULES:\n`;
-    instruction += `1. To call a tool, you MUST output the exact syntax: TOOL_CALL: tool_name(arguments)\n`;
-    instruction += `2. Output only ONE tool call at a time.\n`;
-    instruction += `3. Do NOT hallucinate or describe tool results before the tool runs.\n`;
-    instruction += `4. Tool usage must NEVER break your persona or tone.\n`;
-
-    const result = new String(instruction);
-    result.mountedSkills = mountedSkills;
-    return result;
+    return instruction;
 }
 
 /**

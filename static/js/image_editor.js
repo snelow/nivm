@@ -512,6 +512,11 @@ export function createImageProgressCard(promptText, isEdit = false, requestedAsp
         setTaskId: (taskId) => {
             currentTaskId = taskId;
         },
+        setRawPrompt: (raw) => {
+            if (card.setRawPrompt) {
+                card.setRawPrompt(raw);
+            }
+        },
         onStop: (cb) => {
             onStopCallback = cb;
         },

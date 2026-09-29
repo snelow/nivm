@@ -251,6 +251,15 @@ CRITICAL SPOKEN CONVERSATION RULES:
             assistantBubble.dataset.initialStatus = 'Analyzing files…';
             assistantBubble.dataset.initialIcon = 'fa-file-lines';
         }
+    } else {
+        const isApi = state.inferenceMode === 'api' || state.engineMode === 'api';
+        if (isApi) {
+            assistantBubble.dataset.initialStatus = 'Connecting to API…';
+            assistantBubble.dataset.initialIcon = 'fa-cloud';
+        } else {
+            assistantBubble.dataset.initialStatus = 'Preparing model…';
+            assistantBubble.dataset.initialIcon = 'fa-microchip';
+        }
     }
 
     updateAssistantBubble(assistantBubble, '', true, null);
@@ -288,6 +297,7 @@ CRITICAL SPOKEN CONVERSATION RULES:
                 max_tokens: state.maxTokens,
                 stream: true,
                 engine_mode: state.engineMode,
+                inference_mode: state.inferenceMode,
                 enable_thinking: isThinkingEnabled
             }),
             signal: state.abortController.signal
@@ -318,6 +328,9 @@ CRITICAL SPOKEN CONVERSATION RULES:
                         const json = JSON.parse(trimmed.substring(6));
                         if (json.model_info) {
                             modelInfo = json.model_info;
+                            assistantBubble.dataset.initialStatus = 'Processing…';
+                            assistantBubble.dataset.initialIcon = 'fa-circle-notch fa-spin';
+                            updateAssistantBubble(assistantBubble, fullResponse, true, null);
                             if (modelInfo.prefill_think && isThinkingEnabled && streamPhase === 'IDLE') {
                                 streamPhase = 'THINKING';
                                 thinkStartTime = performance.now();

@@ -106,6 +106,7 @@ def get_shared_api_client() -> httpx.AsyncClient:
     if _shared_api_client is None or _shared_api_client.is_closed:
         _shared_api_client = httpx.AsyncClient(
             http2=True,
+            follow_redirects=True,
             timeout=180.0,
             limits=httpx.Limits(max_keepalive_connections=20, max_connections=50, keepalive_expiry=60.0)
         )

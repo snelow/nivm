@@ -159,7 +159,15 @@ class MemoryEngine:
         except Exception as e:
             logger.error(f"Failed to initialize Mem0: {e}", exc_info=True)
 
-    def search(self, query: str, user_id: str = "user", limit: int = 5) -> List[str]:
+    def preload(self):
+        """Warm up embedding model & vector store in background so first prompt has zero latency."""
+        try:
+            self.search("warmup test", limit=1)
+            logger.info("Neural memory embedding model pre-warmed.")
+        except Exception as e:
+            logger.warning(f"Note during memory warmup: {e}")
+
+    def search(self, query: str, user_id: str = "user", limit: int = 5, score_threshold: float = 0.35) -> List[str]:
         """Retrieve relevant long-term memories for RAG injection."""
         if not self._mem or not query or not query.strip():
             return []
@@ -168,6 +176,9 @@ class MemoryEngine:
             results = res.get("results", []) if isinstance(res, dict) else res
             facts = []
             for r in results:
+                score = r.get("score") if isinstance(r, dict) else getattr(r, "score", None)
+                if score is not None and score < score_threshold:
+                    continue
                 txt = r.get("memory") if isinstance(r, dict) else getattr(r, "memory", None)
                 if txt and txt not in facts:
                     facts.append(txt)

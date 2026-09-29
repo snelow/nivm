@@ -150,8 +150,13 @@ async def security_and_network_middleware(request: Request, call_next):
 
 @app.on_event("startup")
 async def startup_event():
-    """Apply saved hardware overrides and custom paths on server startup."""
+    """Apply saved hardware overrides, custom paths, and pre-warm neural memory on startup."""
     _apply_all_overrides()
+    try:
+        from core.memory_engine import memory_engine
+        asyncio.create_task(asyncio.to_thread(memory_engine.preload))
+    except Exception as e:
+        logger.warning(f"Failed to schedule memory pre-warm: {e}")
 
 
 # Mount sub-routers
@@ -393,7 +398,12 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
     # Step 3: Route to the right model (or forward in API mode)
     _apply_all_overrides()
     settings = get_user_settings()
-    inference_mode = settings.get("inference_mode", "single")
+    inference_mode = body.get("inference_mode")
+    if not inference_mode or inference_mode not in ("api", "single", "routing"):
+        if body.get("engine_mode") == "api":
+            inference_mode = "api"
+        else:
+            inference_mode = settings.get("inference_mode", "single")
 
     # RAG Memory Retrieval (Mem0 + Google TurboQuant)
     if settings.get("memory_enabled", True) and user_text.strip():
@@ -423,7 +433,8 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
         api_key = settings.get("api_key", "").strip()
         api_model = settings.get("api_model", "llama-3.3-70b-versatile").strip() or "llama-3.3-70b-versatile"
         req_model = body.get("model")
-        if req_model and req_model not in ("coder", "router", "vision", "single", ""):
+        # Ensure local model names or filenames (.gguf) never override external API model
+        if req_model and req_model not in ("coder", "router", "vision", "single", "custom", "") and not req_model.endswith(".gguf") and ".gguf" not in req_model:
             api_model = req_model
 
         # Determine if external provider/model supports multimodal images
@@ -663,7 +674,15 @@ async def reconnect_chat_stream(chat_id: str):
     job = chat_manager.get_job(chat_id)
     if not job:
         raise HTTPException(status_code=404, detail="No active generation for this chat")
-    return StreamingResponse(chat_manager.stream_job(job), media_type="text/event-stream")
+    return StreamingResponse(
+        chat_manager.stream_job(job),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 
 @app.post("/api/chat/stop")

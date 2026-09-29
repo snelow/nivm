@@ -95,7 +95,7 @@ async def fetch_remote_models(req: FetchRemoteModelsRequest):
             pass
 
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
             resp = await client.get(models_url, headers=headers)
             if resp.status_code != 200:
                 err_text = resp.text[:300]
@@ -174,7 +174,7 @@ async def test_api_connection(req: TestApiConnectionRequest):
 
     t_start = time.perf_counter()
     try:
-        async with httpx.AsyncClient(timeout=12.0) as client:
+        async with httpx.AsyncClient(timeout=12.0, follow_redirects=True) as client:
             resp = await client.post(chat_url, headers=headers, json=payload)
             latency_ms = round((time.perf_counter() - t_start) * 1000)
 

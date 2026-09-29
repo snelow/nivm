@@ -247,28 +247,64 @@ export const tools = [
             let resolution = 'portrait';
 
             let trimmed = (argsStr || '').trim();
-            if ((trimmed.startsWith("'") && trimmed.endsWith("'")) || (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.includes('{'))) {
-                trimmed = trimmed.substring(1, trimmed.length - 1).trim();
+            // Handle cases where small models wrap JSON in outer quotes: "{"..."}" or '{"..."}' or "{"...""
+            if (/^['"]\s*\{/.test(trimmed)) {
+                trimmed = trimmed.replace(/^['"]\s*/, '');
+                trimmed = trimmed.replace(/['"\s]+$/, '');
             }
-            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+            // Auto-close JSON if small model omitted closing brace
+            if (trimmed.startsWith('{') && !trimmed.endsWith('}')) {
+                trimmed = trimmed.replace(/['"\s]+$/, '') + '}';
+            }
+
+            let parsed = null;
+            if (trimmed.startsWith('{')) {
                 try {
-                    const parsed = JSON.parse(trimmed);
-                    charKey = parsed.character || parsed.char || '';
-                    outfit = parsed.outfit || null;
-                    hairstyle = parsed.hairstyle || parsed.hair || null;
-                    expression = parsed.expression || parsed.expr || 'smile';
-                    concept = parsed.concept || 'none';
-                    pose = parsed.pose || 'none';
-                    userPrompt = parsed.prompt || parsed.user_prompt || '';
-                    useLcm = !!parsed.use_lcm || !!parsed.turbo || !!parsed.lcm;
-                    resolution = parsed.resolution || parsed.aspect_ratio || 'portrait';
-                } catch (_) {}
+                    parsed = JSON.parse(trimmed);
+                } catch (_) {
+                    // Resilient fallback for small models: regex-extract keys if JSON.parse failed
+                    const getField = (field) => {
+                        const m = trimmed.match(new RegExp(`"${field}"\\s*:\\s*(?:"([^"]*)"|'([^']*)'|([^,}]+))`));
+                        return m ? (m[1] ?? m[2] ?? m[3]?.trim()) : null;
+                    };
+                    const extractedChar = getField('character') || getField('char');
+                    if (extractedChar) {
+                        parsed = {
+                            character: extractedChar,
+                            outfit: getField('outfit'),
+                            hairstyle: getField('hairstyle') || getField('hair'),
+                            expression: getField('expression') || getField('expr'),
+                            concept: getField('concept'),
+                            pose: getField('pose'),
+                            prompt: getField('prompt') || getField('user_prompt'),
+                            resolution: getField('resolution') || getField('aspect_ratio'),
+                            use_lcm: getField('use_lcm') === 'true' || getField('lcm') === 'true' || getField('turbo') === 'true'
+                        };
+                    }
+                }
+            }
+
+            if (parsed) {
+                charKey = parsed.character || parsed.char || '';
+                outfit = parsed.outfit || null;
+                hairstyle = parsed.hairstyle || parsed.hair || null;
+                expression = parsed.expression || parsed.expr || 'smile';
+                concept = parsed.concept || 'none';
+                pose = parsed.pose || 'none';
+                userPrompt = parsed.prompt || parsed.user_prompt || '';
+                useLcm = !!parsed.use_lcm || !!parsed.turbo || !!parsed.lcm;
+                resolution = parsed.resolution || parsed.aspect_ratio || 'portrait';
             } else {
                 const parts = trimmed.match(/(?:[^\s,"']+|"[^"]*"|'[^']*')+/g) || [];
                 const cleanParts = parts.map(p => p.trim().replace(/^['"]|['"]$/g, ''));
                 if (cleanParts.length > 0) charKey = cleanParts[0].toLowerCase().replace(/\s+/g, '_');
                 if (cleanParts.length > 1) userPrompt = cleanParts[1];
                 if (cleanParts.length > 2) expression = cleanParts[2];
+            }
+
+            // Clean up literal placeholder text if a small model copied the system prompt example literally
+            if (/rich scene and lighting description/i.test(userPrompt)) {
+                userPrompt = '';
             }
 
             if (!charKey && _animeRegistryCache?.characters) {
@@ -782,9 +818,11 @@ export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume 
 
         instruction += `2. Calling generate_anime_image:\n`;
         instruction += `   - Always specify a single subject. If characters are registered, pick a valid character and outfit. If no characters exist or general anime illustration is requested, use 'character': 'none'.\n`;
-        instruction += `   - Use JSON format with the character's key: TOOL_CALL: generate_anime_image('{"character": "character_key", "outfit": "outfit_key", "expression": "smile", "prompt": "rich scene and lighting description"}')\n`;
-        instruction += `   - Concepts & Poses: Only pass concept or pose when explicitly requested by the user. If unrequested, omit them.\n`;
-        instruction += `   - Fast/Turbo Mode: Set "use_lcm": true if the user requests fast or quick generation (8 steps).\n`;
+        instruction += `   - Use JSON format with the character's key: TOOL_CALL: generate_anime_image({"character": "character_key", "outfit": "outfit_key", "expression": "smile", "prompt": "a vivid description of the specific setting, action, and lighting"})\n`;
+        instruction += `   - Prompt field: Describe what is actually happening in the scene based on the user's request. NEVER copy placeholder words like 'rich scene and lighting description'.\n`;
+        instruction += `   - Concepts & Poses: ONLY pass concept or pose if the user specifically asked for one. Otherwise leave them out.\n`;
+        instruction += `   - Single Turn Execution: Output ONLY the TOOL_CALL. Do NOT describe the generated image in the same message before the image has been rendered.\n`;
+        instruction += `   - Fast/Turbo Mode: Set "use_lcm": true if the user explicitly requests fast or quick generation (8 steps).\n`;
         instruction += `   - User Inquiry: When the user asks what anime characters or outfits are available, report the live list above accurately.\n`;
     }
 
@@ -793,7 +831,8 @@ export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume 
     instruction += `   TOOL_CALL: tool_name(arguments)\n`;
     instruction += `2. NEVER output tool names like 'execute_terminal(...)' alone without the 'TOOL_CALL: ' prefix.\n`;
     instruction += `3. Output only ONE tool call at a time.\n`;
-    instruction += `4. Tool usage must NEVER break your persona or tone. Embody your persona consistently before, during, and after tool calls.\n`;
+    instruction += `4. Do NOT hallucinate or describe tool results before the tool runs.\n`;
+    instruction += `5. Tool usage must NEVER break your persona or tone. Embody your persona consistently before, during, and after tool calls.\n`;
 
     return instruction;
 }

@@ -27,6 +27,23 @@ try:
 except Exception:
     _libc = None
 
+# Patch llama-cpp-python's internal stdout suppressor so closed file descriptors never abort deallocation
+try:
+    import llama_cpp._utils
+    _orig_enter = llama_cpp._utils.suppress_stdout_stderr.__enter__
+    def _safe_suppress_enter(self):
+        if getattr(llama_cpp._utils.outnull_file, "closed", False) or getattr(llama_cpp._utils.errnull_file, "closed", False):
+            self.disable = True
+            return self
+        try:
+            return _orig_enter(self)
+        except Exception:
+            self.disable = True
+            return self
+    llama_cpp._utils.suppress_stdout_stderr.__enter__ = _safe_suppress_enter
+except Exception:
+    pass
+
 
 @contextlib.contextmanager
 def suppress_c():
@@ -701,12 +718,18 @@ class ModelManager:
         return len(self.loaded_models) > 0
 
     def unload_all(self):
-        """Unload all models and free memory."""
+        """Unload all models and free memory safely."""
         logger.warning(f"Unloading all {len(self.loaded_models)} models...")
         for role in list(self.loaded_models.keys()):
             model = self.loaded_models.pop(role, None)
             if model is not None:
-                # Close multimodal chat handler first (may hold its own CUDA/mmproj context)
+                # 1. Close model exit stack first (cleanly executes registered mtmd_free while handler is still attached)
+                try:
+                    if hasattr(model, "close"):
+                        model.close()
+                except Exception as ce:
+                    logger.warning(f"Error closing model {role}: {ce}")
+                # 2. Release chat handler
                 try:
                     handler = getattr(model, "chat_handler", None)
                     if handler is not None:
@@ -716,11 +739,6 @@ class ModelManager:
                         del handler
                 except Exception:
                     pass
-                try:
-                    if hasattr(model, "close"):
-                        model.close()
-                except Exception as ce:
-                    logger.warning(f"Error closing model {role}: {ce}")
                 del model
         self.loaded_models.clear()
         self.loaded_paths.clear()

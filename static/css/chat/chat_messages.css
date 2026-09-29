@@ -307,3 +307,48 @@
     color: var(--text-primary);
 }
 
+/* Modular Skill Badge (Sleek, Minimalist, No Emojis) */
+.skill-badge-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+    padding-left: 2px;
+}
+
+.skill-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border-radius: var(--radius-sm, 4px);
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.73rem;
+    font-family: var(--font-mono, monospace);
+    line-height: 1.35;
+    user-select: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(4px);
+    transition: border-color var(--transition-fast, 0.15s ease);
+}
+
+.skill-badge:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.skill-badge-label {
+    color: var(--text-muted, #71717a);
+    text-transform: uppercase;
+    font-size: 0.62rem;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+}
+
+.skill-badge-name {
+    color: var(--accent-light, #c084fc);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+

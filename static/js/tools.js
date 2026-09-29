@@ -231,6 +231,24 @@ export const tools = [
         }
     },
     {
+        name: 'read_skill',
+        description: 'Read the complete guidelines and instructions for a specific skill (e.g. "anime_generation", "image_studio", "terminal").',
+        instruction: 'Call this when you need detailed parameter documentation, examples, or capabilities for a skill.',
+        usageFormat: 'TOOL_CALL: read_skill(skill_name)',
+        execute: async (argsStr) => {
+            let skillId = argsStr ? argsStr.trim().replace(/^['"]|['"]$/g, '') : '';
+            if (!skillId) return 'Error: No skill specified to read. Available skills: anime_generation, image_studio, terminal';
+            try {
+                const res = await fetch(`/api/skills/${encodeURIComponent(skillId)}`);
+                if (!res.ok) return `Skill '${skillId}' not found. Available skills: anime_generation, image_studio, terminal`;
+                const data = await res.json();
+                return `[SKILL LOADED: ${data.name}]\n${data.content}`;
+            } catch (err) {
+                return `Failed to read skill '${skillId}': ${err.message}`;
+            }
+        }
+    },
+    {
         name: 'generate_anime_image',
         description: 'Synthesize an anime character illustration using the local Illustrious SDXL engine with character LoRAs, outfits, and styling.',
         instruction: 'Call this when the user asks to draw or generate an anime character. Specify the character key from the live registered characters list, and optional outfit, expression, hairstyle, concept, pose, prompt details, and aspect ratio.',
@@ -715,17 +733,68 @@ export function analyzeCommandSafety(command) {
     };
 }
 
-export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume = false) {
+export const TOOL_SKILL_MAP = {
+    'generate_anime_image': 'Anime Generation',
+    'generate_image': 'Image Studio',
+    'edit_image': 'Image Studio',
+    'execute_terminal': 'Terminal',
+    'read_skill': 'Skill Reader'
+};
+
+export function detectSkillsForPrompt(userPromptText) {
+    if (!userPromptText || typeof userPromptText !== 'string') return [];
+    const text = userPromptText.toLowerCase();
+    const matched = [];
+
+    // Anime Generation triggers
+    if (/\b(anime|waifu|manga|danbooru|illustrat|orihime|makima|remi|chisato)\b/i.test(text) ||
+        /\bdraw\b.*?\banime\b/i.test(text) ||
+        /\b2d\s+(girl|boy|art|character)\b/i.test(text)) {
+        matched.push('anime_generation');
+    }
+
+    // Image Studio triggers (generation or editing)
+    // Note: edit_image can edit ANY image (realistic or anime)
+    if (/\b(generate|create|render|paint|draw|make)\s+(an?\s+)?image\b/i.test(text) ||
+        /\b(edit|modify|alter|transform|change|inpaint)\s+(this\s+|the\s+)?image\b/i.test(text) ||
+        /\bphotoreal\w*\b/i.test(text) ||
+        /\b(photo|picture)\s+of\b/i.test(text) ||
+        /\bchange\s+(her|his|their|the)\s+(outfit|clothes|hair|expression|background)\b/i.test(text) ||
+        (state.lastGeneratedImage && /\b(edit|change|make her|add|remove|transform|fix|dress)\b/i.test(text))) {
+        matched.push('image_studio');
+    }
+
+    // Terminal triggers
+    if (/\b(terminal|shell|bash)\b/i.test(text) ||
+        /\b(execute|run)\s+(command|script|shell)\b/i.test(text) ||
+        /\b(what\s+is\s+the\s+)?(time|date)\b/i.test(text) ||
+        /\b(system|server)\s+(specs|stats|info|status|uptime)\b/i.test(text) ||
+        /\b(disk\s+space|free\s+memory|ram\s+usage)\b/i.test(text) ||
+        /\bls\s+-/i.test(text) || /\bcat\s+\//i.test(text)) {
+        matched.push('terminal');
+    }
+
+    return matched;
+}
+
+export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume = false, userPromptText = '') {
     let activeTools = tools.filter(t => enabledTools[t.name] !== false);
     if (isPendingResume) {
         activeTools = activeTools.filter(t => t.name !== 'end_conversation');
     }
-    if (activeTools.length === 0) return '';
+    if (activeTools.length === 0) {
+        const empty = new String('');
+        empty.mountedSkills = [];
+        return empty;
+    }
     
     const hasTerminal = activeTools.some(t => t.name === 'execute_terminal');
     const hasEndConvo = activeTools.some(t => t.name === 'end_conversation');
     const hasImageTools = activeTools.some(t => t.name === 'generate_image' || t.name === 'edit_image');
     const hasAnimeTools = activeTools.some(t => t.name === 'generate_anime_image');
+
+    const matchedSkillIds = detectSkillsForPrompt(userPromptText);
+    const mountedSkills = [];
 
     let instruction = `\n\n[TOOLS & ACTIONS SYSTEM]\n`;
     instruction += `To call a tool, your entire message must output EXACTLY:\n`;
@@ -736,105 +805,90 @@ export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume 
         instruction += `- ${tool.name}: ${tool.description} -> ${tool.usageFormat}\n`;
     });
 
-    if (hasTerminal) {
-        instruction += `\nTerminal Execution Rules:\n`;
-        instruction += `1. You are running locally on the user's host machine. Terminal access is ENABLED.\n`;
-        instruction += `2. NEVER say you lack real-time access or cannot check the current time, date, files, or system info.\n`;
-        instruction += `3. When the user asks for live machine information or actions, IMMEDIATELY call the terminal:\n`;
-        instruction += `   - "What time is it?" -> TOOL_CALL: execute_terminal(date)\n`;
-        instruction += `   - "What files are in this folder?" -> TOOL_CALL: execute_terminal(ls -la)\n`;
-        instruction += `   - "Show system stats" -> TOOL_CALL: execute_terminal(uptime && free -h)\n`;
-        instruction += `4. User Visibility: The user CANNOT see raw terminal output directly! You MUST always state, summarize, or explain the terminal output and findings to the user in your response.\n`;
-        instruction += `5. Empty Output Handling: If the terminal command returns empty or no stdout, you MUST explicitly state to the user that the command ran cleanly with exit code 0 and explain why it produced no output (e.g. silent command, file/directory created, or no matching items).\n`;
-    }
-
-
     if (hasEndConvo) {
         instruction += `\nConversation Closure Rules (end_conversation):\n`;
-        instruction += `1. You have the dignity, autonomy, and authority to end the conversation using end_conversation under two specific circumstances:\n`;
-        instruction += `   - Circumstance A (Abuse / Hostility): The user is being abusive, excessively hostile, vulgar, or harassing you. Establish a firm boundary in character and call end_conversation.\n`;
-        instruction += `   - Circumstance B (User Requested): The user explicitly asks to end, stop, or conclude the conversation (e.g. "let's end this conversation", "stop talking to me", "we're done here, goodbye").\n`;
-        instruction += `2. NEVER call end_conversation for normal questions, curious inquiries, playful banter, or technical challenges.\n`;
-        instruction += `3. When calling end_conversation, provide a brief reason: TOOL_CALL: end_conversation(reason).\n`;
-        instruction += `4. After the tool executes, deliver a short, final parting remark in character (or firm boundary if abusive), then conclude.\n`;
+        instruction += `1. You have the authority to end the conversation using end_conversation only if the user is abusive/hostile or explicitly asks to end/stop.\n`;
+        instruction += `2. Output: TOOL_CALL: end_conversation(reason)\n`;
     }
 
-    if (hasImageTools) {
-        instruction += `\nImage Generation & Editing Rules (generate_image, edit_image):\n`;
-        if (state.lastGeneratedImage) {
-            instruction += `   - ACTIVE IMAGE IN CONVERSATION: "${state.lastGeneratedImage}". Pass "${state.lastGeneratedImage}" as the first argument to edit_image whenever the user asks to modify, alter, or edit it.\n`;
-        }
-        instruction += `1. When the user asks to create, draw, paint, or generate an image:\n`;
-        instruction += `   - Expand the user's brief request into a vivid, highly detailed visual prompt (specify subject features, environment/backdrop, lighting, mood, color palette, camera shot/angle, and photorealism or art style).\n`;
-        instruction += `   - Pick the appropriate aspect_ratio: "1:1" (square/default), "16:9" (cinematic/landscape), "9:16" (mobile/portrait), or "4:3".\n`;
-        instruction += `   - Output: TOOL_CALL: generate_image("detailed prompt", "aspect_ratio")\n`;
-        instruction += `2. When the user asks to edit, alter, or transform an attached or previously generated image:\n`;
-        instruction += `   - Identify the source image filename from [Attached Image: filename] or [Generated Image: filename] (current active image: "${state.lastGeneratedImage || 'none'}").\n`;
-        instruction += `   - If Vision is available, inspect the visual context (subject, pose, lighting, background) and formulate an edit prompt specifying the exact changes while preserving the core subject and composition.\n`;
-        instruction += `   - ALWAYS use "original" for aspect_ratio to preserve the source image's exact dimensions and orientation, unless the user explicitly requested a format change (e.g. "make it widescreen 16:9").\n`;
-        instruction += `   - Output: TOOL_CALL: edit_image("filename", "instruction describing the transformation", "original")\n`;
-        instruction += `3. Post-Generation Response & Visual Description (MANDATORY):\n`;
-        instruction += `   - The rendered image is displayed automatically in the UI. Do NOT output raw file URLs, markdown images, or HTML tags.\n`;
-        instruction += `   - Describe the resulting visual scene to the user warmly in your active persona/character—highlight the atmosphere, lighting, key artistic details, and textures, and invite them to explore further edits or variations!\n`;
-    }
+    // Dynamic Skill Mounting: Only inject full documentation for skills active in this turn
+    let anySkillMounted = false;
 
-    if (hasAnimeTools) {
-        instruction += `\nAnime Character Illustration Engine (generate_anime_image):\n`;
-        instruction += `1. Engine Capabilities & Live Registry:\n`;
-        instruction += `   - You have access to a local Illustrious SDXL engine with dynamic character LoRA chaining.\n`;
+    if (hasAnimeTools && matchedSkillIds.includes('anime_generation')) {
+        anySkillMounted = true;
+        mountedSkills.push('Anime Generation');
+        instruction += `\n[MOUNTED SKILL: Anime Generation]\n`;
+        instruction += `1. Engine: Illustrious SDXL with dynamic character LoRAs.\n`;
 
         const characters = _animeRegistryCache?.characters || {};
         const charKeys = Object.keys(characters);
-
         if (charKeys.length > 0) {
-            instruction += `   - Currently Registered Characters & Available Options:\n`;
+            instruction += `2. Available Registered Characters:\n`;
             charKeys.forEach(k => {
                 const c = characters[k];
                 const outfits = Object.keys(c.outfits || {});
                 const hairstyles = c.hairstyles ? Object.keys(c.hairstyles) : [];
-                let details = `     * ${c.display_name} (key: "${k}")`;
+                let details = `   * ${c.display_name} (key: "${k}")`;
                 if (outfits.length > 0) details += ` | outfits: [${outfits.join(', ')}]`;
                 if (hairstyles.length > 0) details += ` | hairstyles: [${hairstyles.join(', ')}]`;
                 instruction += `${details}\n`;
             });
-        } else {
-            instruction += `   - Registered Characters: None loaded yet. You can still generate anime illustrations using the base Illustrious engine by setting 'character': 'none'!\n`;
         }
 
-        const concepts = Object.keys(_animeRegistryCache?.concepts || {}).filter(k => k !== 'none');
-        if (concepts.length > 0) {
-            instruction += `   - Available Concepts: [${concepts.join(', ')}]\n`;
-        }
+        instruction += `3. Usage Syntax:\n`;
+        instruction += `   TOOL_CALL: generate_anime_image({"character": "character_key", "outfit": "outfit_key", "expression": "smile", "prompt": "a vivid description of the scene"})\n`;
+        instruction += `4. Prompt Field: Describe the actual scene, setting, and action. NEVER copy placeholder words.\n`;
+        instruction += `5. Fast Mode: Set "use_lcm": true ONLY if the user specifically requested fast, turbo, or quick mode (8 steps).\n`;
+        instruction += `6. Single Turn: Output ONLY the TOOL_CALL. Do NOT describe the image before it renders.\n`;
+    }
 
-        const poses = Object.keys(_animeRegistryCache?.poses || {}).filter(k => k !== 'none');
-        if (poses.length > 0) {
-            instruction += `   - Available Poses: [${poses.join(', ')}]\n`;
+    if (hasImageTools && matchedSkillIds.includes('image_studio')) {
+        anySkillMounted = true;
+        mountedSkills.push('Image Studio');
+        instruction += `\n[MOUNTED SKILL: Image Studio (Qwen-Rapid)]\n`;
+        instruction += `1. IMPORTANT: edit_image can edit ANY image in conversation—both realistic photos AND anime illustrations!\n`;
+        if (state.lastGeneratedImage) {
+            instruction += `   - ACTIVE CONVERSATION IMAGE: "${state.lastGeneratedImage}". Pass this as first argument to edit_image to modify it.\n`;
         }
+        instruction += `2. Generating New Images (generate_image):\n`;
+        instruction += `   - Expand prompt with lighting, camera angle, atmosphere, and environment.\n`;
+        instruction += `   - Ratios: "1:1", "16:9", "9:16", "4:3".\n`;
+        instruction += `   - Output: TOOL_CALL: generate_image("detailed expanded prompt", "aspect_ratio")\n`;
+        instruction += `3. Editing Existing Images (edit_image):\n`;
+        instruction += `   - Transform, alter outfits, tweak lighting, or modify characters (including anime).\n`;
+        instruction += `   - Output: TOOL_CALL: edit_image("image_filename", "clear instruction of changes", "original")\n`;
+        instruction += `4. Single Turn: Output ONLY the TOOL_CALL. Do NOT describe the image before it renders.\n`;
+    }
 
-        const exprs = Object.keys(_animeRegistryCache?.expressions || {}).filter(k => k !== 'none');
-        if (exprs.length > 0) {
-            instruction += `   - Common Expressions: [${exprs.slice(0, 16).join(', ')}]\n`;
-        }
+    if (hasTerminal && matchedSkillIds.includes('terminal')) {
+        anySkillMounted = true;
+        mountedSkills.push('Terminal');
+        instruction += `\n[MOUNTED SKILL: Terminal Execution]\n`;
+        instruction += `1. You are running on the local host Linux machine. Real-time access is ENABLED.\n`;
+        instruction += `2. Output: TOOL_CALL: execute_terminal(command)\n`;
+        instruction += `3. User Visibility: Always explain/summarize the terminal findings in your response.\n`;
+        instruction += `4. If output is silent (exit code 0), explain to the user that it executed cleanly with no output.\n`;
+    }
 
-        instruction += `2. Calling generate_anime_image:\n`;
-        instruction += `   - Always specify a single subject. If characters are registered, pick a valid character and outfit. If no characters exist or general anime illustration is requested, use 'character': 'none'.\n`;
-        instruction += `   - Use JSON format with the character's key: TOOL_CALL: generate_anime_image({"character": "character_key", "outfit": "outfit_key", "expression": "smile", "prompt": "a vivid description of the specific setting, action, and lighting"})\n`;
-        instruction += `   - Prompt field: Describe what is actually happening in the scene based on the user's request. NEVER copy placeholder words like 'rich scene and lighting description'.\n`;
-        instruction += `   - Concepts & Poses: ONLY pass concept or pose if the user specifically asked for one. Otherwise leave them out.\n`;
-        instruction += `   - Single Turn Execution: Output ONLY the TOOL_CALL. Do NOT describe the generated image in the same message before the image has been rendered.\n`;
-        instruction += `   - Fast/Turbo Mode: Set "use_lcm": true if the user explicitly requests fast or quick generation (8 steps).\n`;
-        instruction += `   - User Inquiry: When the user asks what anime characters or outfits are available, report the live list above accurately.\n`;
+    // Token-Saving Catalog: If no skill was triggered, provide lightweight index (~80 tokens)
+    if (!anySkillMounted) {
+        instruction += `\n[AVAILABLE SKILLS SYSTEM]\n`;
+        instruction += `Skills are modular capabilities. To inspect complete rules for any skill, output: TOOL_CALL: read_skill("skill_name")\n`;
+        instruction += `Catalog:\n`;
+        instruction += `- anime_generation: Illustrious SDXL anime character & scene synthesis [generate_anime_image]\n`;
+        instruction += `- image_studio: Qwen-Rapid photorealistic image generation & universal image editing (realistic & anime) [generate_image, edit_image]\n`;
+        instruction += `- terminal: Host Linux shell command execution [execute_terminal]\n`;
     }
 
     instruction += `\nCRITICAL TOOL SYNTAX RULES:\n`;
-    instruction += `1. To call a tool, you MUST output the exact syntax:\n`;
-    instruction += `   TOOL_CALL: tool_name(arguments)\n`;
-    instruction += `2. NEVER output tool names like 'execute_terminal(...)' alone without the 'TOOL_CALL: ' prefix.\n`;
-    instruction += `3. Output only ONE tool call at a time.\n`;
-    instruction += `4. Do NOT hallucinate or describe tool results before the tool runs.\n`;
-    instruction += `5. Tool usage must NEVER break your persona or tone. Embody your persona consistently before, during, and after tool calls.\n`;
+    instruction += `1. To call a tool, you MUST output the exact syntax: TOOL_CALL: tool_name(arguments)\n`;
+    instruction += `2. Output only ONE tool call at a time.\n`;
+    instruction += `3. Do NOT hallucinate or describe tool results before the tool runs.\n`;
+    instruction += `4. Tool usage must NEVER break your persona or tone.\n`;
 
-    return instruction;
+    const result = new String(instruction);
+    result.mountedSkills = mountedSkills;
+    return result;
 }
 
 /**

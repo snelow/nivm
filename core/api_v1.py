@@ -489,3 +489,42 @@ async def detokenize_endpoint(req: DetokenizeRequest):
         "model": active_info.get("name", role),
         "role": role
     }
+
+
+# Skills System Endpoints
+
+class SkillDetectRequest(BaseModel):
+    text: str
+
+
+@router.get("/api/skills")
+async def get_skills_catalog():
+    """Returns available modular skills and their metadata."""
+    from .skills import get_available_skills
+    return {"skills": get_available_skills()}
+
+
+@router.get("/api/skills/{skill_id}")
+async def get_skill_detail(skill_id: str):
+    """Returns markdown documentation and instructions for a specific skill."""
+    from .skills import get_skill_content, SKILLS_REGISTRY
+    meta = SKILLS_REGISTRY.get(skill_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail=f"Skill '{skill_id}' not found.")
+    content = get_skill_content(skill_id)
+    return {
+        "id": skill_id,
+        "name": meta.get("name", skill_id),
+        "description": meta.get("description", ""),
+        "tools": meta.get("tools", []),
+        "content": content
+    }
+
+
+@router.post("/api/skills/detect")
+async def detect_skills_endpoint(req: SkillDetectRequest):
+    """Detects which skills are relevant to a user prompt."""
+    from .skills import detect_skills_for_prompt
+    matched = detect_skills_for_prompt(req.text)
+    return {"detected_skills": matched}
+

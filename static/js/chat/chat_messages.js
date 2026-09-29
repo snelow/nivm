@@ -2,7 +2,7 @@
 
 import { state, saveConversations } from '../state.js';
 import { dom } from '../dom.js';
-import { tools, parseToolCall, stripToolCallFromText } from '../tools.js';
+import { tools, parseToolCall, stripToolCallFromText, TOOL_SKILL_MAP } from '../tools.js';
 import { normalizeThinkTags, cleanReasoningText } from '../think_tags.js';
 import { createSingleImageCard, createBeforeAfterSlider, getImageDuration, saveImageDuration } from '../image_editor.js';
 import { escapeHtml, showNotification } from '../modals/dialogs.js';
@@ -569,6 +569,19 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
     const wrapper = document.createElement('div');
     wrapper.className = 'message-wrapper';
 
+    // Minimalist Skill Used Badge (No Emojis, Matches UI Theme)
+    if (role === 'assistant' && msg.skillsUsed && msg.skillsUsed.length > 0) {
+        const badgeCont = document.createElement('div');
+        badgeCont.className = 'skill-badge-container';
+        msg.skillsUsed.forEach(skillName => {
+            const pill = document.createElement('span');
+            pill.className = 'skill-badge';
+            pill.innerHTML = `<span class="skill-badge-label">Skill used:</span> <span class="skill-badge-name">${escapeHtml(skillName)}</span>`;
+            badgeCont.appendChild(pill);
+        });
+        wrapper.appendChild(badgeCont);
+    }
+
     const bubble = document.createElement('div');
     bubble.className = 'message-bubble';
     
@@ -770,6 +783,23 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
         }
 
         if (toolCommand) {
+            const mappedSkill = TOOL_SKILL_MAP[toolCommand];
+            if (mappedSkill) {
+                if (!msg.skillsUsed) msg.skillsUsed = [];
+                if (!msg.skillsUsed.includes(mappedSkill)) {
+                    msg.skillsUsed.push(mappedSkill);
+                }
+                if (!wrapper.querySelector('.skill-badge-container')) {
+                    const badgeCont = document.createElement('div');
+                    badgeCont.className = 'skill-badge-container';
+                    const pill = document.createElement('span');
+                    pill.className = 'skill-badge';
+                    pill.innerHTML = `<span class="skill-badge-label">Skill used:</span> <span class="skill-badge-name">${escapeHtml(mappedSkill)}</span>`;
+                    badgeCont.appendChild(pill);
+                    wrapper.insertBefore(badgeCont, bubble);
+                }
+            }
+
             // Restore rich image card in history for generate_image, edit_image, and generate_anime_image
             if (toolCommand === 'generate_image' || toolCommand === 'edit_image' || toolCommand === 'generate_anime_image') {
                 let imgUrl = null;

@@ -2,7 +2,7 @@
 
 import { state, saveConversations, saveUsageStats } from '../state.js';
 import { dom } from '../dom.js';
-import { tools, buildToolsInstruction, parseToolCall, stripToolCallFromText } from '../tools.js';
+import { tools, buildToolsInstruction, parseToolCall, stripToolCallFromText, TOOL_SKILL_MAP } from '../tools.js';
 import { renderActiveChat, appendMessageToDOM, scrollToBottom, toggleSendStopButtons, updateAssistantBubble, updateMessageActionIcons, buildToolTraceHtml, updateChatInputState, sealUnclosedThoughts } from './chat_messages.js';
 import { renderChatHistory, createNewChat } from './chat_history.js';
 import { clearAttachedImage, isVisionSupported } from '../media/media_manager.js';
@@ -163,7 +163,15 @@ export async function sendMessage(text, triggerAssistantOnly = false, isHiddenUs
         dynamicSystemPrompt += `\n\n[Custom Persona & Behavioral Instructions]:\n${state.personalityPrompt.trim()}`;
     }
 
-    let toolsInstruction = buildToolsInstruction([], state.enabledTools, Boolean(activeChat?.isPendingResume));
+    // Extract last user message to detect relevant skill
+    let lastUserQuery = '';
+    const lastUserTurn = activeChat?.messages ? [...activeChat.messages].reverse().find(m => m.role === 'user') : null;
+    if (lastUserTurn) {
+        lastUserQuery = typeof lastUserTurn.content === 'string' ? lastUserTurn.content : (Array.isArray(lastUserTurn.content) ? lastUserTurn.content.find(c => c.type === 'text')?.text || '' : '');
+    }
+
+    const toolsInstruction = buildToolsInstruction([], state.enabledTools, Boolean(activeChat?.isPendingResume), lastUserQuery);
+    const activeSkillsForTurn = Array.isArray(toolsInstruction.mountedSkills) ? [...toolsInstruction.mountedSkills] : [];
     dynamicSystemPrompt += toolsInstruction;
 
 
@@ -236,7 +244,7 @@ CRITICAL SPOKEN CONVERSATION RULES:
 
     activeChat.messages.forEach(m => payloadMessages.push({ role: m.role, content: m.content }));
 
-    const assistantMsg = { role: 'assistant', content: '' };
+    const assistantMsg = { role: 'assistant', content: '', skillsUsed: [...activeSkillsForTurn] };
     activeChat.messages.push(assistantMsg);
     const turnChatId = activeChat.id;
 
@@ -453,6 +461,10 @@ CRITICAL SPOKEN CONVERSATION RULES:
                             if (!activeChat.isPendingResume && responseBuffer) {
                                 const detectedTool = parseToolCall(responseBuffer, tools);
                                 if (detectedTool) {
+                                    const skillName = TOOL_SKILL_MAP[detectedTool.command];
+                                    if (skillName && !assistantMsg.skillsUsed?.includes(skillName)) {
+                                        assistantMsg.skillsUsed = [...(assistantMsg.skillsUsed || []), skillName];
+                                    }
                                     // Adjust index: detectedTool.index is relative to responseBuffer,
                                     // but it needs to be relative to fullResponse for slicing later.
                                     const responseBufferOffsetInFull = fullResponse.length - responseBuffer.length;

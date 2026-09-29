@@ -264,9 +264,9 @@ export const tools = [
     },
     {
         name: 'generate_anime_image',
-        description: 'Synthesize an anime character illustration using the local Illustrious SDXL engine with character LoRAs, outfits, and styling.',
-        instruction: 'Call this when the user asks to draw or generate an anime character. Specify the character key from the live registered characters list, and optional outfit, expression, hairstyle, concept, pose, prompt details, and aspect ratio.',
-        usageFormat: 'TOOL_CALL: generate_anime_image("character_key", "prompt_details", "expression")',
+        description: 'Synthesize an anime character illustration or anime artwork using Illustrious SDXL with character LoRAs.',
+        instruction: 'Call this for ANY anime character (e.g. Orihime, Makima, Reze), waifu, or anime styled scene. Specify character key and prompt.',
+        usageFormat: 'TOOL_CALL: generate_anime_image({"character": "character_key", "prompt": "scene description"})',
         execute: async (argsStr) => {
             let charKey = '';
             let outfit = null;
@@ -418,8 +418,8 @@ export const tools = [
     },
     {
         name: 'generate_image',
-        description: 'Synthesize a new image from pure text description using local Qwen-Rapid diffusion model.',
-        instruction: 'Call this whenever the user asks to draw, generate, or create an image from text. Pass the descriptive prompt and optional aspect_ratio ("square", "portrait", "landscape", "1:1", "16:9", "9:16").',
+        description: 'Synthesize a photorealistic, cinematic, or general real-world image (NON-ANIME) using local Qwen-Rapid diffusion model.',
+        instruction: 'Call this for realistic photos, 3D renders, or real-world scenes. DO NOT call this for anime characters (use generate_anime_image instead).',
         usageFormat: 'TOOL_CALL: generate_image("prompt", "aspect_ratio")',
         execute: async (argsStr) => {
             let prompt = '';
@@ -769,21 +769,48 @@ export function detectSkillsForPrompt(userPromptText) {
     const text = userPromptText.toLowerCase();
     const matched = [];
 
+    // Dynamically match against registered anime characters
+    let matchesRegisteredChar = false;
+    if (_animeRegistryCache?.characters) {
+        for (const [k, c] of Object.entries(_animeRegistryCache.characters)) {
+            const charKeyWords = k.split('_');
+            const dispWords = (c.display_name || '').toLowerCase().split(/\s+/);
+            const allWords = [...new Set([...charKeyWords, ...dispWords])].filter(w => w.length > 2);
+            for (const word of allWords) {
+                const rx = new RegExp(`\\b${word}\\b`, 'i');
+                if (rx.test(text)) {
+                    matchesRegisteredChar = true;
+                    break;
+                }
+            }
+            if (matchesRegisteredChar) break;
+        }
+    }
+
     // Anime Generation triggers
-    if (/\b(anime|waifu|manga|danbooru|illustrat|orihime|makima|remi|chisato)\b/i.test(text) ||
+    const isAnime = matchesRegisteredChar ||
+        /\b(anime|waifu|manga|danbooru|illustrat\w*|orihime|makima|remi|chisato|reze|hori|waguri|asanagi|nikaidou)\b/i.test(text) ||
         /\bdraw\b.*?\banime\b/i.test(text) ||
-        /\b2d\s+(girl|boy|art|character)\b/i.test(text)) {
+        /\b2d\s+(girl|boy|art|character)\b/i.test(text);
+
+    if (isAnime) {
         matched.push('anime_generation');
     }
 
     // Image Studio triggers (generation or editing)
-    // Note: edit_image can edit ANY image (realistic or anime)
-    if (/\b(generate|create|render|paint|draw|make)\s+(an?\s+)?image\b/i.test(text) ||
-        /\b(edit|modify|alter|transform|change|inpaint)\s+(this\s+|the\s+)?image\b/i.test(text) ||
-        /\bphotoreal\w*\b/i.test(text) ||
-        /\b(photo|picture)\s+of\b/i.test(text) ||
+    const isEdit = /\b(edit|modify|alter|transform|change|inpaint)\s+(this\s+|the\s+)?image\b/i.test(text) ||
         /\bchange\s+(her|his|their|the)\s+(outfit|clothes|hair|expression|background)\b/i.test(text) ||
-        (state.lastGeneratedImage && /\b(edit|change|make her|add|remove|transform|fix|dress)\b/i.test(text))) {
+        (state.lastGeneratedImage && /\b(edit|change|make her|add|remove|transform|fix|dress)\b/i.test(text));
+
+    const isPhotorealOrGeneral = /\bphotoreal\w*\b/i.test(text) ||
+        /\b(photo|picture)\s+of\b/i.test(text) ||
+        /\brealistic\b/i.test(text) ||
+        /\bcinematic\s+photo\b/i.test(text);
+
+    const isNewImage = /\b(generate|create|render|paint|draw|make)\s+(an?\s+)?image\b/i.test(text);
+
+    // Only include image_studio if it is an edit request OR if it's a non-anime new image request
+    if (isEdit || (!isAnime && (isNewImage || isPhotorealOrGeneral))) {
         matched.push('image_studio');
     }
 
@@ -811,13 +838,25 @@ export function buildToolsInstruction(memoryKeys, enabledTools, isPendingResume 
         return empty;
     }
     
+    const matchedSkillIds = detectSkillsForPrompt(userPromptText);
+    const mountedSkills = [];
+
+    // Isolate active tools based on matched skills for this turn
+    if (matchedSkillIds.length > 0) {
+        activeTools = activeTools.filter(t => {
+            if (t.name === 'end_conversation' || t.name === 'read_skill') return true;
+            if (t.name === 'execute_terminal') return matchedSkillIds.includes('terminal');
+            if (t.name === 'generate_anime_image') return matchedSkillIds.includes('anime_generation');
+            if (t.name === 'generate_image') return matchedSkillIds.includes('image_studio');
+            if (t.name === 'edit_image') return matchedSkillIds.includes('image_studio');
+            return true;
+        });
+    }
+
     const hasTerminal = activeTools.some(t => t.name === 'execute_terminal');
     const hasEndConvo = activeTools.some(t => t.name === 'end_conversation');
     const hasImageTools = activeTools.some(t => t.name === 'generate_image' || t.name === 'edit_image');
     const hasAnimeTools = activeTools.some(t => t.name === 'generate_anime_image');
-
-    const matchedSkillIds = detectSkillsForPrompt(userPromptText);
-    const mountedSkills = [];
 
     let instruction = `\n\n[TOOLS & ACTIONS SYSTEM]\n`;
     instruction += `To call a tool, your entire message must output EXACTLY:\n`;

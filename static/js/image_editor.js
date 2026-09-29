@@ -355,7 +355,10 @@ export function createImageProgressCard(promptText, isEdit = false, requestedAsp
 
         // Provide dynamic stage guidance during text-encoding and weights streaming
         if (currentStep === 0 && !previewImg.src && !isSamplerActive) {
-            const isAnime = typeof promptText === 'string' && (promptText.startsWith('Anime') || promptText.toLowerCase().includes('illustrious'));
+            const pLower = typeof promptText === 'string' ? promptText.toLowerCase() : '';
+            const isAnime = pLower.startsWith('anime') ||
+                pLower.includes('illustrious') ||
+                /\b(anime|waifu|manga|danbooru|orihime|makima|reze|hori|waguri|asanagi|nikaidou)\b/i.test(pLower);
             let stageNotice = 'Starting diffusion engine';
             let simPct = 3;
 

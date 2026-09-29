@@ -92,18 +92,64 @@ def get_skill_content(skill_id: str) -> Optional[str]:
 
 
 def detect_skills_for_prompt(user_text: str) -> List[str]:
-    """Scans the user query and returns matched skill IDs based on intent triggers."""
+    """Scans the user query and returns matched skill IDs based on intent triggers.
+    
+    Anime generation takes precedence over image studio creation for anime characters
+    and anime styling, while preserving image editing capabilities for all image types.
+    """
     if not user_text or not isinstance(user_text, str):
         return []
     
     text = user_text.lower()
     matched = []
-    
-    for skill_id, skill in SKILLS_REGISTRY.items():
-        for trigger in skill.get("triggers", []):
-            if re.search(trigger, text, re.IGNORECASE):
-                matched.append(skill_id)
+
+    # Dynamically check registered anime characters if available
+    matches_registered_char = False
+    try:
+        from core.image_engine.illustrious.characters import get_characters
+        chars = get_characters(nsfw_enabled=True)
+        for char_key, char_data in chars.items():
+            words = char_key.split("_")
+            disp = char_data.get("display_name", "").lower().split()
+            for w in set(words + disp):
+                if len(w) > 2 and re.search(rf"\b{re.escape(w)}\b", text):
+                    matches_registered_char = True
+                    break
+            if matches_registered_char:
                 break
+    except Exception:
+        pass
+
+    # Check anime generation triggers
+    anime_skill = SKILLS_REGISTRY.get("anime_generation", {})
+    is_anime = matches_registered_char or any(
+        re.search(t, text, re.IGNORECASE) for t in anime_skill.get("triggers", [])
+    )
+    if is_anime:
+        matched.append("anime_generation")
+
+    # Check image studio triggers
+    is_edit = bool(
+        re.search(r"\b(?:edit|modify|alter|transform|change|inpaint)\s+(?:this\s+|the\s+)?image\b", text, re.IGNORECASE)
+        or re.search(r"\bchange\s+(?:her|his|their|the)\s+(?:outfit|clothes|hair|expression|background)\b", text, re.IGNORECASE)
+    )
+    is_photo_or_general = bool(
+        re.search(r"\bphotoreal\w*\b", text, re.IGNORECASE)
+        or re.search(r"\b(?:photo|picture)\s+of\b", text, re.IGNORECASE)
+        or re.search(r"\brealistic\b", text, re.IGNORECASE)
+    )
+    is_new_image = bool(
+        re.search(r"\b(?:generate|create|render|paint|draw|make)\s+(?:an?\s+)?image\b", text, re.IGNORECASE)
+    )
+
+    # Only include image_studio if it is an edit request OR if it's a non-anime image creation request
+    if is_edit or (not is_anime and (is_new_image or is_photo_or_general)):
+        matched.append("image_studio")
+
+    # Check terminal triggers
+    terminal_skill = SKILLS_REGISTRY.get("terminal", {})
+    if any(re.search(t, text, re.IGNORECASE) for t in terminal_skill.get("triggers", [])):
+        matched.append("terminal")
                 
     return matched
 

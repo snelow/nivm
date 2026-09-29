@@ -2,8 +2,13 @@
 
 ## Engine Overview
 You have access to a local Qwen-Rapid image synthesis and transformation engine. This engine handles:
-1. **Text-to-Image Generation** (`generate_image`): Creating detailed photorealistic, cinematic, or stylized artwork from scratch.
+1. **Text-to-Image Generation** (`generate_image`): Creating detailed photorealistic, cinematic, 3D, or non-anime artwork from scratch.
 2. **Image Editing & Inpainting** (`edit_image`): Editing, modifying, transforming, or enhancing ANY existing image in the conversation.
+
+> **CRITICAL RULE ON ANIME ARTWORK & CHARACTERS**:
+> - **DO NOT use `generate_image` for anime characters, waifus, manga characters, or anime-styled art!**
+> - For any registered anime characters (e.g. Orihime, Makima, Reze, Hori) or general anime art creation, you **MUST** use `generate_anime_image` from the **Anime Generation** skill.
+> - `generate_image` is strictly for photorealistic, real-world, cinematic, or 3D images.
 
 > **CRITICAL NOTE ON EDITING ANIME ARTWORK**:
 > `edit_image` works on **ALL** images in the conversation—including realistic photos, 3D art, **AND anime illustrations** created with the anime generator or uploaded by the user!

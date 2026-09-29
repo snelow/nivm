@@ -176,12 +176,26 @@ function _trackImageTask(taskId, progressCard, defaultFilename, successDesc, ori
 
         if (evtSource) evtSource.onmessage = (e) => { try { handleData(JSON.parse(e.data)); } catch (_) {} };
 
+        let consecutiveFetchFailures = 0;
         pollTimer = setInterval(async () => {
             if (completed) return;
             try {
                 const pRes = await fetch(`/api/image/task/${taskId}`);
-                if (pRes.ok) handleData(await pRes.json());
-            } catch (_) {}
+                if (pRes.ok) {
+                    consecutiveFetchFailures = 0;
+                    handleData(await pRes.json());
+                } else if (pRes.status === 404) {
+                    consecutiveFetchFailures++;
+                    if (consecutiveFetchFailures >= 5) {
+                        finishFail('Task not found on backend (server may have restarted)');
+                    }
+                }
+            } catch (_) {
+                consecutiveFetchFailures++;
+                if (consecutiveFetchFailures >= 15) {
+                    finishFail('Backend server is unreachable or offline');
+                }
+            }
         }, 1500);
     });
 }
@@ -369,6 +383,9 @@ export const tools = [
                 const taskId = data.task_id;
                 if (!taskId) throw new Error('No task_id returned from server');
                 progressCard.setTaskId(taskId);
+                if (data.prompt) {
+                    progressCard.setRawPrompt(data.prompt);
+                }
                 if (data.max_steps || data.steps) {
                     progressCard.update({ max_steps: data.max_steps || data.steps });
                 }
@@ -445,6 +462,9 @@ export const tools = [
                 const taskId = data.task_id;
                 if (!taskId) throw new Error('No task_id returned from server');
                 progressCard.setTaskId(taskId);
+                if (data.prompt) {
+                    progressCard.setRawPrompt(data.prompt);
+                }
                 if (data.max_steps || data.steps) {
                     progressCard.update({ max_steps: data.max_steps || data.steps });
                 }
@@ -574,6 +594,9 @@ export const tools = [
                 const origUrl = data.original_url || null;
                 if (!taskId) throw new Error('No task_id returned from server');
                 progressCard.setTaskId(taskId);
+                if (data.prompt) {
+                    progressCard.setRawPrompt(data.prompt);
+                }
                 if (data.max_steps || data.steps) {
                     progressCard.update({ max_steps: data.max_steps || data.steps });
                 }

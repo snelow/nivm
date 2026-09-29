@@ -303,7 +303,7 @@ export function getMessageText(content) {
 
 export function renderActiveChat() {
     const activeChat = state.conversations.find(c => c.id === state.activeChatId);
-    
+
     if (!activeChat || activeChat.messages.length === 0) {
         dom.welcomeHero.classList.remove('hidden');
         dom.messagesContainer.classList.add('hidden');
@@ -349,9 +349,9 @@ export function buildToolTraceHtml(command, argsStr, resultStr = null) {
     const isError = !isInterrupted && !isDenied && !isEndConvo && (resLower.includes('error') || resLower.includes('failed'));
     const [statusClass, statusText, statusIcon] = isEndConvo ? ['warning', 'Concluded', 'fa-lock']
         : isDenied ? ['warning', 'Denied', 'fa-ban']
-        : isInterrupted ? ['warning', 'Stopped', 'fa-circle-stop']
-        : isError ? ['error', 'Failed', 'fa-triangle-exclamation']
-        : ['success', 'Executed', 'fa-check'];
+            : isInterrupted ? ['warning', 'Stopped', 'fa-circle-stop']
+                : isError ? ['error', 'Failed', 'fa-triangle-exclamation']
+                    : ['success', 'Executed', 'fa-check'];
 
     const fullInv = `${command}(${clean})`;
     const escInv = escapeHtml(fullInv).replace(/'/g, "\\'");
@@ -388,34 +388,34 @@ export function buildToolTraceHtml(command, argsStr, resultStr = null) {
 function buildWaveformPlayer(audioUrl) {
     const container = document.createElement('div');
     container.className = 'waveform-player';
-    
+
     const playBtn = document.createElement('button');
     playBtn.className = 'waveform-play-btn';
     playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
-    
+
     const waveWrap = document.createElement('div');
     waveWrap.className = 'waveform-canvas-wrap';
-    
+
     const canvas = document.createElement('canvas');
     canvas.className = 'waveform-canvas';
     canvas.width = 220;
     canvas.height = 40;
     waveWrap.appendChild(canvas);
-    
+
     const timeLabel = document.createElement('span');
     timeLabel.className = 'waveform-time';
     timeLabel.textContent = '0:00';
-    
+
     container.appendChild(playBtn);
     container.appendChild(waveWrap);
     container.appendChild(timeLabel);
-    
+
     const audio = new Audio(audioUrl);
     audio.preload = 'metadata';
     let bars = [];
     let animFrame = null;
     let trueDuration = 0;
-    
+
     const formatTime = (s) => {
         if (isNaN(s) || !isFinite(s) || s < 0) return '0:00';
         const m = Math.floor(s / 60);
@@ -428,7 +428,7 @@ function buildWaveformPlayer(audioUrl) {
         if (isFinite(trueDuration) && trueDuration > 0) return trueDuration;
         return 0;
     };
-    
+
     // Generate pseudo-waveform bars (from audio data or random if unavailable)
     const generateBars = async () => {
         const numBars = 44;
@@ -463,33 +463,33 @@ function buildWaveformPlayer(audioUrl) {
         }
         drawWaveform();
     };
-    
+
     const drawWaveform = () => {
         const ctx = canvas.getContext('2d');
         const dpr = window.devicePixelRatio || 1;
         canvas.width = canvas.clientWidth * dpr;
         canvas.height = canvas.clientHeight * dpr;
         ctx.scale(dpr, dpr);
-        
+
         const w = canvas.clientWidth;
         const h = canvas.clientHeight;
         ctx.clearRect(0, 0, w, h);
-        
+
         if (bars.length === 0) return;
-        
+
         const barW = Math.max(2, (w / bars.length) * 0.6);
         const gap = w / bars.length;
         const dur = getDuration();
         const progress = dur > 0 ? audio.currentTime / dur : 0;
-        
+
         const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent-color').trim() || '#f4f4f5';
-        
+
         bars.forEach((val, i) => {
             const barH = Math.max(3, val * (h - 4));
             const x = i * gap + (gap - barW) / 2;
             const y = (h - barH) / 2;
             const barProgress = (i + 0.5) / bars.length;
-            
+
             ctx.beginPath();
             if (ctx.roundRect) {
                 ctx.roundRect(x, y, barW, barH, 1);
@@ -504,7 +504,7 @@ function buildWaveformPlayer(audioUrl) {
             ctx.fill();
         });
     };
-    
+
     const animLoop = () => {
         drawWaveform();
         timeLabel.textContent = formatTime(audio.currentTime);
@@ -512,7 +512,7 @@ function buildWaveformPlayer(audioUrl) {
             animFrame = requestAnimationFrame(animLoop);
         }
     };
-    
+
     playBtn.onclick = () => {
         if (audio.paused) {
             audio.play();
@@ -524,7 +524,7 @@ function buildWaveformPlayer(audioUrl) {
             if (animFrame) cancelAnimationFrame(animFrame);
         }
     };
-    
+
     audio.onended = () => {
         playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
         if (animFrame) cancelAnimationFrame(animFrame);
@@ -532,12 +532,12 @@ function buildWaveformPlayer(audioUrl) {
         const dur = getDuration();
         timeLabel.textContent = formatTime(dur);
     };
-    
+
     audio.onloadedmetadata = () => {
         const dur = getDuration();
         if (dur > 0) timeLabel.textContent = formatTime(dur);
     };
-    
+
     // Click-to-seek on canvas
     waveWrap.onclick = (e) => {
         const dur = getDuration();
@@ -548,9 +548,9 @@ function buildWaveformPlayer(audioUrl) {
         drawWaveform();
         timeLabel.textContent = formatTime(audio.currentTime);
     };
-    
+
     generateBars();
-    
+
     return container;
 }
 
@@ -562,14 +562,14 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
 
     const role = msg.role;
     const content = msg.content;
-    
+
     const row = document.createElement('div');
     row.className = `message-row ${role}-row`;
 
     const wrapper = document.createElement('div');
     wrapper.className = 'message-wrapper';
 
-    // Minimalist Skill Used Badge (No Emojis, Matches UI Theme)
+    // Minimalist Skill Used Badge
     if (role === 'assistant' && msg.skillsUsed && msg.skillsUsed.length > 0) {
         const badgeCont = document.createElement('div');
         badgeCont.className = 'skill-badge-container';
@@ -584,25 +584,25 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
 
     const bubble = document.createElement('div');
     bubble.className = 'message-bubble';
-    
+
     if (role === 'user') {
         if (Array.isArray(content)) {
             bubble.innerHTML = '';
             // Extract text and media
             const texts = content.filter(item => item.type === 'text');
             const mediaItems = content.filter(item => item.type === 'image_url' || item.type === 'video_url' || item.type === 'audio_url' || item.type === 'document_url');
-            
+
             if (mediaItems.length > 0) {
                 const gallery = document.createElement('div');
                 gallery.className = 'chat-media-gallery';
                 if (texts.length === 0) gallery.style.marginBottom = '0';
-                
+
                 mediaItems.forEach(item => {
                     const isVideo = item.type === 'video_url';
                     const isAudio = item.type === 'audio_url';
                     const isDocument = item.type === 'document_url';
                     const url = isVideo ? item.video_url.url : (isAudio ? item.audio_url.url : (isDocument ? item.document_url.url : item.image_url.url));
-                    
+
                     if (isAudio) {
                         const player = buildWaveformPlayer(url);
                         gallery.appendChild(player);
@@ -644,7 +644,7 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
                 });
                 bubble.appendChild(gallery);
             }
-            
+
             texts.forEach(item => {
                 const txt = document.createElement('div');
                 txt.textContent = item.text;
@@ -733,14 +733,14 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
             .replace(/<(think|thought|reasoning)>[\s\S]*?<\/\1>/gi, '')
             .replace(/<(think|thought|reasoning)>[\s\S]*$/gi, '')
             .trim();
-        
+
         let completedThoughtContent = '';
         const mThought = textWithoutTool.match(/<(think|thought|reasoning)>([\s\S]*?)<\/\1>/i);
         if (mThought && mThought[2].trim()) {
             completedThoughtContent = mThought[2].trim();
         }
         const hasCompletedThought = Boolean(completedThoughtContent);
-        
+
         let toolCommand = msg.toolExecution?.command || detectedTool?.command || null;
         let argsStr = msg.toolExecution?.argsStr || detectedTool?.argsStr || null;
         let resultStr = msg.toolExecution?.resultStr || null;
@@ -879,7 +879,7 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
             }
 
             const sysBubbleHtml = buildToolTraceHtml(toolCommand, argsStr, resultStr);
-            
+
             if (textOutsideThoughts === '' && !hasCompletedThought) {
                 // Pure tool step: remove wrapper and render only the clean tool badge
                 wrapper.remove();
@@ -899,15 +899,15 @@ export function appendMessageToDOM(msg, isStreaming = false, msgIndex = null, al
         requestAnimationFrame(() => {
             if (bubble.scrollHeight > 160) {
                 bubble.classList.add('collapsible-text');
-                
+
                 const overlay = document.createElement('div');
                 overlay.className = 'collapse-overlay';
                 overlay.innerHTML = '<i class="fa-solid fa-chevron-down"></i>';
-                
+
                 overlay.onclick = () => {
                     bubble.classList.toggle('expanded');
                 };
-                
+
                 bubble.appendChild(overlay);
             }
         });
@@ -1410,7 +1410,7 @@ export function attachCodeCopyButtons(container) {
 
         const header = document.createElement('div');
         header.className = 'code-header';
-        
+
         const langLabel = document.createElement('span');
         langLabel.textContent = lang;
 

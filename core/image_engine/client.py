@@ -362,10 +362,12 @@ async def execute_image_workflow(
 
     # Fallback to poll history until job finishes if WebSocket closed or images not yet captured
     if not output_images:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            consecutive_conn_errors = 0
             while time.time() - start_time < timeout_seconds and not output_images:
                 try:
                     hist_resp = await client.get(f"{base_url}/history/{prompt_id}")
+                    consecutive_conn_errors = 0
                     if hist_resp.status_code == 200:
                         hist_data = hist_resp.json().get(prompt_id, {})
                         outputs = hist_data.get("outputs", {})
@@ -379,6 +381,10 @@ async def execute_image_workflow(
                             for msg_tuple in status_info.get("messages", []):
                                 if len(msg_tuple) > 1 and "execution_error" in str(msg_tuple[0]):
                                     raise RuntimeError(f"ComfyUI diffusion error: {msg_tuple[1]}")
+                except (httpx.ConnectError, httpx.ConnectTimeout):
+                    consecutive_conn_errors += 1
+                    if consecutive_conn_errors >= 2:
+                        raise RuntimeError("ComfyUI backend crashed or disconnected. Please start ComfyUI with run_comfy.sh (--lowvram).")
                 except Exception as poll_err:
                     if isinstance(poll_err, RuntimeError):
                         raise

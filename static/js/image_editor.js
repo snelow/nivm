@@ -219,19 +219,67 @@ export function createImageProgressCard(promptText, isEdit = false, requestedAsp
     const promptWrapper = card.querySelector('.gen-prompt-wrapper');
     const promptTextEl = card.querySelector('.gen-prompt-text');
     const promptChevron = card.querySelector('.prompt-expand-chevron');
+    let isPromptExpanded = false;
+    let rawPromptText = '';
+
+    const rawPromptEl = document.createElement('div');
+    rawPromptEl.className = 'gen-raw-prompt-box';
+    rawPromptEl.style.cssText = `
+        display: none;
+        margin-top: 8px;
+        padding: 8px 10px;
+        background: rgba(0, 0, 0, 0.45);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 6px;
+        font-family: var(--font-mono, monospace);
+        font-size: 0.72rem;
+        color: #94a3b8;
+        line-height: 1.45;
+        word-break: break-word;
+        user-select: text;
+    `;
+    if (promptWrapper) {
+        promptWrapper.appendChild(rawPromptEl);
+    }
+
     if (promptWrapper && promptTextEl && promptChevron) {
-        let isPromptExpanded = false;
         promptWrapper.onclick = () => {
             isPromptExpanded = !isPromptExpanded;
             if (isPromptExpanded) {
                 promptTextEl.style.whiteSpace = 'normal';
                 promptChevron.style.transform = 'rotate(180deg)';
+                if (rawPromptText) rawPromptEl.style.display = 'block';
             } else {
                 promptTextEl.style.whiteSpace = 'nowrap';
                 promptChevron.style.transform = 'rotate(0deg)';
+                rawPromptEl.style.display = 'none';
             }
         };
     }
+
+    card.setRawPrompt = (raw) => {
+        if (!raw) return;
+        rawPromptText = raw;
+        rawPromptEl.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 3px;">
+                <span style="color: var(--text-primary, #f1f5f9); font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Raw Engine Prompt</span>
+                <button type="button" class="copy-raw-prompt-btn" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: #38bdf8; font-size: 0.65rem; padding: 1px 6px; cursor: pointer;">Copy</button>
+            </div>
+            <div style="color: #cbd5e1;">${escapeHtml(raw)}</div>
+        `;
+        const copyBtn = rawPromptEl.querySelector('.copy-raw-prompt-btn');
+        if (copyBtn) {
+            copyBtn.onclick = (e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(raw);
+                copyBtn.textContent = 'Copied!';
+                setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+            };
+        }
+        if (isPromptExpanded) {
+            rawPromptEl.style.display = 'block';
+        }
+    };
 
     let currentTaskId = null;
     let onStopCallback = null;

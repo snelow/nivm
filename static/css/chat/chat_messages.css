@@ -346,7 +346,7 @@
 }
 
 .skill-badge-name {
-    color: var(--accent-light, #c084fc);
+    color: var(--text-primary);
     font-weight: 600;
     letter-spacing: 0.02em;
 }

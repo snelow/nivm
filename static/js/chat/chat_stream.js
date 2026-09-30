@@ -236,7 +236,7 @@ CRITICAL SPOKEN CONVERSATION RULES:
 
     activeChat.messages.forEach(m => payloadMessages.push({ role: m.role, content: m.content }));
 
-    const assistantMsg = { role: 'assistant', content: '', skillsUsed: [...activeSkillsForTurn] };
+    const assistantMsg = { role: 'assistant', content: '', skillsUsed: [] };
     activeChat.messages.push(assistantMsg);
     const turnChatId = activeChat.id;
 

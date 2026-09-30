@@ -3,6 +3,7 @@ from .skill_manager import (
     get_skill_content,
     detect_skills_for_prompt,
     build_skills_instruction,
+    SKILLS_REGISTRY,
 )
 
 __all__ = [
@@ -10,4 +11,5 @@ __all__ = [
     "get_skill_content",
     "detect_skills_for_prompt",
     "build_skills_instruction",
+    "SKILLS_REGISTRY",
 ]

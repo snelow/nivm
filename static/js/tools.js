@@ -250,7 +250,14 @@ export const tools = [
         instruction: 'Call this when you need detailed parameter documentation, examples, or capabilities for a skill.',
         usageFormat: 'TOOL_CALL: read_skill(skill_name)',
         execute: async (argsStr) => {
-            let skillId = argsStr ? argsStr.trim().replace(/^['"]|['"]$/g, '') : '';
+            let skillId = (argsStr || '').trim();
+            if (skillId.startsWith('{') && skillId.endsWith('}')) {
+                try {
+                    const parsed = JSON.parse(skillId);
+                    skillId = parsed.skill || parsed.skill_name || parsed.id || parsed.name || skillId;
+                } catch (_) {}
+            }
+            skillId = skillId.replace(/^['"\s\(\)]+|['"\s\(\)]+$/g, '').toLowerCase();
             if (!skillId) return 'Error: No skill specified to read. Available skills: anime_generation, image_studio, terminal';
             try {
                 const res = await fetch(`/api/skills/${encodeURIComponent(skillId)}`);

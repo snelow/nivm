@@ -6,7 +6,7 @@ import { tools, buildToolsInstruction, parseToolCall, stripToolCallFromText, TOO
 import { renderActiveChat, appendMessageToDOM, scrollToBottom, toggleSendStopButtons, updateAssistantBubble, updateMessageActionIcons, buildToolTraceHtml, updateChatInputState, sealUnclosedThoughts } from './chat_messages.js';
 import { renderChatHistory, createNewChat } from './chat_history.js';
 import { clearAttachedImage, isVisionSupported } from '../media/media_manager.js';
-import { generateChatTitle, uploadImage } from '../api.js';
+import { generateChatTitle, uploadImage, fetchEngineStatus } from '../api.js';
 import { voiceConfig, speakText, stopSpeaking, setVoiceOrbGeneratingState } from '../voice.js';
 import { showAlert, showNotification } from '../modals/dialogs.js';
 import { populateStatsModal } from '../modals/tools_settings.js';
@@ -304,7 +304,12 @@ CRITICAL SPOKEN CONVERSATION RULES:
         });
 
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            let errDetail = `${response.status} ${response.statusText}`;
+            try {
+                const errJson = await response.json();
+                if (errJson?.detail) errDetail = errJson.detail;
+            } catch (_) {}
+            throw new Error(`HTTP error! status: ${errDetail}`);
         }
 
         const reader = response.body.getReader();
@@ -731,6 +736,9 @@ CRITICAL SPOKEN CONVERSATION RULES:
             saveConversations();
 
             if (state.activeChatId === turnChatId) {
+                if (isImageTool) {
+                    await fetchEngineStatus().catch(() => {});
+                }
                 setTimeout(() => sendMessage(null, true), 100);
             }
         } else {

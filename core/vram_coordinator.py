@@ -42,22 +42,26 @@ def prepare_vram_for_image_generation() -> Optional[Dict[str, Any]]:
     If VRAM is constrained, unloads the LLM and flushes CUDA cache.
     Returns saved state for subsequent restoration.
     """
+    active_role = model_manager.active_role
+    if not active_role:
+        try:
+            from .storage import get_user_settings
+            active_role = get_user_settings().get("single_model_role", "custom")
+        except Exception:
+            active_role = "custom"
+
+    custom_path = model_manager.loaded_paths.get(active_role) if (active_role and active_role in model_manager.loaded_paths) else None
+
     if not should_unload_llm():
         logger.info("Sufficient VRAM detected (>=16GB or CPU); keeping LLM resident.")
-        return None
+        return {"active_role": None, "skip_reload": True}
 
-    if not model_manager.has_any_loaded():
-        return None
-
-    active_role = model_manager.active_role
-    custom_path = model_manager.loaded_paths.get(active_role) if active_role else None
-
-    logger.warning(
-        f"Constrained VRAM detected (<16GB). Temporarily unloading active LLM ({active_role}) "
-        "to dedicate 100% of GPU VRAM to image diffusion."
-    )
-
-    model_manager.unload_all()
+    if model_manager.has_any_loaded():
+        logger.warning(
+            f"Constrained VRAM detected (<16GB). Temporarily unloading active LLM ({active_role}) "
+            "to dedicate 100% of GPU VRAM to image diffusion."
+        )
+        model_manager.unload_all()
 
     # Multiple gc passes to break any reference cycles holding ggml contexts alive
     for _ in range(3):
@@ -114,6 +118,7 @@ def prepare_vram_for_image_generation() -> Optional[Dict[str, Any]]:
     return {
         "active_role": active_role,
         "custom_path": custom_path,
+        "skip_reload": False
     }
 
 
@@ -123,12 +128,6 @@ async def restore_vram_after_image_generation_async(saved_state: Optional[Dict[s
     Called after diffusion completes (or errors).
     Tells ComfyUI to free GPU memory, clears CUDA cache, and restores the previously active LLM.
     """
-    if not saved_state or not saved_state.get("active_role"):
-        return
-
-    active_role = saved_state["active_role"]
-    logger.info(f"Restoring active LLM ({active_role}) into memory...")
-
     # 1. Ask ComfyUI to release diffusion model weights from VRAM
     try:
         import httpx
@@ -156,6 +155,19 @@ async def restore_vram_after_image_generation_async(saved_state: Optional[Dict[s
     import asyncio
     await asyncio.sleep(0.5)
 
+    if not saved_state or saved_state.get("skip_reload"):
+        return
+
+    active_role = saved_state.get("active_role")
+    if not active_role:
+        try:
+            from .storage import get_user_settings
+            active_role = get_user_settings().get("single_model_role", "custom")
+        except Exception:
+            active_role = "custom"
+
+    logger.info(f"Restoring active LLM ({active_role}) into memory...")
+
     # 3. Reload active LLM into llama.cpp
     try:
         await asyncio.to_thread(model_manager.activate, active_role)
@@ -168,10 +180,36 @@ def restore_vram_after_image_generation(saved_state: Optional[Dict[str, Any]]):
     """
     Synchronous fallback wrapper for LLM restoration.
     """
-    if not saved_state or not saved_state.get("active_role"):
+    try:
+        import httpx
+        from .image_engine.config import COMFY_HOST, COMFY_PORT
+        with httpx.Client(timeout=6.0) as client:
+            client.post(
+                f"http://{COMFY_HOST}:{COMFY_PORT}/free",
+                json={"unload_models": True, "free_memory": True}
+            )
+    except Exception:
+        pass
+
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+    gc.collect()
+
+    if not saved_state or saved_state.get("skip_reload"):
         return
 
-    active_role = saved_state["active_role"]
+    active_role = saved_state.get("active_role")
+    if not active_role:
+        try:
+            from .storage import get_user_settings
+            active_role = get_user_settings().get("single_model_role", "custom")
+        except Exception:
+            active_role = "custom"
+
     logger.info(f"Restoring active LLM ({active_role}) into llama.cpp memory (sync)...")
 
     try:

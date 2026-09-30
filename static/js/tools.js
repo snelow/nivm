@@ -1,5 +1,5 @@
 import { state, saveConversations } from './state.js';
-import { executeTerminalAPI } from './api.js';
+import { executeTerminalAPI, fetchEngineStatus } from './api.js';
 import { createImageProgressCard, saveImageDuration } from './image_editor.js';
 import { normalizeThinkTags } from './think_tags.js';
 
@@ -115,6 +115,7 @@ function _trackImageTask(taskId, progressCard, defaultFilename, successDesc, ori
             if (completed) return;
             completed = true;
             cleanup();
+            fetchEngineStatus().catch(() => {});
             const srcUrl = finalOrigUrl || originalUrl;
             const durationSec = progressCard.finish(imgData.url, srcUrl) || null;
             const filename = imgData.filename || (imgData.url ? imgData.url.split('/').pop() : defaultFilename);
@@ -128,6 +129,7 @@ function _trackImageTask(taskId, progressCard, defaultFilename, successDesc, ori
             if (completed) return;
             completed = true;
             cleanup();
+            fetchEngineStatus().catch(() => {});
             progressCard.stop(reason || 'Generation stopped by user');
             resolve(`[GENERATION INTERRUPTED] Image processing was explicitly stopped/cancelled by the user. No image was generated.`);
         };
@@ -136,6 +138,7 @@ function _trackImageTask(taskId, progressCard, defaultFilename, successDesc, ori
             if (completed) return;
             completed = true;
             cleanup();
+            fetchEngineStatus().catch(() => {});
             progressCard.fail(errMsg || 'Generation failed');
             resolve(`[GENERATION FAILED] Image processing failed: ${errMsg || 'Unknown error'}. No image was produced.`);
         };

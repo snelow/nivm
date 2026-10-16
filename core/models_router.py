@@ -366,10 +366,7 @@ async def engine_smart_toggle():
         settings = get_user_settings()
         inference_mode = settings.get("inference_mode", "single")
 
-        if inference_mode == "single":
-            role = settings.get("single_model_role", "coder")
-        else:
-            role = get_resident_role()
+        role = settings.get("single_model_role", "custom")
 
         try:
             swap_time = await asyncio.to_thread(model_manager.activate, role)

@@ -50,7 +50,7 @@ def prepare_vram_for_image_generation() -> Optional[Dict[str, Any]]:
         except Exception:
             active_role = "custom"
 
-    custom_path = model_manager.loaded_paths.get(active_role) if (active_role and active_role in model_manager.loaded_paths) else None
+    custom_path = model_manager.active_path or None
 
     if not should_unload_llm():
         logger.info("Sufficient VRAM detected (>=16GB or CPU); keeping LLM resident.")
@@ -63,25 +63,7 @@ def prepare_vram_for_image_generation() -> Optional[Dict[str, Any]]:
         )
         model_manager.unload_all()
 
-    # Multiple gc passes to break any reference cycles holding ggml contexts alive
-    for _ in range(3):
-        gc.collect()
-
-    # llama-cpp-python allocates CUDA memory through ggml's own CUDA backend
-    # (cuBLAS/cuMemAlloc), NOT through PyTorch. torch.cuda.empty_cache() has
-    # zero effect on those allocations. We need to explicitly free ggml's backend.
-    try:
-        import llama_cpp
-        if hasattr(llama_cpp, 'llama_backend_free'):
-            llama_cpp.llama_backend_free()
-            logger.info("Called llama_backend_free() to release ggml CUDA allocations.")
-            # Re-initialize the backend so it's ready when we reload later
-            if hasattr(llama_cpp, 'llama_backend_init'):
-                llama_cpp.llama_backend_init()
-    except Exception as e:
-        logger.debug(f"llama_backend_free not available or failed: {e}")
-
-    # Flush PyTorch CUDA cache (helps if any PyTorch ops were used, e.g. mmproj)
+    # Flush residual PyTorch CUDA cache
     try:
         import torch
         if torch.cuda.is_available():

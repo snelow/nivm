@@ -33,8 +33,8 @@ class SettingsModel(BaseModel):
     model_config = {"extra": "allow"}
 
     engine_mode: str = "native"
-    inference_mode: str = "single"          # "single", "routing", or "api"
-    single_model_role: str = "coder"         # which role to use in single mode
+    inference_mode: str = "single"          # "single" or "api"
+    single_model_role: str = "custom"        # default local role
 
     # API Mode settings
     api_base_url: str = "https://api.groq.com/openai/v1"
@@ -42,47 +42,6 @@ class SettingsModel(BaseModel):
     api_key: str = ""
     api_model: str = "llama-3.3-70b-versatile"
     api_multimodal: Optional[bool] = None
-
-    # Legacy flat settings (kept for backward compat)
-    native_gpu_layers: int = -1
-    native_ctx: int = 8192
-    native_batch: int = 512
-    native_flash_attn: bool = True
-    native_offload_kqv: bool = True
-    native_use_mlock: bool = False
-    native_use_mmap: bool = True
-    native_kv_type: str = "q4_0"
-
-    # Per-role: Router
-    router_gpu_layers: int = -1
-    router_ctx: int = 8192
-    router_batch: int = 512
-    router_flash_attn: bool = True
-    router_offload_kqv: bool = True
-    router_use_mlock: bool = False
-    router_use_mmap: bool = True
-    router_kv_type: str = "f16"
-
-    # Per-role: Coder
-    coder_gpu_layers: int = -1
-    coder_ctx: int = 8192
-    coder_batch: int = 1024
-    coder_flash_attn: bool = True
-    coder_offload_kqv: bool = True
-    coder_use_mlock: bool = False
-    coder_use_mmap: bool = True
-    coder_kv_type: str = "q8_0"
-
-    # Per-role: Vision
-    vision_gpu_layers: int = -1
-    vision_ctx: int = 32768
-    vision_batch: int = 1024
-    vision_flash_attn: bool = True
-    vision_offload_kqv: bool = True
-    vision_use_mlock: bool = False
-    vision_use_mmap: bool = True
-    vision_kv_type: str = "q4_0"
-    vision_mmproj_use_gpu: bool = True
 
     # Custom model selection & path history
     custom_model_path: str = ""
@@ -176,12 +135,13 @@ def _get_role_overrides(settings: dict, role: str) -> dict:
 
 
 def _apply_all_overrides():
-    """Read user settings and apply per-role overrides to MODEL_REGISTRY."""
+    """Read user settings and apply overrides to MODEL_REGISTRY for the local model."""
     settings = get_user_settings()
-    for role in ["router", "coder", "vision", "custom"]:
-        overrides = _get_role_overrides(settings, role)
-        if overrides:
-            model_manager.apply_user_overrides(role, overrides)
+    overrides = _get_role_overrides(settings, "custom")
+    if not overrides:
+        overrides = _get_role_overrides(settings, "single")
+    if overrides:
+        model_manager.apply_user_overrides("custom", overrides)
 
     # Custom model path override
     custom_path = settings.get("custom_model_path", "").strip()
@@ -195,7 +155,6 @@ def _apply_all_overrides():
     model_manager.apply_user_overrides("custom", {
         "mmproj_path": custom_mmproj,
         "mmproj_use_gpu": settings.get("custom_mmproj_use_gpu", True),
-        "chat_handler_type": settings.get("custom_chat_handler", "auto")
     })
 
     # Restore last known good paths

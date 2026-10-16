@@ -69,47 +69,12 @@ class DetokenizeRequest(BaseModel):
 
 # Helper functions
 
-def _resolve_text_role(requested_model: Optional[str]) -> str:
+def _resolve_text_role(requested_model: Optional[str] = None) -> str:
     """
     Resolve which role to use for text requests.
-    Enforces text-only constraints.
+    Enforces text-only constraints and routes to the local custom model.
     """
-    from main import get_user_settings, _apply_all_overrides
-    _apply_all_overrides()
-    settings = get_user_settings()
-
-    if requested_model:
-        req = requested_model.strip().lower()
-        if req == "vision":
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": {
-                        "message": "Vision model is disabled on the text API endpoint.",
-                        "type": "invalid_request_error",
-                        "code": "vision_disabled"
-                    }
-                }
-            )
-        for role, reg in MODEL_REGISTRY.items():
-            if role == "vision":
-                continue
-            if req == role or req == reg.get("name", "").lower():
-                return role
-            path = reg.get("path") or ""
-            if req == os.path.basename(path).lower():
-                return role
-
-    # No specific model requested: obey inference_mode
-    inference_mode = settings.get("inference_mode", "single")
-    if inference_mode == "single":
-        single_role = settings.get("single_model_role", "coder")
-        if single_role == "vision":
-            return "coder" if model_manager.get_model_path("coder") else "custom"
-        return single_role
-
-    # Routing mode: default to coder for technical/general text tasks
-    return "coder" if model_manager.get_model_path("coder") else "router"
+    return "custom"
 
 
 def _check_text_only(messages: List[ChatMessage]):
@@ -146,8 +111,6 @@ async def list_models():
     available = model_manager.list_available()
     data = []
     for role, info in available.items():
-        if role == "vision":
-            continue  # API is strictly text-only
         if info.get("available"):
             data.append({
                 "id": role,
@@ -170,11 +133,6 @@ async def list_models():
 @router.get("/api/v1/models/{model_id}")
 async def get_model(model_id: str):
     """Get metadata for a single model."""
-    if model_id == "vision":
-        raise HTTPException(
-            status_code=400,
-            detail={"error": {"message": "Vision model is disabled on the text API.", "type": "invalid_request_error"}}
-        )
     available = model_manager.list_available()
     if model_id in available and available[model_id].get("available"):
         info = available[model_id]
@@ -442,14 +400,7 @@ async def tokenize_endpoint(req: TokenizeRequest):
     Raw token inspection endpoint.
     Returns exact token IDs, token pieces, and count using the local model's tokenizer.
     """
-    role = req.role or req.model
-    if not role or role == "vision":
-        from main import get_user_settings, _apply_all_overrides
-        _apply_all_overrides()
-        settings = get_user_settings()
-        role = settings.get("single_model_role", "coder")
-        if role == "vision":
-            role = "coder" if model_manager.get_model_path("coder") else "custom"
+    role = req.role or req.model or "custom"
 
     tokens = model_manager.tokenize(req.text, role=role)
     pieces = model_manager.get_token_pieces(tokens, role=role)
@@ -471,14 +422,7 @@ async def detokenize_endpoint(req: DetokenizeRequest):
     Raw token decode endpoint.
     Decodes token IDs back into string text using the local model.
     """
-    role = req.role or req.model
-    if not role or role == "vision":
-        from main import get_user_settings, _apply_all_overrides
-        _apply_all_overrides()
-        settings = get_user_settings()
-        role = settings.get("single_model_role", "coder")
-        if role == "vision":
-            role = "coder" if model_manager.get_model_path("coder") else "custom"
+    role = req.role or req.model or "custom"
 
     text = model_manager.detokenize(req.tokens, role=role)
     active_info = model_manager.get_active_info()

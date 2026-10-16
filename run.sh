@@ -253,18 +253,76 @@ if [ -d "/usr/local/cuda/bin" ] && [[ ":$PATH:" != *":/usr/local/cuda/bin:"* ]];
     export PATH="/usr/local/cuda/bin:$PATH"
 fi
 
-for CUDA_LIB in "/usr/local/cuda/lib64" "/usr/local/cuda-13.2/lib64" "$HOME/.local/lib/python3.14/site-packages/nvidia/cudnn/lib" "/home/blubvlub/.local/lib/python3.14/site-packages/nvidia/cudnn/lib"; do
+for CUDA_LIB in "/usr/local/cuda/lib64" "/usr/local/cuda-13.2/lib64" "$HOME/.local/lib/python*/site-packages/nvidia/cudnn/lib"; do
     if [ -d "$CUDA_LIB" ]; then
         export LD_LIBRARY_PATH="$CUDA_LIB:${LD_LIBRARY_PATH:-}"
     fi
 done
 
-# Verify llama-cpp acceleration backend
-CUDA_CHECK=$(python -c "import llama_cpp, subprocess; print('CUDA' if 'cuda' in subprocess.check_output(['ldd', llama_cpp.llama_cpp._lib._name]).decode().lower() else 'CPU')" 2>/dev/null || echo "Unknown")
-if [ "$CUDA_CHECK" = "CUDA" ]; then
-    LLAMA_INFO="CUDA (GPU Hardware Acceleration Active)"
+# Include project-local bin/ in LD_LIBRARY_PATH for companion libraries (.so)
+if [ -d "$PWD/bin" ]; then
+    export LD_LIBRARY_PATH="$PWD/bin:${LD_LIBRARY_PATH:-}"
+fi
+
+# Bundled llama-server engine setup
+BIN_DIR="bin"
+LLAMA_SERVER="$BIN_DIR/llama-server"
+mkdir -p "$BIN_DIR"
+
+if [ ! -x "$LLAMA_SERVER" ] || [ "$FORCE_SETUP" = "true" ]; then
+    echo -e "${YELLOW}[+] Setting up bundled native llama-server...${NC}"
+
+    # 1. Check local source cache
+    NOA_BIN="/home/blubvlub/Desktop/Projects/noa/bin/cuda"
+    if [ -d "$NOA_BIN" ] && [ -x "$NOA_BIN/llama-server" ]; then
+        echo -e "  • Deploying verified CUDA llama-server from local source..."
+        cp -a "$NOA_BIN"/* "$BIN_DIR/"
+        chmod +x "$LLAMA_SERVER" 2>/dev/null || true
+    fi
+
+    # 2. Automated download fallback from official release
+    if [ ! -x "$LLAMA_SERVER" ]; then
+        ARCH=$(uname -m)
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        echo -e "  • Detecting hardware (Arch: $ARCH, OS: $OS)..."
+        TMP_ZIP=$(mktemp)
+        GITHUB_REPO="ggerganov/llama.cpp"
+        DOWNLOAD_URL=""
+
+        if [ "$OS" = "linux" ] && [ "$ARCH" = "x86_64" ]; then
+            if command -v nvidia-smi &>/dev/null; then
+                DOWNLOAD_URL=$(curl -s "https://api.github.com/repos/$GITHUB_REPO/releases/latest" | grep "browser_download_url" | grep -i "bin-cuda-cu12" | grep "x64.zip" | head -n 1 | cut -d '"' -f 4)
+            fi
+            if [ -z "$DOWNLOAD_URL" ]; then
+                DOWNLOAD_URL=$(curl -s "https://api.github.com/repos/$GITHUB_REPO/releases/latest" | grep "browser_download_url" | grep -i "bin-ubuntu-x64.zip" | head -n 1 | cut -d '"' -f 4)
+            fi
+        elif [ "$OS" = "darwin" ]; then
+            DOWNLOAD_URL=$(curl -s "https://api.github.com/repos/$GITHUB_REPO/releases/latest" | grep "browser_download_url" | grep -i "bin-macos" | head -n 1 | cut -d '"' -f 4)
+        fi
+
+        if [ -n "$DOWNLOAD_URL" ]; then
+            echo -e "  • Downloading precompiled release from GitHub..."
+            curl -L -# -o "$TMP_ZIP" "$DOWNLOAD_URL"
+            unzip -q -o "$TMP_ZIP" -d "$BIN_DIR/"
+            rm -f "$TMP_ZIP"
+            chmod +x "$LLAMA_SERVER" 2>/dev/null || true
+        else
+            echo -e "${RED}[!] Could not resolve automatic llama-server download.${NC}"
+            echo -e "    Please place the compiled 'llama-server' binary into $BIN_DIR/"
+        fi
+    fi
+fi
+
+# Determine llama-server backend status
+if [ -x "$LLAMA_SERVER" ]; then
+    SERVER_VER=$("$LLAMA_SERVER" --version 2>&1 | head -n 1 | awk '{print $2}' || echo "native")
+    if ldd "$LLAMA_SERVER" 2>/dev/null | grep -qi "cuda"; then
+        LLAMA_INFO="llama-server v${SERVER_VER} (Bundled CUDA C++ Native)"
+    else
+        LLAMA_INFO="llama-server v${SERVER_VER} (Bundled CPU C++ Native)"
+    fi
 else
-    LLAMA_INFO="CPU Mode (libggml-cuda not detected)"
+    LLAMA_INFO="Missing (Run ./run.sh --setup)"
 fi
 
 # Neural TTS engine setup (Kokoro v1.0)

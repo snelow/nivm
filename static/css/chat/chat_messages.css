@@ -351,4 +351,39 @@
     letter-spacing: 0.02em;
 }
 
+/* Context limit notification block in assistant message */
+.context-limit-block {
+    margin-top: 14px;
+    padding: 14px 16px;
+    background: rgba(244, 63, 94, 0.08);
+    border: 1px solid rgba(244, 63, 94, 0.3);
+    border-radius: var(--radius-md, 12px);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    animation: messageReveal 0.3s ease;
+}
+
+.context-limit-header {
+    color: var(--accent-rose, #f43f5e);
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.context-limit-desc {
+    font-size: 0.88rem;
+    color: var(--text-secondary, #a1a1aa);
+    line-height: 1.45;
+    margin-bottom: 12px;
+}
+
+.context-limit-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
 

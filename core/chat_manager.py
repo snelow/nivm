@@ -312,6 +312,7 @@ class ChatGenerationManager:
             job.broadcast_chunk(f"data: {json.dumps(meta_chunk)}\n\n")
 
             token_count = 0
+            last_finish_reason = None
             client = get_shared_api_client()
 
             for attempt in range(3):
@@ -321,7 +322,12 @@ class ChatGenerationManager:
                             err_body = await resp.aread()
                             err_text = err_body.decode("utf-8", errors="replace")
                             logger.error(f"External API error {resp.status_code}: {err_text}")
-                            job.broadcast_chunk(f"data: {json.dumps({'error': f'API Error {resp.status_code}: {err_text}'})}\n\n")
+                            is_ctx = any(k in err_text.lower() for k in [
+                                "context window", "maximum context length", "exceeds context", "context limit",
+                                "n_ctx exceeded", "too many tokens", "prompt is too long", "context length exceeded",
+                                "context size exceeded", "context full"
+                            ])
+                            job.broadcast_chunk(f"data: {json.dumps({'error': f'API Error {resp.status_code}: {err_text}', 'is_context_limit': is_ctx})}\n\n")
                             job.finish(status="error", error=err_text)
                             return
 
@@ -340,7 +346,11 @@ class ChatGenerationManager:
                                     chunk = json.loads(data_str)
                                     job.broadcast_chunk(f"{line}\n\n")
                                     if "choices" in chunk and len(chunk["choices"]) > 0:
-                                        delta = chunk["choices"][0].get("delta", {})
+                                        c_first = chunk["choices"][0]
+                                        c_finish = c_first.get("finish_reason")
+                                        if c_finish:
+                                            last_finish_reason = c_finish
+                                        delta = c_first.get("delta", {})
                                         if "content" in delta and delta["content"]:
                                             job.full_text += delta["content"]
                                             token_count += 1
@@ -366,9 +376,11 @@ class ChatGenerationManager:
             tk_s = token_count / elapsed if elapsed > 0 else 0
             prompt_len = sum(_calc_tokens(m.get("content")) for m in clean_messages)
 
+            finish_val = last_finish_reason or "stop"
             usage_chunk = {
                 "object": "chat.completion.chunk",
-                "choices": [{"delta": {"content": ""}, "index": 0, "finish_reason": "stop"}],
+                "choices": [{"delta": {"content": ""}, "index": 0, "finish_reason": finish_val}],
+                "is_context_limit": finish_val in ("length", "max_tokens"),
                 "usage": {
                     "prompt_tokens": prompt_len,
                     "completion_tokens": token_count,
@@ -506,10 +518,14 @@ class ChatGenerationManager:
             }
             job.broadcast_chunk(f"data: {json.dumps(meta_chunk)}\n\n")
 
-            token_count = 0
             loop = asyncio.get_running_loop()
+            server_timings = {}
+            server_usage = {}
+            first_token_time = None
 
+            last_finish_reason = None
             def sync_generate():
+                nonlocal first_token_time, last_finish_reason
                 for chunk in model_manager.generate(
                     messages, max_tokens, temperature, top_p,
                     stream=True, repeat_penalty=repeat_penalty,
@@ -521,14 +537,27 @@ class ChatGenerationManager:
                         job.broadcast_chunk, f"data: {json.dumps(chunk)}\n\n"
                     )
                     try:
+                        if "timings" in chunk and isinstance(chunk["timings"], dict):
+                            server_timings.update(chunk["timings"])
+                        if "usage" in chunk and isinstance(chunk["usage"], dict):
+                            server_usage.update(chunk["usage"])
                         if "choices" in chunk and len(chunk["choices"]) > 0:
-                            delta = chunk["choices"][0].get("delta", {})
+                            c_first = chunk["choices"][0]
+                            c_finish = c_first.get("finish_reason")
+                            if c_finish:
+                                last_finish_reason = c_finish
+                            delta = c_first.get("delta", {})
+                            has_content = False
                             if "content" in delta and delta["content"]:
                                 piece = delta["content"].replace("<|im_end|>", "").replace("<|im_start|>", "")
                                 job.full_text += piece
+                                has_content = True
                             if "reasoning_content" in delta and delta["reasoning_content"]:
                                 r_piece = delta["reasoning_content"].replace("<|im_end|>", "").replace("<|im_start|>", "")
                                 job.reasoning_text += r_piece
+                                has_content = True
+                            if has_content and first_token_time is None:
+                                first_token_time = time.time()
                     except Exception:
                         pass
 
@@ -545,29 +574,39 @@ class ChatGenerationManager:
 
             elapsed = time.time() - start_time
             raw_tokens = []
-            completion_tokens = len(job.full_text.split())
-            prompt_tokens = 0
+            completion_tokens = int(server_usage.get("completion_tokens") or len(job.full_text.split()))
+            prompt_tokens = int(server_usage.get("prompt_tokens") or 0)
             try:
                 raw_tokens = model_manager.tokenize(job.full_text, role=routed_to)
-                if raw_tokens:
+                if raw_tokens and not server_usage.get("completion_tokens"):
                     completion_tokens = len(raw_tokens)
-                prompt_text = " ".join(
-                    m.get("content", "") if isinstance(m.get("content"), str) else " ".join(
-                        part.get("text", "") for part in m.get("content", []) if isinstance(part, dict)
+                if not prompt_tokens:
+                    prompt_text = " ".join(
+                        m.get("content", "") if isinstance(m.get("content"), str) else " ".join(
+                            part.get("text", "") for part in m.get("content", []) if isinstance(part, dict)
+                        )
+                        for m in messages
                     )
-                    for m in messages
-                )
-                raw_prompt_tokens = model_manager.tokenize(prompt_text, role=routed_to)
-                if raw_prompt_tokens:
-                    prompt_tokens = len(raw_prompt_tokens)
+                    raw_prompt_tokens = model_manager.tokenize(prompt_text, role=routed_to)
+                    if raw_prompt_tokens:
+                        prompt_tokens = len(raw_prompt_tokens)
             except Exception as tok_err:
                 logger.warning(f"Post-stream token counting error: {tok_err}")
 
-            tk_s = completion_tokens / elapsed if elapsed > 0 else 0
+            # Accurate generation tk/s from native llama-server timings or first-token delta
+            if server_timings.get("predicted_per_second"):
+                tk_s = float(server_timings["predicted_per_second"])
+            elif first_token_time:
+                gen_duration = max(0.05, time.time() - first_token_time)
+                tk_s = completion_tokens / gen_duration
+            else:
+                tk_s = completion_tokens / elapsed if elapsed > 0 else 0
 
+            finish_val = last_finish_reason or "stop"
             usage_chunk = {
                 "object": "chat.completion.chunk",
-                "choices": [{"delta": {"content": ""}, "index": 0, "finish_reason": "stop"}],
+                "choices": [{"delta": {"content": ""}, "index": 0, "finish_reason": finish_val}],
+                "is_context_limit": finish_val == "length",
                 "usage": {
                     "prompt_tokens": prompt_tokens,
                     "completion_tokens": completion_tokens,
@@ -636,14 +675,16 @@ class ChatGenerationManager:
                 job.finish(status="stopped")
         except Exception as e:
             logger.error(f"Error in local background task for {job.chat_id}: {e}", exc_info=True)
-            job.broadcast_chunk(f"data: {json.dumps({'error': str(e)})}\n\n")
-            job.finish(status="error", error=str(e))
+            err_str = str(e)
+            is_ctx = any(k in err_str.lower() for k in [
+                "context window", "maximum context length", "exceeds context", "context limit",
+                "n_ctx exceeded", "too many tokens", "prompt is too long", "context length exceeded",
+                "context size exceeded", "context full"
+            ])
+            job.broadcast_chunk(f"data: {json.dumps({'error': err_str, 'is_context_limit': is_ctx})}\n\n")
+            job.finish(status="error", error=err_str)
         finally:
-            if inference_mode == "routing" and not job.stop_requested:
-                try:
-                    await asyncio.to_thread(model_manager.activate, get_resident_role())
-                except Exception:
-                    pass
+            pass
 
 
 # Singleton instance

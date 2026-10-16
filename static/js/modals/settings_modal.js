@@ -15,27 +15,18 @@ try {
 let fetchModelsDebounce = null;
 
 export function setInferenceMode(mode) {
+    if (mode === 'routing') mode = 'single';
     state.inferenceMode = mode;
     try { localStorage.setItem('nivm_inference_mode', mode); } catch (_) {}
-    ['routing', 'single', 'api'].forEach(m => {
+    ['single', 'api'].forEach(m => {
         dom[`${m}ModeBtn`]?.classList.toggle('active', mode === m);
         dom[`${m}ModePanel`]?.classList.toggle('hidden', mode !== m);
     });
 
     const isApi = mode === 'api';
     if (dom.memoryEstimatorCard) {
-        if (mode === 'single' && dom.customModelCard) {
+        if (dom.customModelCard) {
             dom.customModelCard.insertAdjacentElement('afterend', dom.memoryEstimatorCard);
-        } else if (mode === 'routing' && dom.routingModePanel) {
-            const section = dom.routingModePanel.querySelector('.settings-section');
-            if (section) {
-                const title = section.querySelector('.section-title');
-                if (title) {
-                    title.insertAdjacentElement('afterend', dom.memoryEstimatorCard);
-                } else {
-                    section.insertAdjacentElement('afterbegin', dom.memoryEstimatorCard);
-                }
-            }
         }
         dom.memoryEstimatorCard.classList.toggle('hidden', isApi);
     }
@@ -55,7 +46,7 @@ export function setInferenceMode(mode) {
         updateModelAvailabilityUI(true);
         fetchRemoteModels(true);
     } else {
-        const localModel = state.singleModelRole || 'coder';
+        const localModel = state.customModelPath ? state.customModelPath.split('/').pop() : 'Local Model';
         state.selectedModel = localModel;
         try { localStorage.setItem('nivm_lastModel', localModel); } catch (_) {}
         refreshEngineStatusUI();
@@ -333,6 +324,47 @@ export function applyModelMetadataToUI(meta) {
         dom.singleGpuSlider.dataset.totalLayers = String(meta.layers);
         const currentVal = parseInt(dom.singleGpuSlider.value, 10);
         updateGpuSliderLabel(dom.singleGpuSlider, dom.singleGpuVal, currentVal, meta.layers);
+    }
+
+    // 2b. Dynamically update Context slider max & auto-scale to safe VRAM budget
+    if (dom.singleCtxSlider && meta.context_length && meta.context_length > 0) {
+        const nativeCtx = meta.context_length;
+        dom.singleCtxSlider.max = String(Math.max(8192, nativeCtx));
+
+        // Evaluate recommended safe context (keeps estimated VRAM <= 82%)
+        let totalVram = 0;
+        if (state.hardwareInfo && state.hardwareInfo.gpu_available && state.hardwareInfo.vram_total_gb > 0) {
+            totalVram = state.hardwareInfo.vram_total_gb;
+        } else {
+            try {
+                const cachedHw = JSON.parse(localStorage.getItem('nivm_cached_hardware') || '{}');
+                if (cachedHw.gpu_available && cachedHw.vram_total_gb > 0) totalVram = cachedHw.vram_total_gb;
+            } catch (_) {}
+        }
+
+        const modelSizeGb = meta.size_gb || 3.0;
+        let safeCtx = Math.min(nativeCtx, 32768);
+
+        if (totalVram > 0) {
+            // Reserve 18% of VRAM for OS/display/system buffers
+            const safeVramBudgetGb = (totalVram * 0.82) - modelSizeGb - 0.35;
+            // Approximate KV cache consumption: ~0.06GB per 1024 tokens for Q4_0 KV
+            const maxSafeTokens = safeVramBudgetGb > 0 ? Math.floor((safeVramBudgetGb / 0.06) * 1024) : 4096;
+
+            const candidates = [131072, 65536, 32768, 16384, 8192, 4096, 2048];
+            const fit = candidates.find(c => c <= nativeCtx && c <= maxSafeTokens);
+            safeCtx = fit || 4096;
+        }
+
+        // Only clamp down if the current context strictly exceeds the GGUF model's native context length.
+        // The user's manual selection is preserved and NOT forcibly overwritten by auto-suggestions.
+        const currentVal = parseInt(dom.singleCtxSlider.value, 10);
+        if (currentVal > nativeCtx) {
+            dom.singleCtxSlider.value = String(nativeCtx);
+            if (dom.singleCtxVal) dom.singleCtxVal.textContent = String(nativeCtx);
+            saveApiSettings();
+        }
+        if (window.updateContextUsageIndicator) window.updateContextUsageIndicator();
     }
 
     // 3. Update MoE alert banner below GPU slider
@@ -738,19 +770,6 @@ export function updateMemoryEstimator() {
         kvType = dom.singleKvSelect ? dom.singleKvSelect.value : 'q4_0';
         offloadKqv = dom.singleOffloadKqv ? dom.singleOffloadKqv.checked : true;
         flashAttn = dom.singleFlashAttn ? dom.singleFlashAttn.checked : true;
-    } else if (state.inferenceMode === 'routing') {
-        const residentRole = (state.engineActive && state.engineActive.role) || 'coder';
-        if (state.engineAvailable && state.engineAvailable[residentRole]?.size_gb) {
-            modelSizeGb = parseFloat(state.engineAvailable[residentRole].size_gb) || 4.7;
-        } else {
-            modelSizeGb = 4.7;
-        }
-        gpuLayers = dom.coderGpuSlider ? parseInt(dom.coderGpuSlider.value, 10) : -1;
-        ctx = dom.coderCtxSlider ? parseInt(dom.coderCtxSlider.value, 10) : 8192;
-        batchSize = dom.coderBatchSlider ? parseInt(dom.coderBatchSlider.value, 10) : 512;
-        kvType = dom.coderKvSelect ? dom.coderKvSelect.value : 'q8_0';
-        offloadKqv = dom.coderOffloadKqv ? dom.coderOffloadKqv.checked : true;
-        flashAttn = dom.coderFlashAttn ? dom.coderFlashAttn.checked : true;
     } else {
         // API mode: 0 local VRAM
         dom.estVramVal.textContent = '0.0 GB';
@@ -1100,9 +1119,6 @@ export function setupSettingsUI() {
     }
 
     const roleSliderSetup = [
-        ['router', 'Gpu', true], ['router', 'Ctx', false], ['router', 'Batch', false],
-        ['coder', 'Gpu', true], ['coder', 'Ctx', false], ['coder', 'Batch', false],
-        ['vision', 'Gpu', true], ['vision', 'Ctx', false], ['vision', 'Batch', false],
         ['single', 'Gpu', true], ['single', 'Ctx', false], ['single', 'Batch', false],
     ];
     roleSliderSetup.forEach(([prefix, suffix, isGpu]) => {
@@ -1120,7 +1136,6 @@ export function setupSettingsUI() {
         }
     });
 
-    if (dom.routingModeBtn) dom.routingModeBtn.addEventListener('click', () => setInferenceMode('routing'));
     if (dom.singleModeBtn) dom.singleModeBtn.addEventListener('click', () => setInferenceMode('single'));
     if (dom.apiModeBtn) dom.apiModeBtn.addEventListener('click', () => setInferenceMode('api'));
 
@@ -1220,7 +1235,7 @@ export function setupSettingsUI() {
         groq: { base: 'https://api.groq.com/openai/v1', chat: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.3-70b-versatile', multimodal: false },
         openai: { base: 'https://api.openai.com/v1', chat: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini', multimodal: true },
         ollama: { base: 'http://localhost:11434/v1', chat: 'http://localhost:11434/v1/chat/completions', model: 'llama3.2', multimodal: false },
-        local: { base: `${window.location.origin}/v1`, chat: `${window.location.origin}/v1/chat/completions`, model: 'coder', multimodal: false }
+        local: { base: `${window.location.origin}/v1`, chat: `${window.location.origin}/v1/chat/completions`, model: 'custom', multimodal: false }
     };
 
     document.querySelectorAll('.api-preset-chip').forEach(btn => {
@@ -1270,40 +1285,7 @@ export function setupSettingsUI() {
         fetchRemoteModels(true);
     }
 
-    if (dom.singleModelRoleSelect) {
-        dom.singleModelRoleSelect.addEventListener('change', () => {
-            const role = dom.singleModelRoleSelect.value;
-            if (dom.customModelCard) {
-                if (role === 'custom') {
-                    dom.customModelCard.classList.remove('hidden');
-                    refreshScannedModelsList();
-                } else {
-                    dom.customModelCard.classList.add('hidden');
-                }
-            }
-            if (role !== 'custom') {
-                ['Gpu', 'Ctx', 'Batch'].forEach(field => {
-                    const src = dom[role + field + 'Slider'];
-                    const dst = dom['single' + field + 'Slider'];
-                    const val = dom['single' + field + 'Val'];
-                    if (src && dst) {
-                        dst.value = src.value;
-                        if (val) val.textContent = field === 'Gpu' && src.value == -1 ? '-1 (Max)' : src.value;
-                    }
-                });
-                if (dom[role + 'KvSelect'] && dom.singleKvSelect) {
-                    dom.singleKvSelect.value = dom[role + 'KvSelect'].value;
-                }
-                ['FlashAttn', 'OffloadKqv', 'Mlock', 'Mmap'].forEach(flag => {
-                    if (dom[role + flag] && dom['single' + flag]) {
-                        dom['single' + flag].checked = dom[role + flag].checked;
-                    }
-                });
-            }
-            updateVisionAvailabilityUI();
-            saveApiSettings();
-        });
-    }
+
 
     function autoPairMmprojForModel(modelPath) {
         if (!modelPath || !dom.scannedMmprojSelect) return;
@@ -1522,15 +1504,24 @@ export function setupSettingsUI() {
     /* reactive memory estimator inputs */
     const estimatorTriggers = [
         dom.singleCtxSlider, dom.singleBatchSlider, dom.singleKvSelect, dom.singleGpuSlider,
-        dom.singleOffloadKqv, dom.singleFlashAttn, dom.singleModelRoleSelect, dom.scannedGgufSelect,
+        dom.singleOffloadKqv, dom.singleFlashAttn, dom.scannedGgufSelect,
         dom.customModelPathInput, dom.customMmprojInput, dom.customMmprojCpu,
-        dom.inferenceModeSelect, dom.coderGpuSlider, dom.coderCtxSlider, dom.coderBatchSlider,
-        dom.coderKvSelect, dom.coderOffloadKqv, dom.coderFlashAttn
+        dom.inferenceModeSelect
     ];
     estimatorTriggers.forEach(elem => {
         if (!elem) return;
-        elem.addEventListener('input', updateMemoryEstimator);
-        elem.addEventListener('change', updateMemoryEstimator);
+        elem.addEventListener('input', () => {
+            updateMemoryEstimator();
+            if (elem === dom.singleCtxSlider && window.updateContextUsageIndicator) {
+                window.updateContextUsageIndicator();
+            }
+        });
+        elem.addEventListener('change', () => {
+            updateMemoryEstimator();
+            if (elem === dom.singleCtxSlider && window.updateContextUsageIndicator) {
+                window.updateContextUsageIndicator();
+            }
+        });
     });
 
     ['unloadAllModelsBtn', 'statsUnloadAllBtn', 'drawerUnloadBtn'].forEach(k => dom[k]?.addEventListener('click', () => handleUnloadAllModels(dom[k])));

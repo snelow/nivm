@@ -274,6 +274,13 @@ export function updateChatInputState(activeChat) {
     ['sendBtn', 'micRecordBtn', 'attachImgBtn', 'visionToggleBtn'].forEach(k => {
         if (dom[k]) dom[k].disabled = isEnded;
     });
+
+    // Collapse pill toggles into compact icons once first message is sent / conversation has messages
+    const inputBox = dom.userPrompt?.closest('.input-box');
+    const hasMessages = activeChat && activeChat.messages && activeChat.messages.length > 0;
+    if (inputBox) {
+        inputBox.classList.toggle('compact-mode', Boolean(hasMessages));
+    }
 }
 
 export function updateAssistantNameUI() {
@@ -319,17 +326,114 @@ export function renderActiveChat() {
         });
     }
     updateChatInputState(activeChat);
+    updateContextUsageIndicator();
     scrollToBottom();
 }
 window.renderActiveChat = renderActiveChat;
+
+export function updateContextUsageIndicator(overrideUsedTokens = null) {
+    const ringEl = dom.contextUsageRing;
+    const progressEl = dom.contextRingProgress;
+    if (!ringEl || !progressEl) return;
+
+    // 1. Determine maximum context limit for active mode
+    let maxContext = 8192;
+    if (state.inferenceMode === 'api') {
+        const model = (state.selectedModel || dom.apiModelInput?.value || '').toLowerCase();
+        if (/gemini-(1\.5|[23]|flash|pro)/.test(model)) maxContext = 1048576;
+        else if (/claude/.test(model)) maxContext = 200000;
+        else if (/llama-3\.[13]|gpt-4o|o[13]/.test(model)) maxContext = 128000;
+        else if (/deepseek/.test(model)) maxContext = 64000;
+        else maxContext = 128000;
+    } else {
+        maxContext = dom.singleCtxSlider ? parseInt(dom.singleCtxSlider.value, 10) : (state.customCtx || 8192);
+        if (!maxContext || isNaN(maxContext) || maxContext <= 0) maxContext = 8192;
+    }
+
+    // 2. Count tokens in current active conversation or use live streamed token override
+    let usedTokens = 0;
+    if (typeof overrideUsedTokens === 'number' && overrideUsedTokens >= 0) {
+        usedTokens = Math.round(overrideUsedTokens);
+    } else {
+        const activeChat = state.conversations.find(c => c.id === state.activeChatId);
+        if (activeChat && activeChat.messages && activeChat.messages.length > 0) {
+            for (let i = activeChat.messages.length - 1; i >= 0; i--) {
+                const m = activeChat.messages[i];
+                if (m.meta && (m.meta.totalTokens || m.meta.promptTokens)) {
+                    usedTokens = (m.meta.totalTokens || (m.meta.promptTokens + (m.meta.estTokens || 0)));
+                    break;
+                }
+            }
+            if (usedTokens === 0) {
+                let totalChars = 0;
+                activeChat.messages.forEach(m => {
+                    if (typeof m.content === 'string') totalChars += m.content.length;
+                    else if (Array.isArray(m.content)) totalChars += JSON.stringify(m.content).length;
+                });
+                usedTokens = Math.max(0, Math.ceil(totalChars / 4));
+            }
+        }
+    }
+
+    const pct = Math.min(100, Math.round((usedTokens / maxContext) * 100));
+
+    // SVG dashoffset calculation: circumference is ~62.83 (r=10)
+    const circumference = 62.83;
+    const offset = Math.max(0, circumference * (1 - (pct / 100)));
+    progressEl.style.strokeDashoffset = String(offset);
+
+    // Color code: safe (brand theme), tight (amber), danger (rose)
+    if (pct < 75) {
+        progressEl.style.stroke = 'var(--accent-purple, #a855f7)';
+    } else if (pct < 90) {
+        progressEl.style.stroke = 'var(--accent-amber, #f59e0b)';
+    } else {
+        progressEl.style.stroke = 'var(--accent-rose, #f43f5e)';
+    }
+
+    const modeLabel = state.inferenceMode === 'api' ? 'Cloud API' : 'Local';
+    const formattedUsed = usedTokens.toLocaleString();
+    const formattedMax = maxContext.toLocaleString();
+    const tooltipText = `${modeLabel} Context: ${formattedUsed} / ${formattedMax} tokens (${pct}% used)`;
+    ringEl.title = tooltipText;
+
+    // Cache latest values for mobile tap / desktop click notification
+    ringEl.dataset.usedTokens = formattedUsed;
+    ringEl.dataset.maxTokens = formattedMax;
+    ringEl.dataset.pct = String(pct);
+    ringEl.dataset.modeLabel = modeLabel;
+
+    if (!ringEl._hasClickListener) {
+        ringEl._hasClickListener = true;
+        ringEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const u = ringEl.dataset.usedTokens || '0';
+            const m = ringEl.dataset.maxTokens || '8,192';
+            const p = ringEl.dataset.pct || '0';
+            const mode = ringEl.dataset.modeLabel || 'Local';
+            if (typeof showNotification === 'function') {
+                showNotification({
+                    title: 'Context Window Usage',
+                    message: `${u} / ${m} tokens (${p}% used) • ${mode}`,
+                    type: 'info',
+                    icon: 'fa-brain',
+                    duration: 3500
+                });
+            }
+        });
+    }
+}
+window.updateContextUsageIndicator = updateContextUsageIndicator;
 
 export function toggleSendStopButtons(isGenerating) {
     if (isGenerating) {
         dom.sendBtn.classList.add('hidden');
         dom.stopBtn.classList.remove('hidden');
+        if (dom.liveSpeedVal) dom.liveSpeedVal.textContent = '0.0';
     } else {
         dom.sendBtn.classList.remove('hidden');
         dom.stopBtn.classList.add('hidden');
+        updateContextUsageIndicator();
     }
 }
 
@@ -964,20 +1068,23 @@ export function updateMessageActionIcons(actionsContainer, msg, row) {
         const popover = document.createElement('div');
         popover.className = 'floating-stats-popover hidden';
         const modelName = meta.modelInfo?.name || state.selectedModel || 'nivm';
-        const roleIcon = meta.modelInfo?.role === 'vision' ? 'fa-eye' : (meta.modelInfo?.role === 'api' ? 'fa-network-wired' : 'fa-code');
+        const isApi = meta.modelInfo?.role === 'api' || state.inferenceMode === 'api';
+        const hasVision = meta.modelInfo?.has_vision || meta.hasVision || (meta.modelInfo?.role === 'vision');
+        const roleIcon = isApi ? 'fa-cloud' : (hasVision ? 'fa-eye' : 'fa-microchip');
+        const iconColor = 'var(--accent-purple, #a855f7)';
         const tokenLabel = meta.isExact ? `${meta.estTokens} tokens${meta.promptTokens ? ` (${meta.promptTokens} prompt)` : ''}` : `~${meta.estTokens} tokens`;
-        popover.innerHTML = `<i class="fa-solid ${roleIcon}" style="color:var(--accent-purple);"></i> ${modelName} &bull; <i class="fa-solid fa-bolt" style="color:var(--accent-emerald);"></i> ${meta.durationSec}s &bull; ${meta.tkPerSec} tk/s &bull; ${tokenLabel}`;
+        popover.innerHTML = `<i class="fa-solid ${roleIcon}" style="color:${iconColor};"></i> ${modelName} &bull; <i class="fa-solid fa-bolt" style="color:var(--accent-emerald);"></i> ${meta.durationSec}s &bull; ${meta.tkPerSec} tk/s &bull; ${tokenLabel}`;
 
         if (meta.rawTokens && meta.rawTokens.length > 0) {
             const rawSpan = document.createElement('span');
             rawSpan.style.cssText = 'margin-left: 8px; cursor: pointer; opacity: 0.9; color: var(--accent-cyan);';
-            rawSpan.title = 'Click to copy raw token IDs';
-            rawSpan.innerHTML = `&bull; <i class="fa-solid fa-microchip"></i> [${meta.rawTokens.length} raw IDs]`;
+            rawSpan.title = 'Click to copy raw integer token IDs to clipboard';
+            rawSpan.innerHTML = `&bull; <i class="fa-solid fa-list-ol"></i> [${meta.rawTokens.length} raw IDs]`;
             rawSpan.onclick = (e) => {
                 e.stopPropagation();
                 navigator.clipboard.writeText(JSON.stringify(meta.rawTokens));
                 rawSpan.innerHTML = `&bull; <i class="fa-solid fa-check"></i> Copied IDs!`;
-                setTimeout(() => { rawSpan.innerHTML = `&bull; <i class="fa-solid fa-microchip"></i> [${meta.rawTokens.length} raw IDs]`; }, 2000);
+                setTimeout(() => { rawSpan.innerHTML = `&bull; <i class="fa-solid fa-list-ol"></i> [${meta.rawTokens.length} raw IDs]`; }, 2000);
             };
             popover.appendChild(rawSpan);
         }

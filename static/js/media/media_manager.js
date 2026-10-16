@@ -20,16 +20,9 @@ export function isVisionSupported() {
         const endpoint = (dom.apiChatUrl?.value || dom.apiBaseUrl?.value || '').toLowerCase();
         return isMultimodalModel(model, endpoint);
     }
-    if (state.inferenceMode === 'routing') {
-        return true;
-    }
-    if (state.inferenceMode === 'single') {
-        const mmproj = (state.customMmprojPath || dom.customMmprojInput?.value || '').trim();
-        if (mmproj && mmproj.toLowerCase() !== 'none') return true;
-        const role = state.singleModelRole || (dom.singleModelRoleSelect ? dom.singleModelRoleSelect.value : (state.selectedModel || ''));
-        if (role === 'vision') return true;
-        return false;
-    }
+    // Single local model mode: vision is enabled when a vision projector (mmproj) is configured
+    const mmproj = (state.customMmprojPath || dom.customMmprojInput?.value || '').trim();
+    if (mmproj && mmproj.toLowerCase() !== 'none') return true;
     return false;
 }
 window.isVisionSupported = isVisionSupported;

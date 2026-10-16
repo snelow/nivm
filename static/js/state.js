@@ -7,7 +7,7 @@ const _num = (k, def) => { const v = parseFloat(localStorage.getItem(k)); return
 export let state = {
     conversations: [],
     activeChatId: null,
-    selectedModel: _str('nivm_lastModel', 'coder'),
+    selectedModel: _str('nivm_lastModel', 'custom'),
     userName: _str('nivm_userName'),
     aiName: _str('nivm_ai_name', 'nivm') || 'nivm',
     systemPrompt: '',

@@ -8,7 +8,6 @@ import { showNotification, showAlert, escapeHtml } from './dialogs.js';
 
 export async function populateStatsModal() {
     const isApi = state.inferenceMode === 'api';
-    const isRouting = state.inferenceMode === 'routing';
 
     const modeBadge = dom.statsModeBadge || document.getElementById('statsModeBadge');
     const modeBadgeText = dom.statsModeBadgeText || document.getElementById('statsModeBadgeText');
@@ -65,30 +64,18 @@ export async function populateStatsModal() {
             const cm = ctxRules.find(([r]) => r.test(lowerModel));
             dom.statsContextLimit.textContent = cm ? cm[1] : '128,000 tokens (128k)';
         }
-    } else if (isRouting) {
-        if (modeBadge) modeBadge.className = 'stats-mode-badge mode-routing';
-        if (modeBadgeText) modeBadgeText.textContent = 'Smart Router';
-        if (statsModelIcon) statsModelIcon.className = 'fa-solid fa-shuffle';
-        if (dom.statsModelName) dom.statsModelName.textContent = 'Multi-Model Intent Router';
-        if (statsProviderTag) statsProviderTag.textContent = 'Auto Hot-Swap: Coder, Creative, General & Vision';
-        if (dom.statsArchitecture) dom.statsArchitecture.textContent = 'Dynamic GGUF (Flash Attn)';
-        if (dom.statsModelType) dom.statsModelType.textContent = 'LOCAL_ROUTING';
-        if (dom.statsQuantization) dom.statsQuantization.textContent = 'Auto Multi-Slot (q4_k_m / q8_0)';
-        if (dom.statsContextLimit) dom.statsContextLimit.textContent = '8,192 tokens (Per Slot)';
     } else {
         if (modeBadge) modeBadge.className = 'stats-mode-badge mode-local';
         if (modeBadgeText) modeBadgeText.textContent = 'Local Engine';
         if (statsModelIcon) statsModelIcon.className = 'fa-solid fa-microchip';
 
-        const role = state.singleModelRole || dom.singleModelRoleSelect?.value || 'custom';
-        const isCustom = role === 'custom';
-        const prefix = isCustom ? 'single' : role;
-        if (dom.statsModelName) dom.statsModelName.textContent = isCustom ? (state.customModelPath ? state.customModelPath.split(/[/\\]/).pop() : 'Custom GGUF Model') : `Local Engine (${role.toUpperCase()})`;
-        if (statsProviderTag) statsProviderTag.textContent = isCustom ? 'Local Native • Custom GGUF File' : `Local Native • Dedicated ${role} slot`;
-        if (dom.statsArchitecture) dom.statsArchitecture.textContent = dom[`${prefix}FlashAttn`]?.checked ? 'GGUF (Flash Attn)' : 'GGUF';
+        const modelName = state.customModelPath ? state.customModelPath.split(/[/\\]/).pop() : (state.selectedModel || 'Local GGUF Model');
+        if (dom.statsModelName) dom.statsModelName.textContent = modelName;
+        if (statsProviderTag) statsProviderTag.textContent = 'Local Bundled llama-server • GGUF';
+        if (dom.statsArchitecture) dom.statsArchitecture.textContent = dom['singleFlashAttn']?.checked ? 'GGUF (Flash Attn)' : 'GGUF';
         if (dom.statsModelType) dom.statsModelType.textContent = 'LOCAL_NATIVE';
-        if (dom.statsQuantization) dom.statsQuantization.textContent = dom[`${prefix}KvSelect`]?.value?.toUpperCase() ? `${dom[`${prefix}KvSelect`].value.toUpperCase()} (KV Cache)` : (isCustom ? 'Custom Quant' : 'Q4_K_M / Q8_0');
-        if (dom.statsContextLimit) dom.statsContextLimit.textContent = `${dom[`${prefix}CtxSlider`]?.value || '8192'} tokens`;
+        if (dom.statsQuantization) dom.statsQuantization.textContent = dom['singleKvSelect']?.value?.toUpperCase() ? `${dom['singleKvSelect'].value.toUpperCase()} (KV Cache)` : 'Auto Quant';
+        if (dom.statsContextLimit) dom.statsContextLimit.textContent = `${dom['singleCtxSlider']?.value || '8192'} tokens`;
     }
 
     // Populate Global Usage Statistics

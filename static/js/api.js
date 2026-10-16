@@ -96,12 +96,10 @@ export async function fetchApiSettings() {
 
     const isApi = inferenceMode === 'api';
 
-    if (dom.routingModeBtn && dom.singleModeBtn) {
-        dom.routingModeBtn.classList.toggle('active', inferenceMode === 'routing');
+    if (dom.singleModeBtn) {
         dom.singleModeBtn.classList.toggle('active', inferenceMode === 'single');
         if (dom.apiModeBtn) dom.apiModeBtn.classList.toggle('active', isApi);
 
-        if (dom.routingModePanel) dom.routingModePanel.classList.toggle('hidden', inferenceMode !== 'routing');
         if (dom.singleModePanel) dom.singleModePanel.classList.toggle('hidden', inferenceMode !== 'single');
         if (dom.apiModePanel) dom.apiModePanel.classList.toggle('hidden', !isApi);
 
@@ -171,12 +169,9 @@ export async function fetchApiSettings() {
     if (window.setVisionEnabled) window.setVisionEnabled(supported);
     else if (window.updateVisionAvailabilityUI) window.updateVisionAvailabilityUI();
 
-    if (dom.customModelCard) dom.customModelCard.classList.remove('hidden');
-
-    _populateRoleDom('router', data, 'router');
-    _populateRoleDom('coder', data, 'coder');
-    _populateRoleDom('vision', data, 'vision');
-    _populateRoleDom('single', data, data.single_model_role || 'coder');
+    _populateRoleDom('single', data, 'custom');
+    state.customCtx = data.custom_ctx || (dom.singleCtxSlider ? parseInt(dom.singleCtxSlider.value, 10) : 8192);
+    if (window.updateContextUsageIndicator) window.updateContextUsageIndicator();
 
     // --- Personalization & Client Preference Synchronization ---
     let needsInitialSync = false;
@@ -314,7 +309,7 @@ export async function fetchApiSettings() {
 
 export async function saveApiSettings() {
     const inferenceMode = state.inferenceMode || 'single';
-    const singleRole = dom.singleModelRoleSelect ? dom.singleModelRoleSelect.value : 'custom';
+    const singleRole = 'custom';
     const activeApiModel = (dom.apiModelSelect && dom.apiModelSelect.value && dom.apiModelSelect.value !== '__custom__')
         ? dom.apiModelSelect.value
         : (dom.apiModelInput?.value.trim() || state.selectedModel || 'llama-3.3-70b-versatile');
@@ -364,25 +359,20 @@ export async function saveApiSettings() {
         downloader_connections: dom.aria2ConnectionsSlider
             ? parseInt(dom.aria2ConnectionsSlider.value, 10)
             : (state.downloaderConnections || parseInt(localStorage.getItem('nivm_downloader_connections') || '4', 10)),
-        ..._readRoleFromDom('router'),
-        ..._readRoleFromDom('coder'),
-        ..._readRoleFromDom('vision'),
     };
 
     state.downloaderConnections = payload.downloader_connections;
     try { localStorage.setItem('nivm_downloader_connections', payload.downloader_connections); } catch (_) {}
 
-    if (inferenceMode === 'single') {
-        const singleSettings = _readRoleFromDom('single');
-        for (const [key, value] of Object.entries(singleSettings)) {
-            payload[key.replace('single_', singleRole + '_')] = value;
-        }
+    const singleSettings = _readRoleFromDom('single');
+    for (const [key, value] of Object.entries(singleSettings)) {
+        payload[key.replace('single_', 'custom_')] = value;
     }
 
     await apiFetchSafe('/api/settings', { method: 'POST', body: payload });
     state.customModelPath = payload.custom_model_path;
     state.customMmprojPath = payload.custom_mmproj_path;
-    const hasMmproj = Boolean(state.customMmprojPath && state.customMmprojPath.trim()) || (singleRole === 'vision');
+    const hasMmproj = Boolean(state.customMmprojPath && state.customMmprojPath.trim());
     if (window.setVisionEnabled) window.setVisionEnabled(hasMmproj);
 }
 

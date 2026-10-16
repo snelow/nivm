@@ -4,15 +4,37 @@ import { state, saveConversations, saveUsageStats } from '../state.js';
 import { dom } from '../dom.js';
 import { tools, buildToolsInstruction, parseToolCall, stripToolCallFromText, TOOL_SKILL_MAP } from '../tools.js';
 import { renderActiveChat, appendMessageToDOM, scrollToBottom, toggleSendStopButtons, updateAssistantBubble, updateMessageActionIcons, buildToolTraceHtml, updateChatInputState, sealUnclosedThoughts } from './chat_messages.js';
-import { renderChatHistory, createNewChat } from './chat_history.js';
+import { renderChatHistory, createNewChat, updateUrlForChat } from './chat_history.js';
 import { clearAttachedImage, isVisionSupported } from '../media/media_manager.js';
 import { generateChatTitle, uploadImage, fetchEngineStatus } from '../api.js';
 import { voiceConfig, speakText, stopSpeaking, setVoiceOrbGeneratingState } from '../voice.js';
-import { showAlert, showNotification } from '../modals/dialogs.js';
+import { showAlert, showNotification, escapeHtml } from '../modals/dialogs.js';
 import { populateStatsModal } from '../modals/tools_settings.js';
 import { openCreatorModal } from '../extras.js';
 import { saveImageDuration } from '../image_editor.js';
 import { normalizeThinkTags, hasRawOpenTag, hasRawCloseTag, normalizeCloseTag, stripRawOpenTags, isPotentialOpenTagPrefix, cleanReasoningText } from '../think_tags.js';
+
+export function isContextLimitError(str) {
+    if (!str) return false;
+    const lower = String(str).toLowerCase();
+    return /context (?:window|length|limit|size)|exceed(?:s|ed)? context|maximum context length|n_ctx exceeded|too many tokens|prompt is too long|context full|kv cache is full|context_length_exceeded/i.test(lower);
+}
+
+export function buildContextLimitBlock(detailMessage = '') {
+    return `\n\n<div class="context-limit-block">
+        <div class="context-limit-header">
+            <i class="fa-solid fa-triangle-exclamation"></i> <span>Context Limit Reached</span>
+        </div>
+        <div class="context-limit-desc">
+            ${detailMessage || 'This conversation has reached the maximum context limit for the active model. Start a new chat or summarize to continue.'}
+        </div>
+        <div class="context-limit-actions">
+            <button class="btn-secondary" onclick="window.exportChat()"><i class="fa-solid fa-download"></i> Export Chat</button>
+            <button class="btn-secondary" onclick="document.getElementById('newChatBtn')?.click()"><i class="fa-solid fa-plus"></i> New Chat</button>
+            <button class="btn-primary" onclick="window.summarizeAndRestart()"><i class="fa-solid fa-wand-magic-sparkles"></i> Summarize & Restart</button>
+        </div>
+    </div>`;
+}
 
 export function sanitizeAssistantText(text) {
     if (!text) return '';
@@ -82,6 +104,7 @@ export async function sendMessage(text, triggerAssistantOnly = false, isHiddenUs
             };
             state.conversations.unshift(newChat);
             state.activeChatId = newChat.id;
+            updateUrlForChat(newChat.id);
         }
 
         const activeChat = state.conversations.find(c => c.id === state.activeChatId);
@@ -89,9 +112,11 @@ export async function sendMessage(text, triggerAssistantOnly = false, isHiddenUs
         if (activeChat.messages.length === 0) {
             activeChat.title = getAttachmentTitle();
             renderChatHistory();
+            updateUrlForChat(activeChat.id);
         }
 
         let finalContent = promptText;
+        dom.userPrompt?.closest('.input-box')?.classList.add('compact-mode');
         if (state.inferenceMode === 'api' && !isVisionSupported() && state.attachedImages && state.attachedImages.length > 0) {
             clearAttachedImage();
         } else if (state.attachedImages && state.attachedImages.length > 0) {
@@ -281,6 +306,33 @@ CRITICAL SPOKEN CONVERSATION RULES:
     let modelInfo = null;
     let interceptedToolCall = null;
     let pendingUpdate = false;
+    let liveTokenCount = 0;
+    let firstTokenPerfTime = null;
+    let streamFinishReason = null;
+    let basePromptTokens = 0;
+    if (activeChat && activeChat.messages) {
+        for (let i = activeChat.messages.length - 1; i >= 0; i--) {
+            const m = activeChat.messages[i];
+            if (m.meta && (m.meta.totalTokens || m.meta.promptTokens)) {
+                basePromptTokens = m.meta.totalTokens || (m.meta.promptTokens + (m.meta.estTokens || 0));
+                break;
+            }
+        }
+        if (basePromptTokens === 0) {
+            let totalChars = 0;
+            activeChat.messages.forEach(m => {
+                if (typeof m.content === 'string') totalChars += m.content.length;
+                else if (Array.isArray(m.content)) totalChars += JSON.stringify(m.content).length;
+            });
+            basePromptTokens = Math.max(0, Math.ceil(totalChars / 4));
+        }
+    }
+    if (promptText) {
+        basePromptTokens += Math.max(1, Math.ceil(promptText.length / 4));
+    }
+    if (window.updateContextUsageIndicator) {
+        window.updateContextUsageIndicator(basePromptTokens);
+    }
     const startTime = performance.now();
 
     try {
@@ -307,9 +359,17 @@ CRITICAL SPOKEN CONVERSATION RULES:
             let errDetail = `${response.status} ${response.statusText}`;
             try {
                 const errJson = await response.json();
-                if (errJson?.detail) errDetail = errJson.detail;
+                if (errJson?.detail) {
+                    errDetail = typeof errJson.detail === 'string' ? errJson.detail : (errJson.detail.message || JSON.stringify(errJson.detail));
+                } else if (errJson?.error) {
+                    errDetail = typeof errJson.error === 'string' ? errJson.error : (errJson.error.message || JSON.stringify(errJson.error));
+                }
             } catch (_) {}
-            throw new Error(`HTTP error! status: ${errDetail}`);
+            const err = new Error(errDetail);
+            if (isContextLimitError(errDetail)) {
+                err.isContextLimit = true;
+            }
+            throw err;
         }
 
         const reader = response.body.getReader();
@@ -342,31 +402,30 @@ CRITICAL SPOKEN CONVERSATION RULES:
                                 setVoiceOrbGeneratingState(true, 'Thinking…');
                             }
                         }
+                        if (json.choices && json.choices[0]?.finish_reason) {
+                            streamFinishReason = json.choices[0].finish_reason;
+                        }
+                        if (json.is_context_limit) {
+                            streamFinishReason = 'length';
+                        }
                         const delta = json.choices && json.choices[0] ? json.choices[0].delta : null;
                         if (json.error) {
-                            const errLower = json.error.toLowerCase();
-                            const isContextExceeded = /context window|maximum context length|exceeds context|context limit|n_ctx exceeded|too many tokens|prompt is too long|context length exceeded/.test(errLower);
-                            const isVramLimit = /vram|failed to create llama_context|out of memory/.test(errLower);
+                            const rawErr = typeof json.error === 'string' ? json.error : (json.error.message || JSON.stringify(json.error));
+                            const isContextExceeded = json.is_context_limit || isContextLimitError(rawErr);
+                            const isVramLimit = /vram|failed to create llama_context|out of memory/i.test(rawErr);
+                            streamPhase = 'COMPLETED';
                             if (isContextExceeded) {
-                                responseBuffer += `\n\n<div class="context-limit-block">
-                                    <div style="color: var(--accent-rose); font-weight: 600; margin-bottom: 8px;"><i class="fa-solid fa-triangle-exclamation"></i> Context Limit Reached</div>
-                                    <div style="font-size: 0.9em; margin-bottom: 12px;">This conversation is too long for the active model.</div>
-                                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                                        <button class="btn-secondary" onclick="window.exportChat()"><i class="fa-solid fa-download"></i> Export Chat</button>
-                                        <button class="btn-secondary" onclick="document.getElementById('newChatBtn').click()"><i class="fa-solid fa-plus"></i> New Chat</button>
-                                        <button class="btn-primary" onclick="window.summarizeAndRestart()"><i class="fa-solid fa-wand-magic-sparkles"></i> Summarize & Restart</button>
-                                    </div>
-                                </div>`;
+                                responseBuffer += buildContextLimitBlock();
                             } else if (isVramLimit) {
                                 responseBuffer += `\n\n<div class="context-limit-block">
-                                    <div style="color: var(--accent-rose); font-weight: 600; margin-bottom: 8px;"><i class="fa-solid fa-microchip"></i> GPU Memory Allocation Exceeded</div>
-                                    <div style="font-size: 0.9em; margin-bottom: 12px; line-height: 1.4;">${json.error}</div>
-                                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                    <div class="context-limit-header"><i class="fa-solid fa-microchip"></i> <span>GPU Memory Allocation Exceeded</span></div>
+                                    <div class="context-limit-desc">${escapeHtml(rawErr)}</div>
+                                    <div class="context-limit-actions">
                                         <button class="btn-primary" onclick="if (window.openSettingsForModelLoad) { window.openSettingsForModelLoad(); } else { document.getElementById('settingsBtn').click(); }"><i class="fa-solid fa-sliders"></i> Adjust Context & KV in Settings</button>
                                     </div>
                                 </div>`;
                             } else {
-                                responseBuffer += `\n\n**Error:** ${json.error}`;
+                                responseBuffer += `\n\n**Error:** ${rawErr}`;
                             }
                             fullResponse = responseBuffer;
                             if (assistantBubble) {
@@ -375,7 +434,26 @@ CRITICAL SPOKEN CONVERSATION RULES:
                         } else if (json.usage) {
                             serverUsage = json.usage;
                             if (json.model_info) modelInfo = json.model_info;
+                            if (dom.liveSpeedVal && serverUsage.tk_s) {
+                                dom.liveSpeedVal.textContent = Number(serverUsage.tk_s).toFixed(1);
+                            }
+                            if (window.updateContextUsageIndicator && serverUsage.total_tokens) {
+                                window.updateContextUsageIndicator(serverUsage.total_tokens);
+                            }
                         } else if (delta) {
+                            if (delta.content || delta.reasoning_content) {
+                                liveTokenCount++;
+                                const nowPerf = performance.now();
+                                if (!firstTokenPerfTime) firstTokenPerfTime = nowPerf;
+                                const genSec = (nowPerf - firstTokenPerfTime) / 1000;
+                                if (genSec > 0.12 && dom.liveSpeedVal) {
+                                    dom.liveSpeedVal.textContent = (liveTokenCount / genSec).toFixed(1);
+                                }
+                                if (liveTokenCount % 2 === 0 && window.updateContextUsageIndicator) {
+                                    const curUsed = (serverUsage?.prompt_tokens || basePromptTokens) + liveTokenCount;
+                                    window.updateContextUsageIndicator(curUsed);
+                                }
+                            }
                             if (delta.reasoning_content) {
                                 isApiReasoning = true;
                                 if (streamPhase !== 'THINKING') {
@@ -505,7 +583,16 @@ CRITICAL SPOKEN CONVERSATION RULES:
 
     } catch (err) {
         if (err.name !== 'AbortError') {
-            fullResponse += `\n\n*Error generating response: ${err.message}*`;
+            if (err.isContextLimit || isContextLimitError(err.message)) {
+                streamPhase = 'COMPLETED';
+                responseBuffer += buildContextLimitBlock();
+                fullResponse = responseBuffer;
+                if (assistantBubble) {
+                    updateAssistantBubble(assistantBubble, fullResponse, false);
+                }
+            } else {
+                fullResponse += `\n\n*Error generating response: ${err.message}*`;
+            }
         }
     } finally {
         if (pendingUpdate) {
@@ -544,6 +631,10 @@ CRITICAL SPOKEN CONVERSATION RULES:
             }
         } else if (!fullResponse && responseBuffer) {
             fullResponse = responseBuffer;
+        }
+
+        if ((streamFinishReason === 'length' || streamFinishReason === 'max_tokens') && !fullResponse.includes('context-limit-block')) {
+            fullResponse += buildContextLimitBlock('The response was cut short because the active model reached its context limit.');
         }
 
         let cleanResponse = sanitizeAssistantText(fullResponse);

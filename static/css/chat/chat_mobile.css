@@ -269,6 +269,7 @@
         height: 36px;
         padding: 0 !important;
         margin: 0 !important;
+        gap: 0 !important;
         display: flex;
         align-items: center;
         justify-content: center;

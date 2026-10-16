@@ -80,9 +80,10 @@ async def security_and_network_middleware(request: Request, call_next):
 
     path = request.url.path
 
-    # Public Whitelist: Landing, frontend static assets, PWA manifest, service worker, icons
+    # Public Whitelist: Landing, dedicated conversation routes, frontend static assets, PWA manifest, service worker, icons
     if (
         path == "/"
+        or path.startswith("/c/")
         or path.startswith("/static")
         or path in ("/manifest.json", "/favicon.ico", "/sw.js")
     ):
@@ -171,6 +172,7 @@ app.include_router(image_router)
 @app.on_event("shutdown")
 async def shutdown_event():
     """Ensure background daemons are cleanly stopped on shutdown."""
+    model_manager.unload_all()
     stop_daemon()
 
 
@@ -180,7 +182,7 @@ async def shutdown_event():
 async def get_config():
     """Returns application configuration settings."""
     return {
-        "default_model": "coder",
+        "default_model": "custom",
         "default_system_prompt": config.DEFAULT_SYSTEM_PROMPT,
         "default_temperature": config.DEFAULT_TEMPERATURE,
         "default_top_p": config.DEFAULT_TOP_P,
@@ -434,7 +436,7 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
         api_model = settings.get("api_model", "llama-3.3-70b-versatile").strip() or "llama-3.3-70b-versatile"
         req_model = body.get("model")
         # Ensure local model names or filenames (.gguf) never override external API model
-        if req_model and req_model not in ("coder", "router", "vision", "single", "custom", "") and not req_model.endswith(".gguf") and ".gguf" not in req_model:
+        if req_model and req_model not in ("single", "custom", "") and not req_model.endswith(".gguf") and ".gguf" not in req_model:
             api_model = req_model
 
         # Determine if external provider/model supports multimodal images
@@ -563,47 +565,29 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
             finally:
                 record_api_end()
 
-    elif inference_mode == "single":
-        # Single model mode
-        routed_to = settings.get("single_model_role", "coder")
-        active_cfg = MODEL_REGISTRY.get(routed_to, {})
+    else:
+        # Single Local Model Mode
+        routed_to = settings.get("single_model_role", "custom")
+        active_cfg = MODEL_REGISTRY.get(routed_to, MODEL_REGISTRY.get("custom", {}))
         mmproj_val = str(active_cfg.get("mmproj_path") or "").strip()
         has_multimodal = bool(
-            active_cfg.get("chat_handler_type") is not None
-            or (mmproj_val and mmproj_val.lower() != "none" and os.path.isfile(mmproj_val))
-            or routed_to == "vision"
+            mmproj_val and mmproj_val.lower() != "none" and os.path.isfile(mmproj_val)
         )
-        if has_images:
-            if has_multimodal:
-                logger.info(f"Single model mode: '{routed_to}' has mmproj active; sending directly to model for multimodal understanding.")
-            else:
-                logger.warning(f"Single model mode: '{routed_to}' has mmproj set to none/missing. Vision is disabled; converting to text-only.")
-                for msg in messages:
-                    if isinstance(msg.get("content"), list):
-                        msg["content"] = " ".join(
-                            item.get("text", "") for item in msg["content"]
-                            if isinstance(item, dict) and item.get("type") == "text"
-                        ).strip()
-                has_images = False
-        logger.warning(f"Single model mode: using {routed_to}")
-    else:
-        # Routing mode — classify intent
-        routed_to = await asyncio.to_thread(classify_intent, user_text, has_images)
-        logger.warning(f"Router classified -> {routed_to}")
+        if has_images and not has_multimodal:
+            logger.warning("Single model mode: vision projector (mmproj) not configured; converting media to text-only.")
+            for msg in messages:
+                if isinstance(msg.get("content"), list):
+                    msg["content"] = " ".join(
+                        item.get("text", "") for item in msg["content"]
+                        if isinstance(item, dict) and item.get("type") == "text"
+                    ).strip()
+            has_images = False
 
     available_models = model_manager.list_available()
     if not available_models.get(routed_to, {}).get("available"):
-        logger.warning(f"Requested role '{routed_to}' unavailable, falling back to coder")
-        routed_to = "coder"
-    logger.warning(f"Routed to: {routed_to}")
+        routed_to = "custom"
 
-    # Strip tools instruction for vision model to prevent looping
-    if routed_to == "vision":
-        for msg in messages:
-            if msg.get("role") == "system" and isinstance(msg.get("content"), str):
-                msg["content"] = msg["content"].split("[CRITICAL INSTRUCTION: TOOLS SYSTEM]")[0].strip()
-
-    # Activate specialist model
+    # Activate model in llama-server
     try:
         swap_time = await asyncio.to_thread(model_manager.activate, routed_to)
     except FileNotFoundError as e:
@@ -624,7 +608,7 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
             temperature=temperature,
             top_p=top_p,
             repeat_penalty=repeat_penalty,
-            inference_mode=inference_mode,
+            inference_mode="single",
             enable_thinking=enable_thinking,
             user_text=user_text
         )
@@ -652,8 +636,6 @@ async def chat_completion(request: Request, background_tasks: BackgroundTasks):
                             background_tasks.add_task(memory_engine.extract_and_store_async, user_text, content)
                         except Exception:
                             pass
-            if inference_mode == "routing":
-                background_tasks.add_task(model_manager.activate, get_resident_role())
             return JSONResponse(status_code=200, content=response)
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
@@ -752,6 +734,11 @@ async def web_manifest():
 @app.get("/favicon.ico")
 async def favicon_ico():
     return _serve_static_file("favicon.ico", "image/x-icon")
+
+
+@app.get("/c/{chat_id}")
+async def conversation_page(chat_id: str):
+    return _serve_static_file("index.html", fallback={"message": "Frontend index.html not yet created."})
 
 
 @app.get("/")

@@ -4,7 +4,7 @@ import { state, themeState, saveConversations, saveUsageStats } from './state.js
 import { dom } from './dom.js';
 import { fetchApiSettings, saveApiSettings, checkBackendHealth, fetchEngineStatus, loadAvailableModels, fetchChats, fetchMemoryAPI, fetchBackendConfig } from './api.js';
 import { setupNodesCanvas, setupMatrixCanvas, setupFluidCanvas, setupFlowFieldCanvas, setupCircuitsCanvas, setupHexCanvas, setupAuroraCanvas, applyThemeState, saveThemeConfig } from './theme.js';
-import { makeDraggable, setupDynamicGreeting, renderChatHistory, renderActiveChat, switchChat, createNewChat, appendMessageToDOM, renderMemoryDrawer, renderToolsSettings, initImageStudioSettings, showAlert, showConfirm, showNotification, setupHistoryUI, setupMobileNav, setupVisionUI, setupAudioRecording, updateVisionAvailabilityUI, populateStatsModal, startStatsVramPolling, stopStatsVramPolling, updateChatInputState, updateAssistantNameUI, setupGlobalSearchUI, openGlobalSearch, closeGlobalSearch } from './ui.js';
+import { makeDraggable, setupDynamicGreeting, renderChatHistory, renderActiveChat, switchChat, createNewChat, appendMessageToDOM, renderMemoryDrawer, renderToolsSettings, initImageStudioSettings, showAlert, showConfirm, showNotification, setupHistoryUI, setupMobileNav, setupVisionUI, setupAudioRecording, updateVisionAvailabilityUI, populateStatsModal, startStatsVramPolling, stopStatsVramPolling, updateChatInputState, updateAssistantNameUI, setupGlobalSearchUI, openGlobalSearch, closeGlobalSearch, getChatIdFromUrl, updateUrlForChat, updateActiveChatItem } from './ui.js';
 import { setupVoiceUI, stopSpeaking } from './voice.js';
 import { initExtras } from './extras.js';
 import { sendMessage, stopGeneration, checkAndResumeActiveGeneration } from './chat/chat_stream.js';
@@ -162,16 +162,29 @@ const startApp = async () => {
                     console.warn('Server chats/memory sync warning:', err);
                 }
 
-                if (state.conversations.length > 0) {
-                    if (!state.activeChatId || !state.conversations.some(c => c.id === state.activeChatId)) {
-                        state.activeChatId = state.conversations[0].id;
-                        switchChat(state.activeChatId);
-                    }
-                    renderChatHistory();
+                const targetChatId = getChatIdFromUrl();
+                if (targetChatId && state.conversations.some(c => c.id === targetChatId)) {
+                    state.activeChatId = targetChatId;
+                    switchChat(targetChatId, true, true);
+                } else if (targetChatId) {
+                    // Chat ID in URL wasn't found in saved conversations, reset to clean URL & fresh start
+                    updateUrlForChat(null, true);
+                    state.activeChatId = null;
+                    renderActiveChat();
+                    updateActiveChatItem(null);
+                    setupDynamicGreeting();
+                } else {
+                    // Fresh start: when URL has no chat ID (root or #/), start clean without auto-selecting previous chat
+                    state.activeChatId = null;
+                    renderActiveChat();
+                    updateActiveChatItem(null);
+                    setupDynamicGreeting();
+                }
+
+                renderChatHistory();
+                if (state.activeChatId) {
                     checkAndResumeActiveGeneration(state.activeChatId);
                     checkAndResumeActiveImageTask(state.activeChatId);
-                } else {
-                    renderChatHistory();
                 }
             };
 
@@ -612,6 +625,23 @@ const startApp = async () => {
                 dom.forceThinkingToggle.classList.toggle('active');
             });
         }
+
+        // Dedicated URL history routing (supports browser Back and Forward navigation)
+        const handleRouteNavigation = () => {
+            const targetChatId = getChatIdFromUrl();
+            if (targetChatId) {
+                if (targetChatId !== state.activeChatId && state.conversations.some(c => c.id === targetChatId)) {
+                    switchChat(targetChatId, false, true);
+                }
+            } else {
+                if (state.activeChatId !== null) {
+                    createNewChat({ forceCreate: false, updateUrl: false });
+                }
+            }
+        };
+
+        window.addEventListener('popstate', handleRouteNavigation);
+        window.addEventListener('hashchange', handleRouteNavigation);
     }
 
     // Export active chat to markdown
@@ -768,7 +798,7 @@ CRITICAL RULES:
 
             if (isCancelled) return;
 
-            createNewChat();
+            createNewChat({ forceCreate: true });
             const newActiveChat = state.conversations.find(c => c.id === state.activeChatId);
             if (newActiveChat) {
                 newActiveChat.title = `Summary: ${activeChat.title || 'Previous Chat'}`;

@@ -6,7 +6,55 @@ import { escapeHtml, showConfirm } from '../modals/dialogs.js';
 import { renderActiveChat, updateChatInputState, toggleSendStopButtons, setupDynamicGreeting, getMessageText } from './chat_messages.js';
 import { renderMemoryDrawer } from '../memory/memory_drawer.js';
 
-export function createNewChat() {
+export function getChatIdFromUrl() {
+    try {
+        // 1. Clean path: /c/<chatId>
+        const pathname = window.location.pathname || '';
+        const pathMatch = pathname.match(/^\/c\/([^/?#]+)/);
+        if (pathMatch && pathMatch[1]) {
+            return decodeURIComponent(pathMatch[1]);
+        }
+        // 2. Hash fallback: #/c/<chatId> or #c/<chatId>
+        const hash = window.location.hash || '';
+        const match = hash.match(/^#\/?c\/([^/?#]+)/);
+        if (match && match[1]) {
+            return decodeURIComponent(match[1]);
+        }
+        // 3. Query param fallback (?c=<chatId>)
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('c')) {
+            return params.get('c');
+        }
+    } catch (e) {
+        console.warn('Error reading chat ID from URL:', e);
+    }
+    return null;
+}
+window.getChatIdFromUrl = getChatIdFromUrl;
+
+export function updateUrlForChat(chatId, replace = false) {
+    try {
+        const targetUrl = chatId ? `/c/${encodeURIComponent(chatId)}` : '/';
+        const currentPath = window.location.pathname;
+        const currentHash = window.location.hash;
+
+        // If already exactly at target without hash, nothing to do
+        if (currentPath === targetUrl && (!currentHash || currentHash === '#')) return;
+
+        if (replace || currentHash.includes('/c/')) {
+            history.replaceState(null, '', targetUrl);
+        } else {
+            history.pushState(null, '', targetUrl);
+        }
+    } catch (e) {
+        console.warn('Error updating URL for chat:', e);
+    }
+}
+window.updateUrlForChat = updateUrlForChat;
+
+export function createNewChat(options = {}) {
+    const { forceCreate = false, updateUrl = true } = (typeof options === 'boolean' ? { forceCreate: options } : options);
+
     if (state.isGenerating) {
         if (typeof window.stopGeneration === 'function') {
             window.stopGeneration();
@@ -17,38 +65,51 @@ export function createNewChat() {
         toggleSendStopButtons(false);
     }
 
-    const activeChat = state.conversations.find(c => c.id === state.activeChatId);
-    
-    if (activeChat && activeChat.messages.length === 0) {
-        renderActiveChat();
-        setupDynamicGreeting();
-        return;
+    // Clean up empty un-messaged chats to prevent sidebar clutter
+    const prevCount = state.conversations.length;
+    state.conversations = state.conversations.filter(c => c && c.messages && c.messages.length > 0);
+    if (state.conversations.length !== prevCount) {
+        saveConversations();
+        renderChatHistory({ animate: false, preserveScroll: true });
     }
 
-    const newChat = {
-        id: 'chat_' + Date.now(),
-        title: 'New Chat',
-        createdAt: Date.now(),
-        messages: []
-    };
-    state.conversations.unshift(newChat);
-    state.activeChatId = newChat.id;
-    saveConversations();
+    if (forceCreate) {
+        const newChat = {
+            id: 'chat_' + Date.now(),
+            title: 'New Chat',
+            createdAt: Date.now(),
+            messages: []
+        };
+        state.conversations.unshift(newChat);
+        state.activeChatId = newChat.id;
+        saveConversations();
+        if (updateUrl) updateUrlForChat(newChat.id);
 
-    if (dom.chatHistoryList && dom.chatHistoryList.children.length > 0) {
-        // Deselect previous active item without rebuilding entire list
-        dom.chatHistoryList.querySelectorAll('.chat-item.active').forEach(el => el.classList.remove('active'));
-        // Create and prepend new chat item with entrance animation only for this new item
-        const newItem = createChatItemElement(newChat, {
-            isActive: true,
-            animate: true,
-            index: 0
-        });
-        dom.chatHistoryList.prepend(newItem);
-        const drawerBody = dom.historyDrawer ? dom.historyDrawer.querySelector('.drawer-body') : null;
-        if (drawerBody) drawerBody.scrollTop = 0;
+        if (dom.chatHistoryList && dom.chatHistoryList.children.length > 0) {
+            // Deselect previous active item without rebuilding entire list
+            dom.chatHistoryList.querySelectorAll('.chat-item.active').forEach(el => el.classList.remove('active'));
+            // Create and prepend new chat item with entrance animation only for this new item
+            const newItem = createChatItemElement(newChat, {
+                isActive: true,
+                animate: true,
+                index: 0
+            });
+            dom.chatHistoryList.prepend(newItem);
+            const drawerBody = dom.historyDrawer ? dom.historyDrawer.querySelector('.drawer-body') : null;
+            if (drawerBody) drawerBody.scrollTop = 0;
+        } else {
+            renderChatHistory({ animate: true });
+        }
     } else {
-        renderChatHistory({ animate: true });
+        // Clean fresh start: no active chat until first message sent
+        state.activeChatId = null;
+        if (updateUrl) updateUrlForChat(null);
+        updateActiveChatItem(null);
+    }
+
+    if (dom.userPrompt) {
+        dom.userPrompt.value = '';
+        dom.userPrompt.style.height = 'auto';
     }
 
     renderActiveChat();
@@ -67,13 +128,13 @@ export function updateActiveChatItem(id = state.activeChatId) {
             item.classList.remove('active');
         }
     });
-    if (!found && state.conversations.some(c => c.id === id)) {
+    if (!found && id && state.conversations.some(c => c.id === id)) {
         renderChatHistory({ animate: false, preserveScroll: true });
     }
 }
 
-export function switchChat(id) {
-    if (id === state.activeChatId) return;
+export function switchChat(id, updateUrl = true, force = false) {
+    if (!force && id === state.activeChatId) return;
     if (state.isGenerating) {
         if (typeof window.stopGeneration === 'function') {
             window.stopGeneration();
@@ -84,6 +145,9 @@ export function switchChat(id) {
         toggleSendStopButtons(false);
     }
     state.activeChatId = id;
+    if (updateUrl) {
+        updateUrlForChat(id);
+    }
     if (window.innerWidth <= 768) {
         if (dom.historyDrawer) dom.historyDrawer.classList.add('hidden');
         const backdrop = dom.mobileDrawerBackdrop || document.getElementById('mobileDrawerBackdrop');
@@ -168,6 +232,7 @@ export function deleteChat(id, e) {
     state.conversations = state.conversations.filter(c => c.id !== id);
     if (wasActive) {
         state.activeChatId = state.conversations.length > 0 ? state.conversations[0].id : null;
+        updateUrlForChat(state.activeChatId);
     }
     saveConversations();
 
@@ -619,6 +684,7 @@ export function forkChatFromMessage(msg) {
 
     state.activeChatId = newChat.id;
     saveConversations();
+    updateUrlForChat(newChat.id);
     renderChatHistory({ animate: false, preserveScroll: true });
     renderActiveChat();
 

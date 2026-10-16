@@ -23,6 +23,7 @@
     gap: 12px;
     box-shadow: var(--shadow-float);
     transition: all var(--transition-normal);
+    overflow: hidden;
 }
 
 .input-box:focus-within {
@@ -58,23 +59,111 @@
 .input-controls-left {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     flex-wrap: nowrap;
+    min-width: 0;
+}
+
+.input-controls-left .thinking-toggle-btn {
+    margin: 0;
 }
 
 .input-controls-right {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     flex-shrink: 0;
 }
 
 .shortcut-hint {
     font-size: 0.8rem;
     color: var(--text-muted);
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 6px;
+    white-space: nowrap;
+    max-width: 280px;
+    opacity: 1;
+    overflow: hidden;
+    transition: max-width 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+                opacity 0.25s ease,
+                margin 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.thinking-toggle-btn {
+    transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+                min-width 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+                padding 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+                gap 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+                background 0.25s ease,
+                border-color 0.25s ease,
+                box-shadow 0.25s ease,
+                transform 0.15s ease !important;
+}
+
+.thinking-toggle-btn i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    line-height: 1;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.toggle-btn-label {
+    display: inline-block;
+    max-width: 80px;
+    opacity: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    vertical-align: middle;
+    transition: max-width 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+                opacity 0.2s ease,
+                margin 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Compact mode when chat is active: smoothly collapse pills to circular icons and slide out shortcut hints */
+.input-box.compact-mode .shortcut-hint {
+    max-width: 0 !important;
+    opacity: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    pointer-events: none !important;
+}
+
+.input-box.compact-mode .thinking-toggle-btn .toggle-btn-label {
+    max-width: 0 !important;
+    opacity: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    pointer-events: none !important;
+}
+
+.input-box.compact-mode .thinking-toggle-btn {
+    width: 32px !important;
+    min-width: 32px !important;
+    height: 32px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    gap: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 50% !important;
+}
+
+.input-box.compact-mode .thinking-toggle-btn i {
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    line-height: 1 !important;
+    text-align: center !important;
 }
 
 kbd {
@@ -87,9 +176,7 @@ kbd {
 
 .send-action-btn,
 .stop-action-btn {
-    width: 36px;
     height: 36px;
-    border-radius: var(--radius-full);
     border: none;
     display: flex;
     align-items: center;
@@ -100,6 +187,8 @@ kbd {
 }
 
 .send-action-btn {
+    width: 36px;
+    border-radius: var(--radius-full);
     background-color: var(--text-primary);
     color: var(--bg-black);
 }
@@ -109,9 +198,129 @@ kbd {
     box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
 }
 
-.stop-action-btn {
-    background-color: var(--accent-rose);
-    color: white;
+/* Morphing Capsule Stop Button with live speed telemetry */
+.stop-action-btn.capsule-stop-btn {
+    width: auto;
+    min-width: 36px;
+    padding: 0 12px;
+    border-radius: 18px;
+    background: rgba(244, 63, 94, 0.12);
+    border: 1px solid rgba(244, 63, 94, 0.35);
+    color: var(--text-primary);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 0 12px rgba(244, 63, 94, 0.18);
+    animation: capsulePulse 2s infinite ease-in-out;
+    white-space: nowrap;
+}
+
+.stop-action-btn.capsule-stop-btn:hover {
+    background: rgba(244, 63, 94, 0.25);
+    border-color: var(--accent-rose, #f43f5e);
+    box-shadow: 0 0 18px rgba(244, 63, 94, 0.45);
+    transform: scale(1.03);
+}
+
+.stop-action-btn.capsule-stop-btn:active {
+    transform: scale(0.97);
+}
+
+.stop-action-btn .stop-icon-wrap {
+    color: var(--accent-rose, #f43f5e);
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease;
+}
+
+.stop-action-btn.capsule-stop-btn:hover .stop-icon-wrap {
+    transform: scale(1.15);
+}
+
+.stop-action-btn .stop-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: 0.02em;
+}
+
+.stop-action-btn .stop-divider {
+    width: 1px;
+    height: 14px;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.stop-action-btn .stop-speed-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-code, monospace);
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--accent-purple, #c084fc);
+}
+
+.stop-action-btn .stop-unit {
+    color: var(--text-muted);
+    font-size: 0.65rem;
+}
+
+@keyframes capsulePulse {
+    0%, 100% {
+        box-shadow: 0 0 8px rgba(244, 63, 94, 0.15);
+    }
+    50% {
+        box-shadow: 0 0 16px rgba(244, 63, 94, 0.35);
+    }
+}
+
+/* Responsive compact styles for phones */
+@media (max-width: 640px) {
+    .shortcut-hint {
+        max-width: 0 !important;
+        opacity: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        pointer-events: none !important;
+    }
+    .thinking-toggle-btn .toggle-btn-label {
+        max-width: 0 !important;
+        opacity: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        pointer-events: none !important;
+    }
+    .thinking-toggle-btn {
+        width: 32px !important;
+        min-width: 32px !important;
+        height: 32px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        gap: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 50% !important;
+    }
+    .thinking-toggle-btn i {
+        width: 100% !important;
+        height: 100% !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        line-height: 1 !important;
+    }
+    .stop-action-btn.capsule-stop-btn {
+        padding: 0 8px;
+        gap: 6px;
+    }
+    .stop-action-btn .stop-label,
+    .stop-action-btn .stop-divider,
+    .stop-action-btn .stop-unit {
+        display: none;
+    }
 }
 
 .footer-caption {
@@ -372,5 +581,58 @@ kbd {
     border-radius: var(--radius-md);
     margin-bottom: 8px;
     display: block;
+}
+
+/* Circular Context Indicator */
+.live-perf-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 2px;
+    user-select: none;
+}
+
+.context-usage-ring {
+    position: relative;
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), filter 0.2s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.context-usage-ring:hover {
+    transform: scale(1.15);
+    filter: drop-shadow(0 0 6px var(--accent-purple, #a855f7));
+}
+
+.context-usage-ring:active {
+    transform: scale(0.95);
+}
+
+.ring-svg {
+    width: 26px;
+    height: 26px;
+    transform: rotate(-90deg);
+}
+
+.ring-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.08);
+    stroke-width: 2.5;
+}
+
+.ring-progress {
+    fill: none;
+    stroke: var(--accent-purple, #a855f7);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-dasharray: 62.83;
+    stroke-dashoffset: 62.83;
+    transition: stroke-dashoffset 0.16s ease-out, stroke 0.3s ease;
 }
 

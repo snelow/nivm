@@ -15,7 +15,7 @@
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg)](https://fastapi.tiangolo.com)
-[![llama.cpp](https://img.shields.io/badge/Engine-llama.cpp%20CUDA%20%2F%20Metal-orange.svg)](https://github.com/ggerganov/llama.cpp)
+[![llama-server](https://img.shields.io/badge/Engine-native%20llama--server%20C%2B%2B-orange.svg)](https://github.com/ggerganov/llama.cpp)
 [![Kokoro TTS](https://img.shields.io/badge/Neural%20TTS-Kokoro%20v1.0-purple.svg)](https://huggingface.co/hexgrad/Kokoro-82M)
 [![Faster-Whisper](https://img.shields.io/badge/Neural%20STT-Faster--Whisper%20INT8-blueviolet.svg)](https://github.com/SYSTRAN/faster-whisper)
 [![ComfyUI Bridge](https://img.shields.io/badge/Image%20Studio-ComfyUI%20%2F%20Diffusion-ff69b4.svg)](https://github.com/comfyanonymous/ComfyUI)
@@ -47,11 +47,12 @@ From parsing multi-page technical PDFs and natural bidirectional voice conversat
 - **Dynamic Iridescent Orb**: Real-time frequency-modulated audio visualizer and glowing orb for conversational voice mode (fullscreen and docked).
 - **Custom Phonetic Lexicon**: Interactive pronunciation dictionary with live draft audio preview, backed by an offline CMUdict dataset (135,000+ words).
 
-### 2. Dual Inference Architecture & Universal VRAM Management
-- **Native GGUF Engine**: Powered by `llama.cpp` with Flash Attention, KV-cache quantization (`q4_0`, `q8_0`, `f16`), split GPU layer offloading, and autonomous intent routing.
-- **MoE (Mixture of Experts) Architecture Support**: Dynamic detection of MoE topologies (active vs. total experts, routed layers) with single-GPU memory threshold advisories.
-- **Interactive VRAM & KV Cache Memory Estimator**: Visual calculator projecting model weights and KV cache memory footprint across context lengths (4K–128K) before loading models into VRAM.
-- **External Multimodal API Mode**: Seamlessly connect to Google Gemini (e.g. `gemini-3.8-flash`, `gemini-3.1-pro`), OpenAI, Groq, Ollama, LM Studio, or OpenRouter with zero code modifications.
+### 2. Native llama-server Engine & Dual Inference Architecture
+- **Native C++ `llama-server` Daemon (`bin/llama-server`)**: Inference runs directly via a compiled native C++ `llama-server` binary with GPU layer offloading (`-ngl`), Flash Attention (`-fa`), and KV-cache quantization (`q4_0`, `q8_0`, `f16`). Completely bypasses Python GIL bottlenecks, providing OpenAI-compatible `/v1/chat/completions` Server-Sent Events (SSE) streaming.
+- **Interactive Generation Telemetry**: Active response stop button merges live throughput metrics (`[ ■ Stop | 74.2 tk/s ]`), automatically adapting to a compact badge on mobile devices.
+- **Dynamic Context Ring & Limit Safeguards**: Real-time SVG circular context indicator monitors token usage with live token pre-calculation and color-coded safety thresholds (safe theme purple, amber warning $\ge 75\%$, rose danger $\ge 90\%$). Intercepts `finish_reason == 'length'` cutoffs across local and cloud APIs, rendering inline recovery alerts with one-click conversation summarization.
+- **Dedicated Clean URL Routing**: First-class `/c/{chat_id}` server routing and `/` clean fresh start with HTML5 `popstate` history navigation, allowing direct session bookmarking and browser Back/Forward navigation.
+- **External Multimodal API Mode**: Connect to Google Gemini (`gemini-2.5-flash`, `gemini-2.5-pro`), Anthropic Claude, OpenAI, Groq, Ollama, or OpenRouter with unified UI controls.
 - **Unified Media Pipeline**: Ingest images, multi-page PDFs, audio waveforms, and video keyframes across both local GGUF models (`mmproj`) and external multimodal API endpoints.
 - **Universal Model Unload**: One-click VRAM flush button that completely unloads active models from GPU memory into 0MB standby mode.
 
@@ -59,7 +60,7 @@ From parsing multi-page technical PDFs and natural bidirectional voice conversat
 - **Local Diffusion Engine**: Integrated local [ComfyUI](https://github.com/comfyanonymous/ComfyUI) bridge supporting Qwen-Rapid, Stable Diffusion, and Flux workflows without external cloud APIs.
 - **Dedicated Anime Pipeline (Illustrious SDXL)**: Optional character synthesis engine with LoRA management (characters, outfits, hairstyles, poses), Danbooru tag compiler, and 8-step LCM Turbo mode for rapid generation on consumer GPUs (4GB+ VRAM).
 - **In-Browser Image Studio**: Interactive prompt and character manager, live generation progress cards with action pills, host disk LoRA import, and conversational multi-turn follow-up editing.
-- **Dynamic VRAM Coordinator (`vram_coordinator.py`)**: Seamlessly arbitrates GPU memory between `llama.cpp` and ComfyUI. Automatically signals `/free`, flushes CUDA cache, releases diffusion weights, and restores the active LLM without manual restarts or OOM crashes on consumer hardware.
+- **Dynamic VRAM Coordinator (`core/vram_coordinator.py`)**: Seamlessly arbitrates GPU memory between `llama-server` and ComfyUI. Automatically frees LLM weights (0MB VRAM footprint) before executing diffusion workflows, flushes torch CUDA caches, and smoothly restores the active LLM once image synthesis concludes without manual restarts or OOM crashes.
 
 ### 4. Integrated In-Browser File Explorer
 - Browse workstation disks, drives, and directory shortcuts (`Desktop`, `Downloads`, `Home`, `Workspace`, `Models`, `LoRAs`) directly inside the UI.
@@ -108,71 +109,69 @@ From parsing multi-page technical PDFs and natural bidirectional voice conversat
 
 ```mermaid
 flowchart TB
-    subgraph Client ["Client Tier (Browser WebApp)"]
-        UI["Glassmorphism Reactive UI"]
-        VoiceOrb["Dynamic Voice Orb & Audio Waveform"]
-        ImgStudio["In-Browser Diffusion Image Studio"]
-        NetMon["Real-Time Socket Oscilloscope"]
-        FileNav["In-Browser Model & File Browser"]
-        MemUI["Categorized Long-Term Memory Drawer"]
+    subgraph Client ["Client Tier - Web Interface"]
+        UI["Glassmorphism UI"]
+        VoiceOrb["Voice Orb Visualizer"]
+        ImgStudio["Diffusion Image Studio"]
+        NetMon["Socket Monitor Oscilloscope"]
+        FileNav["Virtual File Browser"]
+        MemUI["Long-Term Memory Drawer"]
     end
 
-    subgraph Gateway ["Application Gateway (FastAPI)"]
-        API["FastAPI Async REST / SSE Engine"]
-        TTS["Kokoro v1.0 Neural TTS Engine"]
-        STT["Faster-Whisper Speech-to-Text Engine"]
-        Router["Smart Query Classifier / Router"]
-        Tools["Agentic Tool Dispatcher (Terminal, Memory)"]
-        ChatMgr["Conversation Lifecycle & Lock Manager"]
-        ImgRouter["Image Generation & Workflow Router"]
+    subgraph Gateway ["Application Gateway - FastAPI"]
+        API["FastAPI Async Engine"]
+        TTS["Kokoro Neural TTS"]
+        STT["Faster-Whisper STT"]
+        Router["Model Router and Classifier"]
+        Tools["Agentic Tool Dispatcher"]
+        ChatMgr["Lifecycle and Lock Manager"]
+        ImgRouter["Diffusion Workflow Router"]
     end
 
-    subgraph Storage ["Local Storage & Cache"]
-        ModelsDir["Local GGUF Models (/models)"]
-        SettingsJSON["User Settings & Audio Config"]
+    subgraph LocalEngine ["Local Inference Engine"]
+        ModelMgr["Engine Supervisor - core/engine.py"]
+        Daemon["Native Daemon - bin/llama-server"]
+        ActiveModel["Active GGUF Model"]
+        VRAMCoord["VRAM Coordinator - LLM to Diffusion Swap"]
+    end
+
+    subgraph DiffusionEngine ["Diffusion Engine - ComfyUI"]
+        ComfyBridge["ComfyUI Daemon Bridge"]
+        Workflows["Diffusion Workflows - SDXL, Flux, Rapid"]
+    end
+
+    subgraph Storage ["Storage and Model Cache"]
+        ModelsDir["Local GGUF Models"]
+        SettingsJSON["User and Audio Settings"]
         MemoryJSON["Persistent Memory Store"]
-        PronounceJSON["Custom Phonetic Lexicon"]
-        ComfyEngine["ComfyUI Daemon & Workflows (/engine)"]
+        PronounceJSON["Phonetic Lexicon"]
     end
 
-    subgraph Engines ["Dual Inference & Media Execution"]
-        subgraph LocalEngine ["Native GGUF Engine (llama.cpp)"]
-            ModelMgr["Dynamic ModelManager (Hot-Swap)"]
-            CoderModel["Specialist: Code (Qwen 2.5 Coder)"]
-            VisionModel["Specialist: Vision (Gemma + mmproj)"]
-            GeneralModel["Specialist: General / Reasoning (Phi-4 / Qwen)"]
-        end
-        subgraph VRAMArbitration ["VRAM Coordinator"]
-            VRAMCoord["GPU Memory Coordinator (LLM ↔ Diffusion)"]
-        end
-        subgraph DiffusionEngine ["Local Diffusion Engine"]
-            ComfyBridge["ComfyUI Daemon (Qwen-Rapid / SD / Flux)"]
-        end
-        subgraph ExternalAPI ["External API Proxy (Optional)"]
-            GeminiAPI["Google Gemini 3.8 Flash & 3.1 Pro"]
-            OpenAIAPI["OpenAI / Groq / OpenRouter"]
-        end
+    subgraph ExternalAPI ["Cloud API Proxy - Optional"]
+        GeminiAPI["Google Gemini"]
+        OpenAIAPI["OpenAI, Groq, OpenRouter"]
     end
 
-    UI -->|HTTP / SSE Streaming| API
-    VoiceOrb -->|WebM Audio / TTS WAV| API
-    ImgStudio -->|Prompt & Aspect Ratio| ImgRouter
-    NetMon -->|psutil Telemetry| API
+    UI -->|HTTP and SSE Streaming| API
+    VoiceOrb -->|Audio and TTS WAV| API
+    ImgStudio -->|Image Prompts| ImgRouter
+    NetMon -->|Telemetry| API
     API --> Router
     API --> TTS
     API --> STT
     API --> ChatMgr
     ImgRouter --> VRAMCoord
-    VRAMCoord -->|Arbitrate VRAM| ModelMgr
-    VRAMCoord -->|Execute Workflow| ComfyBridge
-    Router -->|Select Role| ModelMgr
-    ModelMgr --> LocalEngine
+    VRAMCoord -->|VRAM Arbitration| ModelMgr
+    VRAMCoord -->|Execute Graph| ComfyBridge
+    ComfyBridge --> Workflows
+    Router -->|Configure Engine| ModelMgr
+    ModelMgr --> Daemon
+    Daemon --> ActiveModel
     API --> ExternalAPI
     API --> Tools
     Tools --> Storage
     TTS --> PronounceJSON
     FileNav --> ModelsDir
-    ComfyBridge --> ComfyEngine
 ```
 
 ---
@@ -181,15 +180,17 @@ flowchart TB
 
 ```text
 nivm/
+├── bin/                      # Native compiled C++ binaries
+│   └── llama-server          # High-performance native llama.cpp HTTP server daemon
 ├── core/
 │   ├── auth.py               # Single-user owner authentication & session token manager
 │   ├── config.py             # System defaults, LLM hyperparams & base prompts
-│   ├── engine.py             # llama.cpp ModelManager with sub-3s model hot-swapping
-│   ├── router.py             # Zero-latency local query classifier & intent router
+│   ├── engine.py             # Native llama-server daemon supervisor & local inference manager
+│   ├── router.py             # Model parameter configuration & query routing
 │   ├── models_router.py      # GGUF model scanning, validation & registry
 │   ├── multimodal.py         # Faster-Whisper STT, OpenCV keyframing & PDF rasterizer
 │   ├── tts.py                # Kokoro v1.0 neural TTS, audio DSP filters & stutter normalizer
-│   ├── vram_coordinator.py   # GPU memory coordinator between llama.cpp and ComfyUI
+│   ├── vram_coordinator.py   # GPU memory coordinator between llama-server and ComfyUI
 │   ├── chat_manager.py       # Session lifecycle, conversation locking & resume appeal
 │   ├── image_router.py       # Diffusion generation routes & ComfyUI daemon bridge
 │   ├── image_engine/         # Modular ComfyUI diffusion subsystem
@@ -352,7 +353,7 @@ The following capabilities are in active research and planning:
 ## Technology Stack
 
 - **Backend**: Python 3.10+, FastAPI, Uvicorn, Pydantic v2
-- **Local Inference Engine**: `llama.cpp`, `llama-cpp-python` (with CUDA / Metal / CPU backends)
+- **Local Inference Engine**: Native `llama-server` C++ binary (`bin/llama-server` with CUDA 12.x / Metal / AVX2 backends)
 - **Neural Speech Synthesis**: Kokoro v1.0 (ONNX Runtime CPU / GPU)
 - **Neural Speech-to-Text**: Faster-Whisper (INT8 quantized on CPU via CTranslate2)
 - **Generative Media**: ComfyUI (WebSocket & REST API), Qwen-Rapid / SD / Flux workflows
